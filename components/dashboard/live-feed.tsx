@@ -53,25 +53,61 @@ function timeAgo(date: Date): string {
 }
 
 export function LiveFeed() {
+  const [mounted, setMounted] = useState(false)
   const [feed, setFeed] = useState<Transaction[]>([])
   const [ticker, setTicker] = useState(0)
 
-  // Populate on the client only — avoids SSR/client mismatch
   useEffect(() => {
+    setMounted(true)
     setFeed(buildInitialFeed())
   }, [])
 
   useEffect(() => {
+    if (!mounted) return
     const interval = setInterval(() => {
       setFeed((prev) => [randomTx(), ...prev.slice(0, 19)])
     }, 3500)
     return () => clearInterval(interval)
-  }, [])
+  }, [mounted])
 
   useEffect(() => {
+    if (!mounted) return
     const t = setInterval(() => setTicker((n) => n + 1), 5000)
     return () => clearInterval(t)
-  }, [])
+  }, [mounted])
+
+  // Render a stable skeleton until after hydration
+  if (!mounted) {
+    return (
+      <div className="bg-card border border-border rounded-lg overflow-hidden flex flex-col h-full">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+          <div className="flex items-center gap-2">
+            <Zap className="w-3.5 h-3.5 text-cyan-400" />
+            <h2 className="text-sm font-semibold text-foreground">Live Transaction Feed</h2>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            <span className="text-xs font-mono text-emerald-400">LIVE</span>
+          </div>
+        </div>
+        <div className="overflow-y-auto flex-1 max-h-[420px]">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex items-start gap-3 px-4 py-2.5 border-b border-border/40">
+              <div className="w-7 h-7 rounded-md bg-secondary shrink-0 mt-0.5" />
+              <div className="flex-1 space-y-1.5">
+                <div className="flex justify-between gap-2">
+                  <div className="h-3 w-24 bg-secondary rounded" />
+                  <div className="h-3 w-14 bg-secondary rounded" />
+                </div>
+                <div className="h-2.5 w-40 bg-secondary rounded" />
+                <div className="h-2.5 w-28 bg-secondary rounded" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="bg-card border border-border rounded-lg overflow-hidden flex flex-col h-full">
