@@ -1,0 +1,176 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Prisma Schema — Multi-tenant Payment Gateway
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("POSTGRES_PRISMA_URL")       // pooled (Neon)
+  directUrl = env("DATABASE_URL_UNPOOLED")      // direct (migrations)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum Role {
+  SUPER_ADMIN
+  MERCHANT
+}
+
+enum AccountStatus {
+  ACTIVE
+  PAUSED
+  WARMING_UP
+  SUSPENDED
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+  DISPUTED
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// User  (global — no tenantId; spans all tenants)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(MERCHANT)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // A MERCHANT user owns one logical tenant/org
+  tenantId     String?  @unique          // null for SUPER_ADMIN
+  tenant       Tenant?  @relation(fields: [tenantId], references: [id])
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tenant  (top-level isolation boundary — one per Merchant)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  owner            User?              @ignore   // inverse handled on User
+  user             User[]
+  stores           Store[]
+  merchantAccounts MerchantAccount[]
+  transactions     Transaction[]
+
+  @@map("tenants")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Store  (a client e-commerce store belonging to one Merchant/Tenant)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Store {
+  id         String   @id @default(uuid())   // storeId (UUID)
+  tenantId   String                          // multi-tenant isolation key
+  name       String
+  apiKeyHash String                          // bcrypt hash of the raw API key
+  webhookUrl String?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([tenantId])
+  @@map("stores")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MerchantAccount  (a PayPal business account inside a tenant's pool)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model MerchantAccount {
+  id           String        @id @default(uuid())
+  tenantId     String                              // multi-tenant isolation key
+
+  // PayPal credentials (stored encrypted in production)
+  clientId     String
+  clientSecret String
+
+  // Rotation & routing
+  shieldDomain  String                            // masking domain for this account
+  dailyLimit    Decimal       @db.Decimal(12, 2)  // USD cap per day
+  currentVolume Decimal       @default(0) @db.Decimal(12, 2)
+  priority      Int           @default(1)         // higher = preferred in weighted rotation
+  status        AccountStatus @default(ACTIVE)
+
+  // Lifecycle
+  volumeResetAt DateTime?                         // timestamp of last daily volume reset
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("merchant_accounts")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Transaction  (immutable audit log of every gateway event)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Transaction {
+  id               String            @id @default(uuid())
+  tenantId         String                                   // multi-tenant isolation key
+
+  // Routing references
+  storeId          String
+  merchantId       String                                   // MerchantAccount.id
+
+  // Amounts
+  originalAmount   Decimal           @db.Decimal(12, 2)    // amount the buyer paid
+  gatewayFee       Decimal           @default(0) @db.Decimal(12, 2)
+
+  // State
+  status           TransactionStatus @default(PENDING)
+
+  // Privacy / compliance
+  maskedItemName   String                                   // obfuscated product name
+
+  // External references
+  paypalOrderId    String?
+  paypalCaptureId  String?
+  buyerIp          String?
+  buyerCountry     String?
+
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  // Relations
+  tenant          Tenant          @relation(fields: [tenantId], references: [id])
+  store           Store           @relation(fields: [storeId], references: [id])
+  merchantAccount MerchantAccount @relation(fields: [merchantId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, storeId])
+  @@index([tenantId, merchantId])
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
+  @@map("transactions")
+}
