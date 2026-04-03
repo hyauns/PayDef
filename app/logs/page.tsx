@@ -1,468 +1,291 @@
 "use client"
 
-import { useState } from "react"
-import { TrendingUp, TrendingDown, Activity, DollarSign, AlertTriangle, BarChart2 } from "lucide-react"
-import { DashboardHeader } from "@/components/dashboard/header"
+import { useState, useMemo } from "react"
 import {
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-} from "recharts"
+  Search,
+  Filter,
+  Download,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  Clock,
+  ChevronDown,
+  RefreshCw,
+} from "lucide-react"
+import { DashboardHeader } from "@/components/dashboard/header"
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────────────────────────
 
-type Range = "24h" | "7d" | "30d"
-
-// ─── Data generators ──────────────────────────────────────────────────────────
-
-function revenueData(range: Range) {
-  if (range === "24h") {
-    return Array.from({ length: 24 }, (_, i) => ({
-      label: `${String(i).padStart(2, "0")}:00`,
-      revenue: Math.round(800 + Math.sin(i / 3) * 400 + Math.random() * 200),
-      transactions: Math.round(18 + Math.random() * 14),
-    }))
-  }
-  if (range === "7d") {
-    const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-    return days.map((label) => ({
-      label,
-      revenue: Math.round(12000 + Math.random() * 8000),
-      transactions: Math.round(280 + Math.random() * 160),
-    }))
-  }
-  return Array.from({ length: 30 }, (_, i) => ({
-    label: `Apr ${i + 1}`,
-    revenue: Math.round(10000 + Math.sin(i / 5) * 4000 + Math.random() * 3000),
-    transactions: Math.round(220 + Math.random() * 180),
-  }))
+type LogLevel = "success" | "error" | "warning" | "info"
+type LogEntry = {
+  id: string
+  ts: Date
+  level: LogLevel
+  event: string
+  account: string
+  store: string
+  amount?: number
+  txId?: string
+  detail: string
 }
 
-const merchantData = [
-  { name: "PP-Main-01",     volume: 42500, txCount: 187 },
-  { name: "PP-Relay-02",    volume: 38200, txCount: 214 },
-  { name: "PP-Node-03",     volume: 27100, txCount: 58  },
-  { name: "PP-Backup-04",   volume: 19800, txCount: 94  },
-  { name: "PP-Alt-05",      volume: 29000, txCount: 113 },
-  { name: "PP-Overflow-06", volume: 48600, txCount: 221 },
-  { name: "PP-Warmup-07",   volume: 3200,  txCount: 14  },
+// ─── Seed data ───────────────────────────────────────────────────────────────
+
+function sr(seed: number) { const x = Math.sin(seed + 1) * 10000; return x - Math.floor(x) }
+function pick<T>(arr: T[], seed: number) { return arr[Math.floor(sr(seed) * arr.length)] }
+
+const ACCOUNTS = ["PP-Main-01", "PP-Relay-02", "PP-Node-03", "PP-Backup-04", "PP-Alt-05", "PP-Overflow-06"]
+const STORES   = ["Tire Shop Pro", "Yoga Bliss", "Pet Paradise", "TechNova", "GlowUp Beauty", "FitGear Store"]
+const EVENTS: { event: string; level: LogLevel; detail: string }[] = [
+  { event: "Transaction Routed",    level: "success", detail: "Order successfully routed to merchant account" },
+  { event: "Payment Confirmed",     level: "success", detail: "PayPal IPN confirmed, funds captured" },
+  { event: "Daily Limit Reached",   level: "warning", detail: "Account reached 90% of its daily limit, rotation paused" },
+  { event: "Account Rotated",       level: "info",    detail: "Gateway switched to next account in rotation pool" },
+  { event: "IPN Webhook Received",  level: "info",    detail: "Incoming PayPal IPN payload parsed and verified" },
+  { event: "Transaction Failed",    level: "error",   detail: "PayPal returned PAYMENT_NOT_COMPLETED — retrying" },
+  { event: "Fraud Flag Raised",     level: "error",   detail: "IP reputation check failed; transaction blocked" },
+  { event: "Shield Domain Changed", level: "info",    detail: "Masking domain rotated per schedule" },
+  { event: "Price Mismatch",        level: "warning", detail: "Server-side price re-validation failed; order held" },
+  { event: "Chargeback Received",   level: "error",   detail: "Dispute raised by buyer; account flagged" },
+  { event: "Account Warm-up Done",  level: "success", detail: "New account cleared warm-up phase, added to active pool" },
+  { event: "Config Updated",        level: "info",    detail: "Admin updated rotation strategy settings" },
 ]
 
-const storeData = [
-  { name: "Tire Shop Pro",  value: 31200 },
-  { name: "Yoga Bliss",     value: 18700 },
-  { name: "Pet Paradise",   value: 24100 },
-  { name: "TechNova",       value: 42800 },
-  { name: "GlowUp Beauty",  value: 15300 },
-  { name: "FitGear Store",  value: 27600 },
-  { name: "UrbanKicks",     value: 19700 },
-]
-
-// Colors — passed as JS values, not CSS vars (recharts requirement)
-const PIE_COLORS = ["#22d3ee", "#34d399", "#fbbf24", "#f87171", "#a78bfa", "#fb923c", "#60a5fa"]
-const CYAN   = "#22d3ee"
-const EMERALD = "#34d399"
-
-// ─── Formatters ───────────────────────────────────────────────────────────────
-
-function fmtK(v: number) {
-  return v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${v}`
+function buildLogs(): LogEntry[] {
+  const now = new Date(2026, 3, 3, 14, 30)
+  return Array.from({ length: 120 }, (_, i) => {
+    const seed  = i * 83 + 7
+    const minsAgo = Math.floor(sr(seed) * 48 * 60)
+    const ev    = pick(EVENTS, seed + 1)
+    const hex   = "0123456789abcdef"
+    const txId  = ev.level === "success" || ev.level === "error"
+      ? "txn_" + Array.from({ length: 12 }, (_, j) => hex[Math.floor(sr(seed * 17 + j) * 16)]).join("")
+      : undefined
+    return {
+      id:      `log_${i}`,
+      ts:      new Date(now.getTime() - minsAgo * 60 * 1000),
+      level:   ev.level,
+      event:   ev.event,
+      account: pick(ACCOUNTS, seed + 3),
+      store:   pick(STORES, seed + 4),
+      amount:  txId ? parseFloat((sr(seed + 5) * 490 + 10).toFixed(2)) : undefined,
+      txId,
+      detail:  ev.detail,
+    }
+  }).sort((a, b) => b.ts.getTime() - a.ts.getTime())
 }
 
-function fmtFull(v: number) {
-  return `$${v.toLocaleString("en-US", { minimumFractionDigits: 0 })}`
+const ALL_LOGS = buildLogs()
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function fmtTs(d: Date) {
+  return d.toLocaleString("en-US", {
+    month: "short", day: "numeric",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+  })
 }
 
-// ─── Metric Card ─────────────────────────────────────────────────────────────
-
-function MetricCard({
-  label, value, sub, trend, trendUp, accent,
-}: {
-  label: string
-  value: string
-  sub?: string
-  trend?: string
-  trendUp?: boolean
-  accent?: string
-}) {
-  return (
-    <div className={`bg-card border rounded-lg p-4 flex flex-col gap-2 ${accent ?? "border-border"}`}>
-      <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{label}</p>
-      <p className="text-2xl font-mono font-bold text-foreground">{value}</p>
-      {sub && <p className="text-xs font-mono text-muted-foreground">{sub}</p>}
-      {trend && (
-        <div className={`flex items-center gap-1 text-xs font-mono ${trendUp ? "text-emerald-400" : "text-red-400"}`}>
-          {trendUp ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-          {trend}
-        </div>
-      )}
-    </div>
-  )
+const LEVEL_STYLES: Record<LogLevel, { text: string; bg: string; border: string; dot: string }> = {
+  success: { text: "text-emerald-400", bg: "bg-emerald-400/10", border: "border-emerald-400/20", dot: "bg-emerald-400" },
+  error:   { text: "text-red-400",     bg: "bg-red-400/10",     border: "border-red-400/20",     dot: "bg-red-400" },
+  warning: { text: "text-amber-400",   bg: "bg-amber-400/10",   border: "border-amber-400/20",   dot: "bg-amber-400" },
+  info:    { text: "text-cyan-400",    bg: "bg-cyan-400/10",    border: "border-cyan-400/20",    dot: "bg-cyan-400" },
 }
 
-// ─── Section Header ───────────────────────────────────────────────────────────
-
-function SectionHeader({ icon, title, sub }: { icon: React.ReactNode; title: string; sub?: string }) {
-  return (
-    <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
-      <div className="text-cyan-400">{icon}</div>
-      <div>
-        <p className="text-sm font-semibold text-foreground">{title}</p>
-        {sub && <p className="text-[10px] font-mono text-muted-foreground">{sub}</p>}
-      </div>
-    </div>
-  )
-}
-
-// ─── Custom Tooltip ───────────────────────────────────────────────────────────
-
-function RevenueTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs font-mono shadow-xl">
-      <p className="text-muted-foreground mb-1">{label}</p>
-      <p className="text-cyan-400">Revenue: {fmtFull(payload[0]?.value ?? 0)}</p>
-      <p className="text-emerald-400">Txns: {payload[1]?.value ?? 0}</p>
-    </div>
-  )
-}
-
-function BarTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs font-mono shadow-xl">
-      <p className="text-foreground font-semibold mb-1">{label}</p>
-      <p className="text-cyan-400">Volume: {fmtFull(payload[0]?.value ?? 0)}</p>
-    </div>
-  )
-}
-
-function PieTooltip({ active, payload }: any) {
-  if (!active || !payload?.length) return null
-  const total = storeData.reduce((s, d) => s + d.value, 0)
-  const pct = ((payload[0].value / total) * 100).toFixed(1)
-  return (
-    <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs font-mono shadow-xl">
-      <p className="text-foreground font-semibold">{payload[0].name}</p>
-      <p style={{ color: payload[0].payload.fill }}>{fmtFull(payload[0].value)} ({pct}%)</p>
-    </div>
-  )
+function LevelIcon({ level }: { level: LogLevel }) {
+  if (level === "success") return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+  if (level === "error")   return <XCircle      className="w-3.5 h-3.5 text-red-400 shrink-0" />
+  if (level === "warning") return <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+  return <Clock className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export default function AnalyticsPage() {
-  const [range, setRange] = useState<Range>("7d")
-  const data = revenueData(range)
+export default function LogsPage() {
+  const [search, setSearch]         = useState("")
+  const [levelFilter, setLevel]     = useState<LogLevel | "all">("all")
+  const [accountFilter, setAccount] = useState("all")
+  const [expanded, setExpanded]     = useState<string | null>(null)
+  const [page, setPage]             = useState(0)
+  const PAGE_SIZE = 40
 
-  const totalRevenue = data.reduce((s, d) => s + d.revenue, 0)
-  const totalTxns    = data.reduce((s, d) => s + d.transactions, 0)
-  const storeTotal   = storeData.reduce((s, d) => s + d.value, 0)
+  const filtered = useMemo(() => {
+    return ALL_LOGS.filter(log => {
+      if (levelFilter !== "all" && log.level !== levelFilter) return false
+      if (accountFilter !== "all" && log.account !== accountFilter) return false
+      if (search) {
+        const q = search.toLowerCase()
+        if (!log.event.toLowerCase().includes(q) &&
+            !log.detail.toLowerCase().includes(q) &&
+            !log.account.toLowerCase().includes(q) &&
+            !log.store.toLowerCase().includes(q) &&
+            !(log.txId ?? "").includes(q)) return false
+      }
+      return true
+    })
+  }, [search, levelFilter, accountFilter])
 
-  const RANGES: { key: Range; label: string }[] = [
-    { key: "24h", label: "Last 24h" },
-    { key: "7d",  label: "7 Days"   },
-    { key: "30d", label: "30 Days"  },
-  ]
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
+  const paged      = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+
+  const counts = useMemo(() => ({
+    total:   ALL_LOGS.length,
+    success: ALL_LOGS.filter(l => l.level === "success").length,
+    error:   ALL_LOGS.filter(l => l.level === "error").length,
+    warning: ALL_LOGS.filter(l => l.level === "warning").length,
+    info:    ALL_LOGS.filter(l => l.level === "info").length,
+  }), [])
 
   return (
     <div className="min-h-screen bg-background font-mono">
       <DashboardHeader />
-
       <main className="px-4 md:px-6 py-5 space-y-5 max-w-[1600px] mx-auto">
 
-        {/* ── Page header ─────────────────────────────────────────────────── */}
+        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-semibold text-foreground">Analytics</h1>
-            <p className="text-xs font-mono text-muted-foreground mt-0.5">
-              Performance overview across all stores and merchant accounts
-            </p>
+            <h1 className="text-lg font-semibold text-foreground">System Logs</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">Real-time gateway event log — last 48 hours</p>
           </div>
-
-          {/* Date-range picker */}
-          <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1">
-            {RANGES.map((r) => (
-              <button
-                key={r.key}
-                onClick={() => setRange(r.key)}
-                className={`px-3 py-1.5 text-xs font-mono rounded-md transition-colors ${
-                  range === r.key
-                    ? "bg-cyan-400/10 text-cyan-400 border border-cyan-400/20"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
+          <button className="flex items-center gap-2 px-3 py-1.5 bg-card border border-border rounded-md text-xs text-muted-foreground hover:text-foreground transition-colors">
+            <Download className="w-3.5 h-3.5" />
+            Export CSV
+          </button>
         </div>
 
-        {/* ── Performance Metric Cards ─────────────────────────────────────── */}
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-          <MetricCard
-            label="Total Revenue"
-            value={fmtK(totalRevenue)}
-            sub={`${totalTxns.toLocaleString()} transactions`}
-            trend="+12.4% vs prior period"
-            trendUp
-            accent="border-cyan-400/30"
-          />
-          <MetricCard
-            label="Success Rate"
-            value="97.3%"
-            sub="↑ 0.8pp this period"
-            trend="+0.8pp improvement"
-            trendUp
-            accent="border-emerald-400/30"
-          />
-          <MetricCard
-            label="Avg Transaction"
-            value="$184.20"
-            sub="median $142.50"
-            trend="+$8.40 vs prior"
-            trendUp
-          />
-          <MetricCard
-            label="Dispute Rate"
-            value="0.41%"
-            sub="8 open disputes"
-            trend="-0.12pp vs prior"
-            trendUp
-            accent="border-emerald-400/20"
-          />
-          <MetricCard
-            label="Refund Rate"
-            value="1.8%"
-            sub="$3,210 refunded"
-            trend="+0.3pp vs prior"
-            trendUp={false}
-            accent="border-amber-400/20"
-          />
-          <MetricCard
-            label="Active Accounts"
-            value="5 / 7"
-            sub="2 paused or warm-up"
-            accent="border-border"
-          />
+        {/* Summary chips */}
+        <div className="flex flex-wrap gap-2">
+          {([
+            { key: "all",     label: "All",     count: counts.total,   cls: "border-border text-muted-foreground" },
+            { key: "success", label: "Success",  count: counts.success, cls: "border-emerald-400/30 text-emerald-400" },
+            { key: "error",   label: "Errors",   count: counts.error,   cls: "border-red-400/30 text-red-400" },
+            { key: "warning", label: "Warnings", count: counts.warning, cls: "border-amber-400/30 text-amber-400" },
+            { key: "info",    label: "Info",     count: counts.info,    cls: "border-cyan-400/30 text-cyan-400" },
+          ] as const).map(chip => (
+            <button
+              key={chip.key}
+              onClick={() => { setLevel(chip.key as LogLevel | "all"); setPage(0) }}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-mono transition-all
+                ${levelFilter === chip.key ? "bg-secondary" : "bg-transparent hover:bg-secondary/50"}
+                ${chip.cls}`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${LEVEL_STYLES[chip.key as LogLevel]?.dot ?? "bg-muted-foreground"}`} />
+              {chip.label}
+              <span className="opacity-70">{chip.count}</span>
+            </button>
+          ))}
         </div>
 
-        {/* ── Revenue Area Chart ───────────────────────────────────────────── */}
+        {/* Search + filters */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => { setSearch(e.target.value); setPage(0) }}
+              placeholder="Search events, accounts, tx IDs..."
+              className="w-full bg-card border border-border rounded-md pl-9 pr-3 py-2 text-xs font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+            />
+          </div>
+          <div className="relative">
+            <select
+              value={accountFilter}
+              onChange={e => { setAccount(e.target.value); setPage(0) }}
+              className="appearance-none bg-card border border-border rounded-md pl-3 pr-8 py-2 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 cursor-pointer"
+            >
+              <option value="all">All Accounts</option>
+              {ACCOUNTS.map(a => <option key={a} value={a}>{a}</option>)}
+            </select>
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+          </div>
+          <button
+            onClick={() => { setSearch(""); setLevel("all"); setAccount("all"); setPage(0) }}
+            className="flex items-center gap-1.5 px-3 py-2 bg-card border border-border rounded-md text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <RefreshCw className="w-3 h-3" />
+            Reset
+          </button>
+        </div>
+
+        {/* Log table */}
         <div className="bg-card border border-border rounded-lg overflow-hidden">
-          <SectionHeader
-            icon={<Activity className="w-4 h-4" />}
-            title="Revenue vs. Time"
-            sub={`Showing ${range === "24h" ? "hourly" : range === "7d" ? "daily" : "daily"} breakdown`}
-          />
-          <div className="p-4">
-            <ResponsiveContainer width="100%" height={280}>
-              <AreaChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={CYAN}    stopOpacity={0.25} />
-                    <stop offset="95%" stopColor={CYAN}    stopOpacity={0}    />
-                  </linearGradient>
-                  <linearGradient id="txnGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={EMERALD} stopOpacity={0.2}  />
-                    <stop offset="95%" stopColor={EMERALD} stopOpacity={0}    />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fill: "#71717a", fontSize: 10, fontFamily: "monospace" }}
-                  axisLine={false}
-                  tickLine={false}
-                  interval="preserveStartEnd"
-                />
-                <YAxis
-                  yAxisId="rev"
-                  tickFormatter={fmtK}
-                  tick={{ fill: "#71717a", fontSize: 10, fontFamily: "monospace" }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={52}
-                />
-                <YAxis
-                  yAxisId="txn"
-                  orientation="right"
-                  tick={{ fill: "#71717a", fontSize: 10, fontFamily: "monospace" }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={36}
-                />
-                <Tooltip content={<RevenueTooltip />} />
-                <Area
-                  yAxisId="rev"
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke={CYAN}
-                  strokeWidth={2}
-                  fill="url(#revenueGrad)"
-                  dot={false}
-                  activeDot={{ r: 4, fill: CYAN }}
-                />
-                <Area
-                  yAxisId="txn"
-                  type="monotone"
-                  dataKey="transactions"
-                  stroke={EMERALD}
-                  strokeWidth={1.5}
-                  fill="url(#txnGrad)"
-                  dot={false}
-                  activeDot={{ r: 3, fill: EMERALD }}
-                  strokeDasharray="4 2"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-            <div className="flex items-center gap-6 mt-2 pl-2">
-              <div className="flex items-center gap-2">
-                <span className="w-6 h-0.5 bg-cyan-400 inline-block rounded" />
-                <span className="text-[10px] font-mono text-muted-foreground">Revenue (USD)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-6 h-0.5 bg-emerald-400 inline-block rounded border-dashed" />
-                <span className="text-[10px] font-mono text-muted-foreground">Transactions</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Distribution Charts Row ───────────────────────────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-
-          {/* Volume per Merchant — Bar Chart */}
-          <div className="bg-card border border-border rounded-lg overflow-hidden">
-            <SectionHeader
-              icon={<BarChart2 className="w-4 h-4" />}
-              title="Volume per Merchant Account"
-              sub="Total USD processed by each PayPal account"
-            />
-            <div className="p-4">
-              <ResponsiveContainer width="100%" height={240}>
-                <BarChart
-                  data={merchantData}
-                  margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
-                  barCategoryGap="30%"
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" horizontal vertical={false} />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fill: "#71717a", fontSize: 9, fontFamily: "monospace" }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tickFormatter={fmtK}
-                    tick={{ fill: "#71717a", fontSize: 10, fontFamily: "monospace" }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={48}
-                  />
-                  <Tooltip content={<BarTooltip />} />
-                  <Bar dataKey="volume" radius={[3, 3, 0, 0]}>
-                    {merchantData.map((entry, index) => {
-                      const maxVol = Math.max(...merchantData.map((d) => d.volume))
-                      const isTop = entry.volume === maxVol
-                      return (
-                        <Cell
-                          key={entry.name}
-                          fill={isTop ? CYAN : "#22d3ee44"}
-                        />
-                      )
-                    })}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-              <div className="mt-3 space-y-1.5">
-                {merchantData
-                  .sort((a, b) => b.volume - a.volume)
-                  .slice(0, 3)
-                  .map((m, i) => (
-                    <div key={m.name} className="flex items-center justify-between text-xs font-mono">
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground w-4">#{i + 1}</span>
-                        <span className="text-foreground">{m.name}</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-muted-foreground">{m.txCount} txns</span>
-                        <span className="text-cyan-400 font-semibold">{fmtFull(m.volume)}</span>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            </div>
+          {/* Table header */}
+          <div className="grid grid-cols-[24px_160px_80px_1fr_140px] gap-3 px-4 py-2.5 border-b border-border bg-secondary/30 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+            <span />
+            <span>Timestamp</span>
+            <span>Level</span>
+            <span>Event</span>
+            <span>Account</span>
           </div>
 
-          {/* Volume per Store — Pie Chart */}
-          <div className="bg-card border border-border rounded-lg overflow-hidden">
-            <SectionHeader
-              icon={<DollarSign className="w-4 h-4" />}
-              title="Volume per Store"
-              sub="Share of total gateway traffic by client store"
-            />
-            <div className="p-4">
-              <div className="flex items-center gap-4">
-                <ResponsiveContainer width={200} height={200}>
-                  <PieChart>
-                    <Pie
-                      data={storeData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={55}
-                      outerRadius={90}
-                      paddingAngle={2}
-                      dataKey="value"
-                      strokeWidth={0}
+          {paged.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
+              <Filter className="w-8 h-8 opacity-30" />
+              <p className="text-sm font-mono">No logs match the current filters</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {paged.map(log => {
+                const st = LEVEL_STYLES[log.level]
+                const isOpen = expanded === log.id
+                return (
+                  <div key={log.id}>
+                    <button
+                      onClick={() => setExpanded(isOpen ? null : log.id)}
+                      className="w-full grid grid-cols-[24px_160px_80px_1fr_140px] gap-3 px-4 py-2.5 items-center text-left hover:bg-secondary/30 transition-colors"
                     >
-                      {storeData.map((entry, index) => (
-                        <Cell
-                          key={entry.name}
-                          fill={PIE_COLORS[index % PIE_COLORS.length]}
-                          opacity={0.85}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip content={<PieTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="flex-1 space-y-2 min-w-0">
-                  {storeData
-                    .sort((a, b) => b.value - a.value)
-                    .map((store, i) => {
-                      const pct = ((store.value / storeTotal) * 100).toFixed(1)
-                      return (
-                        <div key={store.name} className="flex items-center justify-between gap-2 text-xs font-mono">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span
-                              className="w-2 h-2 rounded-full shrink-0"
-                              style={{ background: PIE_COLORS[i % PIE_COLORS.length] }}
-                            />
-                            <span className="text-foreground truncate">{store.name}</span>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-muted-foreground">{pct}%</span>
-                            <span className="text-foreground">{fmtK(store.value)}</span>
-                          </div>
+                      <LevelIcon level={log.level} />
+                      <span className="text-[11px] font-mono text-muted-foreground truncate">{fmtTs(log.ts)}</span>
+                      <span className={`text-[10px] font-mono font-semibold uppercase tracking-wider ${st.text}`}>
+                        {log.level}
+                      </span>
+                      <span className="text-xs font-mono text-foreground truncate">{log.event}</span>
+                      <span className="text-[11px] font-mono text-muted-foreground truncate">{log.account}</span>
+                    </button>
+                    {isOpen && (
+                      <div className={`mx-4 mb-2 px-3 py-3 rounded-lg border text-xs font-mono space-y-1.5 ${st.bg} ${st.border}`}>
+                        <p className={`font-semibold ${st.text}`}>{log.event}</p>
+                        <p className="text-muted-foreground">{log.detail}</p>
+                        <div className="flex flex-wrap gap-x-6 gap-y-1 text-[11px] text-muted-foreground pt-1">
+                          <span>Store: <span className="text-foreground">{log.store}</span></span>
+                          {log.amount !== undefined && <span>Amount: <span className="text-foreground">${log.amount.toFixed(2)}</span></span>}
+                          {log.txId && <span>Tx ID: <span className="text-foreground">{log.txId}</span></span>}
+                          <span>Time: <span className="text-foreground">{fmtTs(log.ts)}</span></span>
                         </div>
-                      )
-                    })}
-                  <div className="pt-2 border-t border-border flex items-center justify-between text-xs font-mono">
-                    <span className="text-muted-foreground">Total</span>
-                    <span className="text-foreground font-semibold">{fmtFull(storeTotal)}</span>
+                      </div>
+                    )}
                   </div>
-                </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <span className="text-[11px] font-mono text-muted-foreground">
+                {filtered.length} results &bull; page {page + 1} of {totalPages}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage(p => Math.max(0, p - 1))}
+                  disabled={page === 0}
+                  className="px-2.5 py-1 text-xs font-mono bg-background border border-border rounded-md disabled:opacity-40 hover:bg-secondary transition-colors"
+                >
+                  Prev
+                </button>
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                  disabled={page === totalPages - 1}
+                  className="px-2.5 py-1 text-xs font-mono bg-background border border-border rounded-md disabled:opacity-40 hover:bg-secondary transition-colors"
+                >
+                  Next
+                </button>
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* ── Alert strip ───────────────────────────────────────────────────── */}
-        <div className="flex items-start gap-3 bg-amber-400/5 border border-amber-400/20 rounded-lg px-4 py-3">
-          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-          <div className="text-xs font-mono">
-            <span className="text-amber-400 font-semibold">PP-Overflow-06</span>
-            <span className="text-muted-foreground"> is carrying 26% of total network volume — consider rebalancing rotation weights to reduce concentration risk.</span>
-          </div>
+          )}
         </div>
 
       </main>

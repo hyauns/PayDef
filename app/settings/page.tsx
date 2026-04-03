@@ -1,471 +1,339 @@
 "use client"
 
 import { useState } from "react"
-import { TrendingUp, TrendingDown, Activity, DollarSign, AlertTriangle, BarChart2 } from "lucide-react"
-import { DashboardHeader } from "@/components/dashboard/header"
 import {
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-} from "recharts"
+  Settings,
+  Shield,
+  Bell,
+  User,
+  Save,
+  Eye,
+  EyeOff,
+  RefreshCw,
+  AlertTriangle,
+  CheckCircle2,
+  Lock,
+} from "lucide-react"
+import { DashboardHeader } from "@/components/dashboard/header"
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+const SECTION_CLASSES = "bg-card border border-border rounded-lg divide-y divide-border"
+const LABEL = "text-[10px] font-mono text-muted-foreground uppercase tracking-wider"
+const INPUT = "w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+const SECTION_HEADER = "px-5 py-3 flex items-center gap-2.5"
+const SECTION_BODY = "px-5 py-5 space-y-5"
 
-type Range = "24h" | "7d" | "30d"
+function Toggle({ enabled, onToggle }: { enabled: boolean; onToggle: () => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${enabled ? "bg-cyan-500" : "bg-secondary border border-border"}`}
+    >
+      <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${enabled ? "left-[22px]" : "left-0.5"}`} />
+    </button>
+  )
+}
 
-// ─── Data generators ──────────────────────────────────────────────────────────
+export default function SettingsPage() {
+  const [saved, setSaved] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
 
-function revenueData(range: Range) {
-  if (range === "24h") {
-    return Array.from({ length: 24 }, (_, i) => ({
-      label: `${String(i).padStart(2, "0")}:00`,
-      revenue: Math.round(800 + Math.sin(i / 3) * 400 + Math.random() * 200),
-      transactions: Math.round(18 + Math.random() * 14),
-    }))
+  const [settings, setSettings] = useState({
+    defaultDailyLimit: "5000",
+    rotationStrategy: "weighted_random",
+    telegramToken: "",
+    chatId: "",
+    alertThreshold: "90",
+    priceRevalidation: true,
+    ipWhitelist: "203.0.113.10\n198.51.100.42",
+    adminEmail: "admin@gateway.io",
+    currentPassword: "",
+    newPassword: "",
+  })
+
+  const update = (patch: Partial<typeof settings>) => setSettings(p => ({ ...p, ...patch }))
+
+  const handleSave = () => {
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2500)
   }
-  if (range === "7d") {
-    const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-    return days.map((label) => ({
-      label,
-      revenue: Math.round(12000 + Math.random() * 8000),
-      transactions: Math.round(280 + Math.random() * 160),
-    }))
-  }
-  return Array.from({ length: 30 }, (_, i) => ({
-    label: `Apr ${i + 1}`,
-    revenue: Math.round(10000 + Math.sin(i / 5) * 4000 + Math.random() * 3000),
-    transactions: Math.round(220 + Math.random() * 180),
-  }))
-}
-
-const merchantData = [
-  { name: "PP-Main-01",     volume: 42500, txCount: 187 },
-  { name: "PP-Relay-02",    volume: 38200, txCount: 214 },
-  { name: "PP-Node-03",     volume: 27100, txCount: 58  },
-  { name: "PP-Backup-04",   volume: 19800, txCount: 94  },
-  { name: "PP-Alt-05",      volume: 29000, txCount: 113 },
-  { name: "PP-Overflow-06", volume: 48600, txCount: 221 },
-  { name: "PP-Warmup-07",   volume: 3200,  txCount: 14  },
-]
-
-const storeData = [
-  { name: "Tire Shop Pro",  value: 31200 },
-  { name: "Yoga Bliss",     value: 18700 },
-  { name: "Pet Paradise",   value: 24100 },
-  { name: "TechNova",       value: 42800 },
-  { name: "GlowUp Beauty",  value: 15300 },
-  { name: "FitGear Store",  value: 27600 },
-  { name: "UrbanKicks",     value: 19700 },
-]
-
-// Colors — passed as JS values, not CSS vars (recharts requirement)
-const PIE_COLORS = ["#22d3ee", "#34d399", "#fbbf24", "#f87171", "#a78bfa", "#fb923c", "#60a5fa"]
-const CYAN   = "#22d3ee"
-const EMERALD = "#34d399"
-
-// ─── Formatters ───────────────────────────────────────────────────────────────
-
-function fmtK(v: number) {
-  return v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${v}`
-}
-
-function fmtFull(v: number) {
-  return `$${v.toLocaleString("en-US", { minimumFractionDigits: 0 })}`
-}
-
-// ─── Metric Card ─────────────────────────────────────────────────────────────
-
-function MetricCard({
-  label, value, sub, trend, trendUp, accent,
-}: {
-  label: string
-  value: string
-  sub?: string
-  trend?: string
-  trendUp?: boolean
-  accent?: string
-}) {
-  return (
-    <div className={`bg-card border rounded-lg p-4 flex flex-col gap-2 ${accent ?? "border-border"}`}>
-      <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{label}</p>
-      <p className="text-2xl font-mono font-bold text-foreground">{value}</p>
-      {sub && <p className="text-xs font-mono text-muted-foreground">{sub}</p>}
-      {trend && (
-        <div className={`flex items-center gap-1 text-xs font-mono ${trendUp ? "text-emerald-400" : "text-red-400"}`}>
-          {trendUp ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-          {trend}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── Section Header ───────────────────────────────────────────────────────────
-
-function SectionHeader({ icon, title, sub }: { icon: React.ReactNode; title: string; sub?: string }) {
-  return (
-    <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
-      <div className="text-cyan-400">{icon}</div>
-      <div>
-        <p className="text-sm font-semibold text-foreground">{title}</p>
-        {sub && <p className="text-[10px] font-mono text-muted-foreground">{sub}</p>}
-      </div>
-    </div>
-  )
-}
-
-// ─── Custom Tooltip ───────────────────────────────────────────────────────────
-
-function RevenueTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs font-mono shadow-xl">
-      <p className="text-muted-foreground mb-1">{label}</p>
-      <p className="text-cyan-400">Revenue: {fmtFull(payload[0]?.value ?? 0)}</p>
-      <p className="text-emerald-400">Txns: {payload[1]?.value ?? 0}</p>
-    </div>
-  )
-}
-
-function BarTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs font-mono shadow-xl">
-      <p className="text-foreground font-semibold mb-1">{label}</p>
-      <p className="text-cyan-400">Volume: {fmtFull(payload[0]?.value ?? 0)}</p>
-    </div>
-  )
-}
-
-function PieTooltip({ active, payload }: any) {
-  if (!active || !payload?.length) return null
-  const total = storeData.reduce((s, d) => s + d.value, 0)
-  const pct = ((payload[0].value / total) * 100).toFixed(1)
-  return (
-    <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs font-mono shadow-xl">
-      <p className="text-foreground font-semibold">{payload[0].name}</p>
-      <p style={{ color: payload[0].payload.fill }}>{fmtFull(payload[0].value)} ({pct}%)</p>
-    </div>
-  )
-}
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
-
-export default function AnalyticsPage() {
-  const [range, setRange] = useState<Range>("7d")
-  const data = revenueData(range)
-
-  const totalRevenue = data.reduce((s, d) => s + d.revenue, 0)
-  const totalTxns    = data.reduce((s, d) => s + d.transactions, 0)
-  const storeTotal   = storeData.reduce((s, d) => s + d.value, 0)
-
-  const RANGES: { key: Range; label: string }[] = [
-    { key: "24h", label: "Last 24h" },
-    { key: "7d",  label: "7 Days"   },
-    { key: "30d", label: "30 Days"  },
-  ]
 
   return (
     <div className="min-h-screen bg-background font-mono">
       <DashboardHeader />
+      <main className="px-4 md:px-6 py-5 max-w-3xl mx-auto space-y-5">
 
-      <main className="px-4 md:px-6 py-5 space-y-5 max-w-[1600px] mx-auto">
-
-        {/* ── Page header ─────────────────────────────────────────────────── */}
+        {/* Page header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-semibold text-foreground">Analytics</h1>
-            <p className="text-xs font-mono text-muted-foreground mt-0.5">
-              Performance overview across all stores and merchant accounts
-            </p>
+            <h1 className="text-lg font-semibold text-foreground">Settings</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">Global gateway configuration and security controls</p>
           </div>
-
-          {/* Date-range picker */}
-          <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1">
-            {RANGES.map((r) => (
-              <button
-                key={r.key}
-                onClick={() => setRange(r.key)}
-                className={`px-3 py-1.5 text-xs font-mono rounded-md transition-colors ${
-                  range === r.key
-                    ? "bg-cyan-400/10 text-cyan-400 border border-cyan-400/20"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
+          <button
+            onClick={handleSave}
+            className={`flex items-center gap-2 px-4 py-2 text-xs font-mono font-semibold rounded-md transition-all ${
+              saved
+                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                : "bg-cyan-400 text-background hover:bg-cyan-300"
+            }`}
+          >
+            {saved ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+            {saved ? "Saved" : "Save Changes"}
+          </button>
         </div>
 
-        {/* ── Performance Metric Cards ─────────────────────────────────────── */}
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-          <MetricCard
-            label="Total Revenue"
-            value={fmtK(totalRevenue)}
-            sub={`${totalTxns.toLocaleString()} transactions`}
-            trend="+12.4% vs prior period"
-            trendUp
-            accent="border-cyan-400/30"
-          />
-          <MetricCard
-            label="Success Rate"
-            value="97.3%"
-            sub="↑ 0.8pp this period"
-            trend="+0.8pp improvement"
-            trendUp
-            accent="border-emerald-400/30"
-          />
-          <MetricCard
-            label="Avg Transaction"
-            value="$184.20"
-            sub="median $142.50"
-            trend="+$8.40 vs prior"
-            trendUp
-          />
-          <MetricCard
-            label="Dispute Rate"
-            value="0.41%"
-            sub="8 open disputes"
-            trend="-0.12pp vs prior"
-            trendUp
-            accent="border-emerald-400/20"
-          />
-          <MetricCard
-            label="Refund Rate"
-            value="1.8%"
-            sub="$3,210 refunded"
-            trend="+0.3pp vs prior"
-            trendUp={false}
-            accent="border-amber-400/20"
-          />
-          <MetricCard
-            label="Active Accounts"
-            value="5 / 7"
-            sub="2 paused or warm-up"
-            accent="border-border"
-          />
-        </div>
-
-        {/* ── Revenue Area Chart ───────────────────────────────────────────── */}
-        <div className="bg-card border border-border rounded-lg overflow-hidden">
-          <SectionHeader
-            icon={<Activity className="w-4 h-4" />}
-            title="Revenue vs. Time"
-            sub={`Showing ${range === "24h" ? "hourly" : range === "7d" ? "daily" : "daily"} breakdown`}
-          />
-          <div className="p-4">
-            <ResponsiveContainer width="100%" height={280}>
-              <AreaChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={CYAN}    stopOpacity={0.25} />
-                    <stop offset="95%" stopColor={CYAN}    stopOpacity={0}    />
-                  </linearGradient>
-                  <linearGradient id="txnGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={EMERALD} stopOpacity={0.2}  />
-                    <stop offset="95%" stopColor={EMERALD} stopOpacity={0}    />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fill: "#71717a", fontSize: 10, fontFamily: "monospace" }}
-                  axisLine={false}
-                  tickLine={false}
-                  interval="preserveStartEnd"
-                />
-                <YAxis
-                  yAxisId="rev"
-                  tickFormatter={fmtK}
-                  tick={{ fill: "#71717a", fontSize: 10, fontFamily: "monospace" }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={52}
-                />
-                <YAxis
-                  yAxisId="txn"
-                  orientation="right"
-                  tick={{ fill: "#71717a", fontSize: 10, fontFamily: "monospace" }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={36}
-                />
-                <Tooltip content={<RevenueTooltip />} />
-                <Area
-                  yAxisId="rev"
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke={CYAN}
-                  strokeWidth={2}
-                  fill="url(#revenueGrad)"
-                  dot={false}
-                  activeDot={{ r: 4, fill: CYAN }}
-                />
-                <Area
-                  yAxisId="txn"
-                  type="monotone"
-                  dataKey="transactions"
-                  stroke={EMERALD}
-                  strokeWidth={1.5}
-                  fill="url(#txnGrad)"
-                  dot={false}
-                  activeDot={{ r: 3, fill: EMERALD }}
-                  strokeDasharray="4 2"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-            <div className="flex items-center gap-6 mt-2 pl-2">
-              <div className="flex items-center gap-2">
-                <span className="w-6 h-0.5 bg-cyan-400 inline-block rounded" />
-                <span className="text-[10px] font-mono text-muted-foreground">Revenue (USD)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-6 h-0.5 bg-emerald-400 inline-block rounded border-dashed" />
-                <span className="text-[10px] font-mono text-muted-foreground">Transactions</span>
-              </div>
+        {/* Section 1: Global Rotation Rules */}
+        <div className={SECTION_CLASSES}>
+          <div className={SECTION_HEADER}>
+            <div className="w-6 h-6 rounded bg-cyan-400/10 border border-cyan-400/20 flex items-center justify-center">
+              <Settings className="w-3.5 h-3.5 text-cyan-400" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground">Global Rotation Rules</p>
+              <p className="text-[11px] text-muted-foreground">Default limits and strategy applied across all accounts</p>
             </div>
           </div>
-        </div>
-
-        {/* ── Distribution Charts Row ───────────────────────────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-
-          {/* Volume per Merchant — Bar Chart */}
-          <div className="bg-card border border-border rounded-lg overflow-hidden">
-            <SectionHeader
-              icon={<BarChart2 className="w-4 h-4" />}
-              title="Volume per Merchant Account"
-              sub="Total USD processed by each PayPal account"
-            />
-            <div className="p-4">
-              <ResponsiveContainer width="100%" height={240}>
-                <BarChart
-                  data={merchantData}
-                  margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
-                  barCategoryGap="30%"
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" horizontal vertical={false} />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fill: "#71717a", fontSize: 9, fontFamily: "monospace" }}
-                    axisLine={false}
-                    tickLine={false}
+          <div className={SECTION_BODY}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="space-y-1.5">
+                <label className={LABEL}>Default Daily Limit (USD)</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-mono text-muted-foreground">$</span>
+                  <input
+                    type="number"
+                    value={settings.defaultDailyLimit}
+                    onChange={e => update({ defaultDailyLimit: e.target.value })}
+                    className={`${INPUT} pl-7`}
+                    placeholder="5000"
                   />
-                  <YAxis
-                    tickFormatter={fmtK}
-                    tick={{ fill: "#71717a", fontSize: 10, fontFamily: "monospace" }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={48}
-                  />
-                  <Tooltip content={<BarTooltip />} />
-                  <Bar dataKey="volume" radius={[3, 3, 0, 0]}>
-                    {merchantData.map((entry, index) => {
-                      const maxVol = Math.max(...merchantData.map((d) => d.volume))
-                      const isTop = entry.volume === maxVol
-                      return (
-                        <Cell
-                          key={entry.name}
-                          fill={isTop ? CYAN : "#22d3ee44"}
-                        />
-                      )
-                    })}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-              <div className="mt-3 space-y-1.5">
-                {merchantData
-                  .sort((a, b) => b.volume - a.volume)
-                  .slice(0, 3)
-                  .map((m, i) => (
-                    <div key={m.name} className="flex items-center justify-between text-xs font-mono">
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground w-4">#{i + 1}</span>
-                        <span className="text-foreground">{m.name}</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-muted-foreground">{m.txCount} txns</span>
-                        <span className="text-cyan-400 font-semibold">{fmtFull(m.volume)}</span>
-                      </div>
+                </div>
+                <p className="text-[10px] text-muted-foreground font-mono">Applied to any account without an explicit adaptive limit</p>
+              </div>
+              <div className="space-y-1.5">
+                <label className={LABEL}>Alert Threshold (%)</label>
+                <input
+                  type="number"
+                  min="50"
+                  max="100"
+                  value={settings.alertThreshold}
+                  onChange={e => update({ alertThreshold: e.target.value })}
+                  className={INPUT}
+                  placeholder="90"
+                />
+                <p className="text-[10px] text-muted-foreground font-mono">Send alert when account reaches this % of its daily limit</p>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className={LABEL}>Global Rotation Strategy</label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {[
+                  { value: "weighted_random", label: "Weighted Random", desc: "Accounts with higher priority receive proportionally more traffic" },
+                  { value: "round_robin", label: "Round Robin", desc: "Each request cycles sequentially through all active accounts" },
+                  { value: "lowest_volume", label: "Lowest Volume First", desc: "Always routes to the account with the most remaining daily capacity" },
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => update({ rotationStrategy: opt.value })}
+                    className={`text-left p-3 rounded-lg border transition-all ${
+                      settings.rotationStrategy === opt.value
+                        ? "border-cyan-400/40 bg-cyan-400/5 text-foreground"
+                        : "border-border bg-background text-muted-foreground hover:border-border/80 hover:text-foreground"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`w-2 h-2 rounded-full border-2 flex-shrink-0 ${settings.rotationStrategy === opt.value ? "border-cyan-400 bg-cyan-400" : "border-muted-foreground"}`} />
+                      <span className="text-xs font-mono font-semibold">{opt.label}</span>
                     </div>
-                  ))}
+                    <p className="text-[10px] font-mono leading-relaxed pl-4">{opt.desc}</p>
+                  </button>
+                ))}
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Volume per Store — Pie Chart */}
-          <div className="bg-card border border-border rounded-lg overflow-hidden">
-            <SectionHeader
-              icon={<DollarSign className="w-4 h-4" />}
-              title="Volume per Store"
-              sub="Share of total gateway traffic by client store"
-            />
-            <div className="p-4">
-              <div className="flex items-center gap-4">
-                <ResponsiveContainer width={200} height={200}>
-                  <PieChart>
-                    <Pie
-                      data={storeData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={55}
-                      outerRadius={90}
-                      paddingAngle={2}
-                      dataKey="value"
-                      strokeWidth={0}
-                    >
-                      {storeData.map((entry, index) => (
-                        <Cell
-                          key={entry.name}
-                          fill={PIE_COLORS[index % PIE_COLORS.length]}
-                          opacity={0.85}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip content={<PieTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="flex-1 space-y-2 min-w-0">
-                  {storeData
-                    .sort((a, b) => b.value - a.value)
-                    .map((store, i) => {
-                      const pct = ((store.value / storeTotal) * 100).toFixed(1)
-                      return (
-                        <div key={store.name} className="flex items-center justify-between gap-2 text-xs font-mono">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span
-                              className="w-2 h-2 rounded-full shrink-0"
-                              style={{ background: PIE_COLORS[i % PIE_COLORS.length] }}
-                            />
-                            <span className="text-foreground truncate">{store.name}</span>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-muted-foreground">{pct}%</span>
-                            <span className="text-foreground">{fmtK(store.value)}</span>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  <div className="pt-2 border-t border-border flex items-center justify-between text-xs font-mono">
-                    <span className="text-muted-foreground">Total</span>
-                    <span className="text-foreground font-semibold">{fmtFull(storeTotal)}</span>
-                  </div>
+        {/* Section 2: Notifications */}
+        <div className={SECTION_CLASSES}>
+          <div className={SECTION_HEADER}>
+            <div className="w-6 h-6 rounded bg-amber-400/10 border border-amber-400/20 flex items-center justify-center">
+              <Bell className="w-3.5 h-3.5 text-amber-400" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground">Notifications</p>
+              <p className="text-[11px] text-muted-foreground">Telegram alerts when accounts approach their daily limit</p>
+            </div>
+          </div>
+          <div className={SECTION_BODY}>
+            <div className="flex items-start gap-3 bg-amber-400/5 border border-amber-400/20 rounded-md px-3 py-2.5">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+              <p className="text-[11px] font-mono text-muted-foreground">
+                Create a bot via <span className="text-amber-400">@BotFather</span> on Telegram, add it to your admin group, and paste the credentials below.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="space-y-1.5">
+                <label className={LABEL}>Telegram Bot Token</label>
+                <input
+                  type="password"
+                  value={settings.telegramToken}
+                  onChange={e => update({ telegramToken: e.target.value })}
+                  className={INPUT}
+                  placeholder="7412345678:AAF..."
+                  autoComplete="off"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className={LABEL}>Admin Chat ID</label>
+                <input
+                  value={settings.chatId}
+                  onChange={e => update({ chatId: e.target.value })}
+                  className={INPUT}
+                  placeholder="-1001234567890"
+                />
+              </div>
+            </div>
+            <button className="flex items-center gap-2 text-xs font-mono text-cyan-400 border border-cyan-400/30 hover:bg-cyan-400/10 rounded-md px-3 py-1.5 transition-colors">
+              <RefreshCw className="w-3 h-3" />
+              Send Test Alert
+            </button>
+          </div>
+        </div>
+
+        {/* Section 3: Security */}
+        <div className={SECTION_CLASSES}>
+          <div className={SECTION_HEADER}>
+            <div className="w-6 h-6 rounded bg-emerald-400/10 border border-emerald-400/20 flex items-center justify-center">
+              <Shield className="w-3.5 h-3.5 text-emerald-400" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground">Security</p>
+              <p className="text-[11px] text-muted-foreground">Server-side validation and access controls</p>
+            </div>
+          </div>
+          <div className={SECTION_BODY}>
+            <div className="flex items-center justify-between gap-4 p-3 bg-background border border-border rounded-lg">
+              <div className="space-y-0.5">
+                <p className="text-sm font-mono font-semibold text-foreground">Server-side Price Re-validation</p>
+                <p className="text-[11px] font-mono text-muted-foreground">
+                  Re-confirms the exact charge amount server-side before routing to PayPal. Prevents price manipulation attacks.
+                </p>
+              </div>
+              <Toggle enabled={settings.priceRevalidation} onToggle={() => update({ priceRevalidation: !settings.priceRevalidation })} />
+            </div>
+            <div className="space-y-1.5">
+              <label className={LABEL}>IP Whitelist</label>
+              <textarea
+                value={settings.ipWhitelist}
+                onChange={e => update({ ipWhitelist: e.target.value })}
+                rows={4}
+                className={`${INPUT} resize-none leading-relaxed`}
+                placeholder={"203.0.113.10\n198.51.100.42"}
+              />
+              <p className="text-[10px] font-mono text-muted-foreground">
+                One IP address per line. Only these IPs may call the Gateway API. Leave empty to allow all (not recommended).
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Section 4: Admin Profile */}
+        <div className={SECTION_CLASSES}>
+          <div className={SECTION_HEADER}>
+            <div className="w-6 h-6 rounded bg-violet-400/10 border border-violet-400/20 flex items-center justify-center">
+              <User className="w-3.5 h-3.5 text-violet-400" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground">Admin Profile</p>
+              <p className="text-[11px] text-muted-foreground">Update dashboard login credentials</p>
+            </div>
+          </div>
+          <div className={SECTION_BODY}>
+            <div className="space-y-1.5">
+              <label className={LABEL}>Admin Email</label>
+              <input
+                type="email"
+                value={settings.adminEmail}
+                onChange={e => update({ adminEmail: e.target.value })}
+                className={INPUT}
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="space-y-1.5">
+                <label className={LABEL}>Current Password</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={settings.currentPassword}
+                    onChange={e => update({ currentPassword: e.target.value })}
+                    className={`${INPUT} pr-10`}
+                    placeholder="••••••••••••"
+                    autoComplete="current-password"
+                  />
+                  <button
+                    onClick={() => setShowPassword(p => !p)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className={LABEL}>New Password</label>
+                <div className="relative">
+                  <input
+                    type={showNewPassword ? "text" : "password"}
+                    value={settings.newPassword}
+                    onChange={e => update({ newPassword: e.target.value })}
+                    className={`${INPUT} pr-10`}
+                    placeholder="Min 12 characters"
+                    autoComplete="new-password"
+                  />
+                  <button
+                    onClick={() => setShowNewPassword(p => !p)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showNewPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
                 </div>
               </div>
             </div>
+            {settings.newPassword && settings.newPassword.length < 12 && (
+              <div className="flex items-center gap-2 text-[11px] font-mono text-red-400">
+                <AlertTriangle className="w-3 h-3" />
+                Password must be at least 12 characters
+              </div>
+            )}
+            <div className="border-t border-border pt-4">
+              <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground bg-secondary/50 rounded-md px-3 py-2">
+                <Lock className="w-3 h-3 text-emerald-400 shrink-0" />
+                Passwords are hashed with bcrypt and never stored in plain text
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* ── Alert strip ───────────────────────────────────────────────────── */}
-        <div className="flex items-start gap-3 bg-amber-400/5 border border-amber-400/20 rounded-lg px-4 py-3">
-          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-          <div className="text-xs font-mono">
-            <span className="text-amber-400 font-semibold">PP-Overflow-06</span>
-            <span className="text-muted-foreground"> is carrying 26% of total network volume — consider rebalancing rotation weights to reduce concentration risk.</span>
-          </div>
+        {/* Bottom save */}
+        <div className="flex justify-end pb-8">
+          <button
+            onClick={handleSave}
+            className={`flex items-center gap-2 px-6 py-2.5 text-sm font-mono font-semibold rounded-md transition-all ${
+              saved
+                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                : "bg-cyan-400 text-background hover:bg-cyan-300"
+            }`}
+          >
+            {saved ? <CheckCircle2 className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+            {saved ? "Saved Successfully" : "Save All Changes"}
+          </button>
         </div>
 
       </main>
     </div>
   )
 }
+
+
+
+
+
+
