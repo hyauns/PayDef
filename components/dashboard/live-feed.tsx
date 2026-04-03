@@ -1,7 +1,7 @@
 "use client"
 
 import { Zap } from "lucide-react"
-import { LiveFeedClient } from "./live-feed-client"
+import { LiveFeedClient } from "@/components/dashboard/live-feed-client"
 
 export function LiveFeed() {
   return (

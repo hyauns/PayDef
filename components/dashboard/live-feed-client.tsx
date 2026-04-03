@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ArrowRightLeft, Zap } from "lucide-react"
+import { ArrowRightLeft } from "lucide-react"
 
 interface Transaction {
   id: string
@@ -19,11 +19,10 @@ const DOMAINS = ["chococlose.com", "safepay-hub.io", "payshield-cdn.com", "relay
 const STATUSES: Transaction["status"][] = ["success", "success", "success", "success", "pending", "failed"]
 
 function randomTx(): Transaction {
-  const store = STORES[Math.floor(Math.random() * STORES.length)]
   const idx = Math.floor(Math.random() * ACCOUNTS.length)
   return {
     id: `tx-${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
-    store,
+    store: STORES[Math.floor(Math.random() * STORES.length)],
     amount: parseFloat((Math.random() * 490 + 10).toFixed(2)),
     paypalAccount: ACCOUNTS[idx],
     shieldDomain: DOMAINS[idx],
@@ -41,13 +40,13 @@ function buildInitialFeed(): Transaction[] {
 
 const statusConfig = {
   success: { text: "text-emerald-400", bg: "bg-emerald-400/10", label: "SUCCESS" },
-  pending: { text: "text-amber-400", bg: "bg-amber-400/10", label: "PENDING" },
-  failed: { text: "text-red-400", bg: "bg-red-400/10", label: "FAILED" },
+  pending: { text: "text-amber-400",   bg: "bg-amber-400/10",   label: "PENDING" },
+  failed:  { text: "text-red-400",     bg: "bg-red-400/10",     label: "FAILED"  },
 }
 
 function timeAgo(date: Date): string {
   const secs = Math.floor((Date.now() - date.getTime()) / 1000)
-  if (secs < 5) return "just now"
+  if (secs < 5)  return "just now"
   if (secs < 60) return `${secs}s ago`
   return `${Math.floor(secs / 60)}m ago`
 }
@@ -56,32 +55,52 @@ export function LiveFeedClient() {
   const [feed, setFeed] = useState<Transaction[]>([])
   const [, setTicker] = useState(0)
 
+  // Client-only: avoids SSR/hydration mismatch
   useEffect(() => {
     setFeed(buildInitialFeed())
   }, [])
 
   useEffect(() => {
-    const interval = setInterval(() => {
+    const id = setInterval(() => {
       setFeed((prev) => [randomTx(), ...prev.slice(0, 19)])
     }, 3500)
-    return () => clearInterval(interval)
+    return () => clearInterval(id)
   }, [])
 
   useEffect(() => {
-    const t = setInterval(() => setTicker((n) => n + 1), 5000)
-    return () => clearInterval(t)
+    const id = setInterval(() => setTicker((n) => n + 1), 5000)
+    return () => clearInterval(id)
   }, [])
+
+  if (feed.length === 0) {
+    return (
+      <div className="overflow-y-auto flex-1 max-h-[420px]">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="flex items-start gap-3 px-4 py-2.5 border-b border-border/40">
+            <div className="w-7 h-7 rounded-md bg-secondary shrink-0 mt-0.5" />
+            <div className="flex-1 space-y-1.5 py-0.5">
+              <div className="flex justify-between gap-2">
+                <div className="h-3 w-24 bg-secondary rounded" />
+                <div className="h-3 w-14 bg-secondary rounded" />
+              </div>
+              <div className="h-2.5 w-40 bg-secondary rounded" />
+              <div className="h-2.5 w-28 bg-secondary rounded" />
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
 
   return (
     <div className="overflow-y-auto flex-1 max-h-[420px]">
       {feed.map((tx, i) => {
         const cfg = statusConfig[tx.status]
-        const isNew = i === 0
         return (
           <div
             key={tx.id}
             className={`flex items-start gap-3 px-4 py-2.5 border-b border-border/40 hover:bg-secondary/20 transition-all ${
-              isNew ? "bg-cyan-400/5" : ""
+              i === 0 ? "bg-cyan-400/5" : ""
             }`}
           >
             <div className="mt-0.5 shrink-0">

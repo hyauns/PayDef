@@ -11,6 +11,7 @@ const navItems = [
   { label: "Analytics", href: "/analytics" },
   { label: "Logs", href: "/logs" },
   { label: "Settings", href: "/settings" },
+  { label: "Super Admin", href: "/super-admin" },
 ]
 
 export function DashboardHeader() {
