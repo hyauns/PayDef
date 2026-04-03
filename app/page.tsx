@@ -1,6 +1,6 @@
 "use client"
 
-import { DashboardHeader } from "@/components/dashboard/header"
+import { DashboardHeader } from "@/components/nav/top-bar"
 import { GlobalMetrics } from "@/components/dashboard/global-metrics"
 import { MerchantAccounts } from "@/components/dashboard/merchant-accounts"
 import { ConnectedStores } from "@/components/dashboard/connected-stores"

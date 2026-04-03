@@ -21,7 +21,7 @@ import {
   Clock,
   Zap,
 } from "lucide-react"
-import { DashboardHeader } from "@/components/dashboard/header"
+import { DashboardHeader } from "@/components/nav/top-bar"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
-
 import {
   Shield,
   Bell,
@@ -40,40 +39,39 @@ type NotificationTransaction = {
   createdAt: string
 }
 
-
-
 // ─── Nav Items ────────────────────────────────────────────────────────────────
-const merchantNavItems = [
-  { label: "Overview", href: "/" },
-  { label: "Accounts", href: "/accounts" },
-  { label: "Stores", href: "/stores" },
+const MERCHANT_NAV = [
+  { label: "Overview",     href: "/" },
+  { label: "Accounts",     href: "/accounts" },
+  { label: "Stores",       href: "/stores" },
   { label: "Transactions", href: "/transactions" },
-  { label: "Analytics", href: "/analytics" },
-  { label: "Logs", href: "/logs" },
-  { label: "Settings", href: "/settings" },
+  { label: "Analytics",    href: "/analytics" },
+  { label: "Logs",         href: "/logs" },
+  { label: "Settings",     href: "/settings" },
 ]
 
-const adminNavItems = [
-  { label: "Overview", href: "/super-admin" },
-  { label: "Tenants", href: "/super-admin/tenants" },
+const ADMIN_NAV = [
+  { label: "Overview",  href: "/super-admin" },
+  { label: "Tenants",   href: "/super-admin/tenants" },
   { label: "Analytics", href: "/analytics" },
-  { label: "Logs", href: "/logs" },
-  { label: "Settings", href: "/settings" },
+  { label: "Logs",      href: "/logs" },
+  { label: "Settings",  href: "/settings" },
 ]
 
 // ─── Status Badge ─────────────────────────────────────────────────────────────
+const STATUS_CONFIG = {
+  COMPLETED: { icon: CheckCircle2, color: "text-emerald-400", bg: "bg-emerald-400/10" },
+  FAILED:    { icon: XCircle,      color: "text-red-400",     bg: "bg-red-400/10"     },
+  PENDING:   { icon: Clock,        color: "text-amber-400",   bg: "bg-amber-400/10"   },
+  REFUNDED:  { icon: XCircle,      color: "text-orange-400",  bg: "bg-orange-400/10"  },
+  DISPUTED:  { icon: XCircle,      color: "text-purple-400",  bg: "bg-purple-400/10"  },
+} as const
+
 function StatusBadge({ status }: { status: NotificationTransaction["status"] }) {
-  const config = {
-    COMPLETED: { icon: CheckCircle2, color: "text-emerald-400", bg: "bg-emerald-400/10" },
-    FAILED:    { icon: XCircle,      color: "text-red-400",     bg: "bg-red-400/10" },
-    PENDING:   { icon: Clock,        color: "text-amber-400",   bg: "bg-amber-400/10" },
-    REFUNDED:  { icon: XCircle,      color: "text-orange-400",  bg: "bg-orange-400/10" },
-    DISPUTED:  { icon: XCircle,      color: "text-purple-400",  bg: "bg-purple-400/10" },
-  }
-  const { icon: Icon, color, bg } = config[status] ?? config.PENDING
+  const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.PENDING
   return (
-    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono ${bg} ${color}`}>
-      <Icon className="w-2.5 h-2.5" />
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono ${cfg.bg} ${cfg.color}`}>
+      <cfg.icon className="w-2.5 h-2.5" />
       {status}
     </span>
   )
@@ -82,60 +80,55 @@ function StatusBadge({ status }: { status: NotificationTransaction["status"] }) 
 // ─── Header ───────────────────────────────────────────────────────────────────
 export function DashboardHeader() {
   const pathname = usePathname()
-  const router = useRouter()
+  const router   = useRouter()
   const { data: session, status } = useSession()
-  const [hasUnread, setHasUnread] = useState(true)
 
-  const role = (session?.user?.role as Role) ?? "MERCHANT"
-  const userName = session?.user?.name ?? session?.user?.email?.split("@")[0] ?? "User"
-  const userInitial = userName.charAt(0).toUpperCase()
+  const role      = (session?.user?.role as Role) ?? "MERCHANT"
+  const userName  = session?.user?.name ?? session?.user?.email?.split("@")[0] ?? "User"
+  const initial   = userName.charAt(0).toUpperCase()
+  const navItems  = role === "SUPER_ADMIN" ? ADMIN_NAV : MERCHANT_NAV
+  const settingsHref = role === "SUPER_ADMIN" ? "/admin/settings" : "/settings"
 
-  // Fetch recent transactions for notifications
+  // ── Notification state ──────────────────────────────────────────────────────
   const [notifications, setNotifications] = useState<NotificationTransaction[]>([])
+  const [hasUnread, setHasUnread]         = useState(false)
 
   const fetchNotifications = useCallback(async () => {
     if (status !== "authenticated") return
     try {
       const res = await fetch("/api/merchant/logs?limit=5")
       if (res.ok) {
-        const data = await res.json()
-        setNotifications(data.transactions ?? [])
+        const json = await res.json()
+        const txns: NotificationTransaction[] = json.transactions ?? []
+        setNotifications(txns)
+        setHasUnread(txns.length > 0)
       }
     } catch {
-      // Silently fail — notifications are non-critical
+      // Non-critical — silently ignore
     }
   }, [status])
 
   useEffect(() => {
     fetchNotifications()
-    const interval = setInterval(fetchNotifications, 30_000)
-    return () => clearInterval(interval)
+    const id = setInterval(fetchNotifications, 30_000)
+    return () => clearInterval(id)
   }, [fetchNotifications])
 
-  // Clear unread indicator when popover is opened
-  const handleNotificationOpen = (open: boolean) => {
-    if (open && hasUnread) {
-      setHasUnread(false)
-    }
+  // ── Handlers ────────────────────────────────────────────────────────────────
+  const handleBellOpen = (open: boolean) => {
+    if (open) setHasUnread(false)
   }
 
-  // Dynamic settings link based on role
-  const settingsHref = role === "SUPER_ADMIN" ? "/admin/settings" : "/settings"
-
-  // Dynamic nav items based on role
-  const navItems = role === "SUPER_ADMIN" ? adminNavItems : merchantNavItems
-
-  // Logout handler
   const handleLogout = async () => {
     await signOut({ redirect: false })
     router.push("/login")
   }
 
-  // Show loading state while session is loading
+  // ── Loading skeleton ────────────────────────────────────────────────────────
   if (status === "loading") {
     return (
       <header className="border-b border-border bg-card sticky top-0 z-30">
-        <div className="flex items-center justify-between px-6 h-12 gap-4">
+        <div className="flex items-center justify-between px-6 h-12">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 bg-cyan-400/10 border border-cyan-400/30 rounded-md flex items-center justify-center">
               <Shield className="w-4 h-4 text-cyan-400" />
@@ -151,8 +144,12 @@ export function DashboardHeader() {
   return (
     <header className="border-b border-border bg-card sticky top-0 z-30">
       <div className="flex items-center justify-between px-6 h-12 gap-4">
+
         {/* Logo */}
-        <Link href={role === "SUPER_ADMIN" ? "/super-admin" : "/"} className="flex items-center gap-2.5 shrink-0">
+        <Link
+          href={role === "SUPER_ADMIN" ? "/super-admin" : "/"}
+          className="flex items-center gap-2.5 shrink-0"
+        >
           <div className="w-7 h-7 bg-cyan-400/10 border border-cyan-400/30 rounded-md flex items-center justify-center">
             <Shield className="w-4 h-4 text-cyan-400" />
           </div>
@@ -168,9 +165,10 @@ export function DashboardHeader() {
         {/* Nav */}
         <nav className="hidden md:flex items-center gap-1 flex-1 justify-center">
           {navItems.map((item) => {
-            const isActive = item.href === "/" || item.href === "/super-admin"
-              ? pathname === item.href
-              : pathname.startsWith(item.href)
+            const isActive =
+              item.href === "/" || item.href === "/super-admin"
+                ? pathname === item.href
+                : pathname.startsWith(item.href)
             return (
               <Link
                 key={item.href}
@@ -187,20 +185,21 @@ export function DashboardHeader() {
           })}
         </nav>
 
-        {/* Right side */}
+        {/* Right-side controls */}
         <div className="flex items-center gap-2 shrink-0">
-          {/* System Status */}
+
+          {/* System status pill */}
           <div className="hidden sm:flex items-center gap-1.5 text-xs font-mono text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-2.5 py-1 rounded-md">
             <Circle className="w-2 h-2 fill-emerald-400 text-emerald-400 animate-pulse" />
             All Systems Operational
           </div>
 
-          {/* Notifications Bell */}
-          <Popover onOpenChange={handleNotificationOpen}>
+          {/* Notification bell */}
+          <Popover onOpenChange={handleBellOpen}>
             <PopoverTrigger asChild>
               <button className="relative p-1.5 text-muted-foreground hover:text-foreground transition-colors border border-border rounded-md">
                 <Bell className="w-4 h-4" />
-                {hasUnread && notifications.length > 0 && (
+                {hasUnread && (
                   <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-400 rounded-full" />
                 )}
               </button>
@@ -212,7 +211,7 @@ export function DashboardHeader() {
               </div>
               <div className="max-h-64 overflow-y-auto">
                 {notifications.length === 0 ? (
-                  <div className="px-4 py-6 text-center text-xs text-muted-foreground">
+                  <div className="px-4 py-6 text-center text-xs text-muted-foreground font-mono">
                     No recent transactions
                   </div>
                 ) : (
@@ -251,7 +250,7 @@ export function DashboardHeader() {
             </PopoverContent>
           </Popover>
 
-          {/* Settings Gear */}
+          {/* Settings icon */}
           <Link
             href={settingsHref}
             className="p-1.5 text-muted-foreground hover:text-foreground transition-colors border border-border rounded-md"
@@ -259,12 +258,12 @@ export function DashboardHeader() {
             <Settings className="w-4 h-4" />
           </Link>
 
-          {/* User Profile Dropdown */}
+          {/* User dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-2 text-xs font-mono text-foreground bg-secondary border border-border rounded-md px-2.5 py-1.5 hover:bg-secondary/80 transition-colors">
                 <div className="w-5 h-5 rounded-full bg-cyan-400/20 border border-cyan-400/30 flex items-center justify-center text-cyan-400 text-[10px] font-bold">
-                  {userInitial}
+                  {initial}
                 </div>
                 <span className="max-w-[80px] truncate">{userName}</span>
                 <ChevronDown className="w-3 h-3 text-muted-foreground" />
@@ -304,6 +303,7 @@ export function DashboardHeader() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
         </div>
       </div>
     </header>
