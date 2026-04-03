@@ -1,6 +1,13 @@
 /** @type {import('next').NextConfig} */
-// Cache bust: middleware.ts (not proxy.ts) is the active middleware file
 const nextConfig = {
+  // Force Turbopack to recompile by changing config shape
+  experimental: {
+    // Invalidate stale module graph references to deleted files
+    turbo: {
+      // Empty rules object changes config hash
+      rules: {},
+    },
+  },
   typescript: {
     ignoreBuildErrors: true,
   },
