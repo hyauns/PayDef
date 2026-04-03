@@ -211,7 +211,7 @@ function MetricCard({
       <div className="flex items-start justify-between">
         <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{label}</span>
         <div className={`w-7 h-7 rounded-md flex items-center justify-center ${accent.includes("emerald") ? "bg-emerald-400/10" : accent.includes("cyan") ? "bg-cyan-400/10" : "bg-purple-400/10"}`}>
-          <Icon className={`w-3.5 h-3.5 ${accent.includes("emerald") ? "text-emerald-400" : accent.includes("cyan") ? "text-cyan-400" : "text-purple-400"}`} />
+          <Icon className={`w-3.5 h-3.5 ${accent.includes("emerald") ? "text-emerald-400" : accent.includes("cyan") ? "text-cyan-400" : "text-foreground"}`} />
         </div>
       </div>
       <div>
@@ -251,7 +251,6 @@ export default function SuperAdminPage() {
   const [sortField, setSortField] = useState<"volume" | "fees" | "rate">("volume")
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc")
 
-  // Aggregate metrics
   const totalVolume = tenants.reduce((s, t) => s + t.totalVolume, 0)
   const totalFees = tenants.reduce((s, t) => s + t.feesCollected, 0)
   const totalPending = tenants.reduce((s, t) => s + t.feesPending, 0)
@@ -300,7 +299,9 @@ export default function SuperAdminPage() {
               <span className="text-xs font-mono text-emerald-400 uppercase tracking-wider">Super Admin Console</span>
             </div>
             <h1 className="text-lg font-semibold text-foreground">Platform Management Dashboard</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">Full network visibility — {tenants.length} tenants, {totalMerchants} merchant accounts, {totalStores} stores</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Full network visibility — {tenants.length} tenants, {totalMerchants} merchant accounts, {totalStores} stores
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono bg-secondary border border-border text-muted-foreground hover:text-foreground rounded-md transition-colors">
@@ -346,14 +347,23 @@ export default function SuperAdminPage() {
               trend={{ value: "+3 new", up: true }}
             />
           </div>
-          {/* Mini stat cards */}
           <div className="bg-card border border-border rounded-lg p-3 flex flex-col justify-between">
             <span className="text-xs font-mono text-muted-foreground">Domains Online</span>
             <div className="mt-2">
-              <p className="text-xl font-mono font-bold text-foreground">{domainHealthCounts["Healthy"] || 0}<span className="text-muted-foreground text-sm">/{shieldDomains.length}</span></p>
+              <p className="text-xl font-mono font-bold text-foreground">
+                {domainHealthCounts["Healthy"] || 0}
+                <span className="text-muted-foreground text-sm">/{shieldDomains.length}</span>
+              </p>
               <div className="flex gap-1 mt-1.5">
                 {shieldDomains.map((d) => (
-                  <div key={d.id} className={`h-1 flex-1 rounded-full ${d.status === "Healthy" ? "bg-emerald-400" : d.status === "Degraded" ? "bg-amber-400" : d.status === "Flagged" ? "bg-orange-400" : "bg-red-400"}`} />
+                  <div
+                    key={d.id}
+                    className={`h-1 flex-1 rounded-full ${
+                      d.status === "Healthy" ? "bg-emerald-400" :
+                      d.status === "Degraded" ? "bg-amber-400" :
+                      d.status === "Flagged" ? "bg-orange-400" : "bg-red-400"
+                    }`}
+                  />
                 ))}
               </div>
             </div>
@@ -370,7 +380,9 @@ export default function SuperAdminPage() {
           <div className="bg-card border border-border rounded-lg p-3 flex flex-col justify-between">
             <span className="text-xs font-mono text-muted-foreground">Flagged Domains</span>
             <div className="mt-2">
-              <p className="text-xl font-mono font-bold text-orange-400">{(domainHealthCounts["Flagged"] || 0) + (domainHealthCounts["Down"] || 0)}</p>
+              <p className="text-xl font-mono font-bold text-orange-400">
+                {(domainHealthCounts["Flagged"] || 0) + (domainHealthCounts["Down"] || 0)}
+              </p>
               <p className="text-xs font-mono text-muted-foreground mt-0.5">need attention</p>
             </div>
           </div>
@@ -400,11 +412,9 @@ export default function SuperAdminPage() {
               title="Tenant Overview"
               sub="All registered tenants and their network contribution"
             >
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground bg-secondary border border-border px-2.5 py-1 rounded-md">
-                  <Layers className="w-3 h-3" />
-                  {tenants.length} tenants
-                </div>
+              <div className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground bg-secondary border border-border px-2.5 py-1 rounded-md">
+                <Layers className="w-3 h-3" />
+                {tenants.length} tenants
               </div>
             </SectionHeader>
 
@@ -425,7 +435,8 @@ export default function SuperAdminPage() {
                   {tenants.map((t) => {
                     const scfg = tenantStatusCfg[t.status]
                     const isExpanded = expandedTenant === t.id
-                    const monthShare = (t.currentMonthVolume / Math.max(...tenants.map((x) => x.currentMonthVolume))) * 100
+                    const maxMonth = Math.max(...tenants.map((x) => x.currentMonthVolume))
+                    const monthShare = maxMonth > 0 ? (t.currentMonthVolume / maxMonth) * 100 : 0
                     return (
                       <Fragment key={t.id}>
                         <tr
@@ -478,12 +489,15 @@ export default function SuperAdminPage() {
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-1">
-                              {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+                              {isExpanded
+                                ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" />
+                                : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                              }
                             </div>
                           </td>
                         </tr>
                         {isExpanded && (
-                          <tr key={`${t.id}-exp`} className="border-b border-border/50 bg-secondary/10">
+                          <tr className="border-b border-border/50 bg-secondary/10">
                             <td colSpan={7} className="px-4 py-3">
                               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                 <div className="bg-card border border-border rounded-md p-3">
@@ -535,7 +549,6 @@ export default function SuperAdminPage() {
         {/* ── Billing Tab ────────────────────────────────────────────────── */}
         {activeTab === "billing" && (
           <div className="space-y-4">
-            {/* Billing summary bar */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="bg-card border border-emerald-400/20 rounded-lg p-3">
                 <p className="text-xs font-mono text-muted-foreground mb-1">Total Fees Collected</p>
@@ -601,7 +614,9 @@ export default function SuperAdminPage() {
                     const fcfg = feeStatusCfg[t.feeStatus]
                     const scfg = tenantStatusCfg[t.status]
                     const expectedFee = t.currentMonthVolume * (t.commissionRate / 100)
-                    const collectionRate = expectedFee > 0 ? Math.min((t.feesCollected / (t.totalVolume * t.commissionRate / 100)) * 100, 100) : 0
+                    const collectionRate = t.totalVolume > 0
+                      ? Math.min((t.feesCollected / (t.totalVolume * t.commissionRate / 100)) * 100, 100)
+                      : 0
                     return (
                       <tr key={t.id} className="border-b border-border/50 hover:bg-secondary/20 transition-colors">
                         <td className="px-4 py-3">
@@ -651,7 +666,12 @@ export default function SuperAdminPage() {
                         </td>
                         <td className="px-4 py-3 text-center">
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono ${fcfg.bg} ${fcfg.text}`}>
-                            {t.feeStatus === "Paid" ? <CheckCircle2 className="w-3 h-3" /> : t.feeStatus === "Overdue" ? <XCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                            {t.feeStatus === "Paid"
+                              ? <CheckCircle2 className="w-3 h-3" />
+                              : t.feeStatus === "Overdue"
+                              ? <XCircle className="w-3 h-3" />
+                              : <Clock className="w-3 h-3" />
+                            }
                             {fcfg.label}
                           </span>
                         </td>
@@ -686,7 +706,6 @@ export default function SuperAdminPage() {
         {/* ── Infrastructure Tab ─────────────────────────────────────────── */}
         {activeTab === "infrastructure" && (
           <div className="space-y-4">
-            {/* Health summary */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {(["Healthy", "Degraded", "Flagged", "Down"] as DomainStatus[]).map((status) => {
                 const cfg = domainStatusCfg[status]
@@ -721,7 +740,6 @@ export default function SuperAdminPage() {
                 const isTesting = testingDomain === d.id
                 return (
                   <div key={d.id} className={`bg-card border rounded-lg p-4 ${cfg.border} transition-all hover:bg-secondary/10`}>
-                    {/* Header row */}
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-2.5">
                         <div className={`w-8 h-8 rounded-md flex items-center justify-center ${cfg.bg}`}>
@@ -742,7 +760,6 @@ export default function SuperAdminPage() {
                       </span>
                     </div>
 
-                    {/* Flag reason */}
                     {d.flagReason && (
                       <div className="flex items-start gap-2 mb-3 bg-orange-400/5 border border-orange-400/20 rounded-md px-2.5 py-2">
                         <AlertTriangle className="w-3 h-3 text-orange-400 mt-0.5 shrink-0" />
@@ -750,17 +767,20 @@ export default function SuperAdminPage() {
                       </div>
                     )}
 
-                    {/* Metrics grid */}
                     <div className="grid grid-cols-3 gap-2 mb-3">
                       <div className="bg-secondary/40 rounded-md p-2 text-center">
                         <p className="text-[10px] text-muted-foreground mb-0.5">Latency</p>
-                        <p className={`text-xs font-mono font-semibold ${d.latencyMs === 0 ? "text-red-400" : d.latencyMs > 200 ? "text-amber-400" : "text-emerald-400"}`}>
+                        <p className={`text-xs font-mono font-semibold ${
+                          d.latencyMs === 0 ? "text-red-400" : d.latencyMs > 200 ? "text-amber-400" : "text-emerald-400"
+                        }`}>
                           {d.latencyMs === 0 ? "—" : `${d.latencyMs}ms`}
                         </p>
                       </div>
                       <div className="bg-secondary/40 rounded-md p-2 text-center">
                         <p className="text-[10px] text-muted-foreground mb-0.5">Uptime</p>
-                        <p className={`text-xs font-mono font-semibold ${d.uptime >= 99 ? "text-emerald-400" : d.uptime >= 95 ? "text-amber-400" : "text-red-400"}`}>
+                        <p className={`text-xs font-mono font-semibold ${
+                          d.uptime >= 99 ? "text-emerald-400" : d.uptime >= 95 ? "text-amber-400" : "text-red-400"
+                        }`}>
                           {d.uptime.toFixed(1)}%
                         </p>
                       </div>
@@ -772,7 +792,6 @@ export default function SuperAdminPage() {
                       </div>
                     </div>
 
-                    {/* Footer */}
                     <div className="flex items-center justify-between">
                       <div className="text-[10px] font-mono text-muted-foreground space-y-0.5">
                         <div className="flex items-center gap-1.5">
@@ -793,10 +812,11 @@ export default function SuperAdminPage() {
                             : "bg-secondary border-border text-muted-foreground hover:text-foreground"
                         }`}
                       >
-                        {isTesting
-                          ? <><RefreshCw className="w-3 h-3 animate-spin" /> Testing...</>
-                          : <><Wifi className="w-3 h-3" /> Test</>
-                        }
+                        {isTesting ? (
+                          <><RefreshCw className="w-3 h-3 animate-spin" /> Testing...</>
+                        ) : (
+                          <><Wifi className="w-3 h-3" /> Test</>
+                        )}
                       </button>
                     </div>
                   </div>
