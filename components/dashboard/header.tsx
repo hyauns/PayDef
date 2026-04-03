@@ -1,18 +1,26 @@
 "use client"
 
-import { useState } from "react"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { Shield, Bell, Settings, ChevronDown, Circle } from "lucide-react"
 
-const navItems = ["Overview", "Accounts", "Stores", "Analytics", "Logs", "Settings"]
+const navItems = [
+  { label: "Overview", href: "/" },
+  { label: "Accounts", href: "/accounts" },
+  { label: "Stores", href: "/stores" },
+  { label: "Analytics", href: "/analytics" },
+  { label: "Logs", href: "/logs" },
+  { label: "Settings", href: "/settings" },
+]
 
 export function DashboardHeader() {
-  const [activeNav, setActiveNav] = useState("Overview")
+  const pathname = usePathname()
 
   return (
     <header className="border-b border-border bg-card sticky top-0 z-30">
       <div className="flex items-center justify-between px-6 h-12 gap-4">
         {/* Logo */}
-        <div className="flex items-center gap-2.5 shrink-0">
+        <Link href="/" className="flex items-center gap-2.5 shrink-0">
           <div className="w-7 h-7 bg-cyan-400/10 border border-cyan-400/30 rounded-md flex items-center justify-center">
             <Shield className="w-4 h-4 text-cyan-400" />
           </div>
@@ -23,23 +31,26 @@ export function DashboardHeader() {
               ENTERPRISE
             </span>
           </div>
-        </div>
+        </Link>
 
         {/* Nav */}
         <nav className="hidden md:flex items-center gap-1 flex-1 justify-center">
-          {navItems.map((item) => (
-            <button
-              key={item}
-              onClick={() => setActiveNav(item)}
-              className={`px-3 py-1.5 text-xs font-mono rounded-md transition-colors ${
-                activeNav === item
-                  ? "text-foreground bg-secondary"
-                  : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-              }`}
-            >
-              {item}
-            </button>
-          ))}
+          {navItems.map((item) => {
+            const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href)
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`px-3 py-1.5 text-xs font-mono rounded-md transition-colors ${
+                  isActive
+                    ? "text-foreground bg-secondary"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                }`}
+              >
+                {item.label}
+              </Link>
+            )
+          })}
         </nav>
 
         {/* Right side */}
@@ -67,3 +78,4 @@ export function DashboardHeader() {
     </header>
   )
 }
+

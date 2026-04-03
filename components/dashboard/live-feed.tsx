@@ -53,8 +53,13 @@ function timeAgo(date: Date): string {
 }
 
 export function LiveFeed() {
-  const [feed, setFeed] = useState<Transaction[]>(buildInitialFeed)
+  const [feed, setFeed] = useState<Transaction[]>([])
   const [ticker, setTicker] = useState(0)
+
+  // Populate on the client only — avoids SSR/client mismatch
+  useEffect(() => {
+    setFeed(buildInitialFeed())
+  }, [])
 
   useEffect(() => {
     const interval = setInterval(() => {
