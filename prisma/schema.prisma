@@ -66,8 +66,7 @@ model Tenant {
   updatedAt DateTime @updatedAt
 
   // Relations
-  owner            User?              @ignore   // inverse handled on User
-  user             User[]
+  users            User[]
   stores           Store[]
   merchantAccounts MerchantAccount[]
   transactions     Transaction[]

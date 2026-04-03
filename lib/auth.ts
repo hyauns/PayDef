@@ -1,7 +1,7 @@
 import { NextAuthOptions } from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
-import { db } from "@/lib/db"
+import { getSql, type UserRow } from "@/lib/db"
 
 // ─── Role constants (mirrors Prisma enum) ─────────────────────────────────────
 export const ROLES = {
@@ -42,28 +42,34 @@ export const authOptions: NextAuthOptions = {
           throw new Error("Email and password are required.")
         }
 
-        // Lookup user by email
-        const user = await db.user.findUnique({
-          where: { email: credentials.email.toLowerCase().trim() },
-        })
+        // Lookup user by email using raw SQL (no Prisma generated client needed)
+        const email = credentials.email.toLowerCase().trim()
+        const sql = getSql()
+        const rows = await sql<UserRow[]>`
+          SELECT id, email, password_hash, role, tenant_id
+          FROM   users
+          WHERE  email = ${email}
+          LIMIT  1
+        `
+        const user = rows[0] ?? null
 
         if (!user) {
-          // Constant-time rejection: run bcrypt even on miss
-          await bcrypt.compare(credentials.password, "$2a$12$placeholder.hash.for.timing")
+          // Constant-time rejection: run bcrypt even on miss to prevent timing attacks
+          await bcrypt.compare(credentials.password, "$2a$12$placeholderHashForTimingSafety00")
           throw new Error("Invalid email or password.")
         }
 
-        const passwordValid = await bcrypt.compare(credentials.password, user.passwordHash)
+        const passwordValid = await bcrypt.compare(credentials.password, user.password_hash)
         if (!passwordValid) {
           throw new Error("Invalid email or password.")
         }
 
-        // Return the minimal user object that NextAuth serialises into the JWT
+        // Return the minimal object NextAuth serialises into the JWT
         return {
           id:       user.id,
           email:    user.email,
           role:     user.role as Role,
-          tenantId: user.tenantId ?? undefined,
+          tenantId: user.tenant_id ?? undefined,
         }
       },
     }),
