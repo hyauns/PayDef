@@ -1,6 +1,5 @@
 /**
- * Next.js 16 Proxy (previously middleware) — Edge-compatible JWT-only auth guard.
- * Exports both `proxy` (named) and `default` for maximum compatibility.
+ * Next.js 16 Proxy — Edge-compatible JWT-only auth guard.
  */
 import { getToken } from "next-auth/jwt"
 import { NextResponse, type NextRequest } from "next/server"
@@ -17,7 +16,8 @@ const PROTECTED_ROUTES: { prefix: string; role: Role }[] = [
   { prefix: "/admin",       role: "SUPER_ADMIN" },
 ]
 
-export async function proxy(req: NextRequest) {
+// Named export "proxy" — required by Next.js 16
+export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
 
   // Always allow static assets, API auth routes, and webhook endpoints
@@ -31,6 +31,11 @@ export async function proxy(req: NextRequest) {
     return NextResponse.next()
   }
 
+  // Use synchronous check first — avoid async if possible for edge perf
+  return handleAuth(req, pathname)
+}
+
+async function handleAuth(req: NextRequest, pathname: string) {
   const token = await getToken({
     req,
     secret: process.env.NEXTAUTH_SECRET,
@@ -64,9 +69,7 @@ export async function proxy(req: NextRequest) {
   return NextResponse.next()
 }
 
-// Default export for Next.js 16 compatibility
-export default proxy
-
+// Config must be inline (not re-exported)
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon\\.ico).*)"],
 }
