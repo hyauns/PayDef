@@ -1,6 +1,5 @@
-/**
- * Next.js 16 Proxy — Edge-compatible JWT-only auth guard.
- */
+// Standard Next.js middleware - uses the classic "middleware" export name
+// which is supported in both Next.js 15 and 16 (backwards compatible)
 import { getToken } from "next-auth/jwt"
 import { NextResponse, type NextRequest } from "next/server"
 
@@ -16,26 +15,21 @@ const PROTECTED_ROUTES: { prefix: string; role: Role }[] = [
   { prefix: "/admin",       role: "SUPER_ADMIN" },
 ]
 
-// Named export "proxy" — required by Next.js 16
-export function proxy(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  // Always allow static assets, API auth routes, and webhook endpoints
+  // Skip middleware for static files, API auth, webhooks, and gateway
   if (
+    pathname.startsWith("/_next") ||
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/webhook") ||
     pathname.startsWith("/api/gateway") ||
-    pathname.startsWith("/_next") ||
     pathname.match(/\.(ico|svg|png|jpg|jpeg|gif|webp|css|js|woff2?)$/)
   ) {
     return NextResponse.next()
   }
 
-  // Use synchronous check first — avoid async if possible for edge perf
-  return handleAuth(req, pathname)
-}
-
-async function handleAuth(req: NextRequest, pathname: string) {
+  // Decode JWT
   const token = await getToken({
     req,
     secret: process.env.NEXTAUTH_SECRET,
@@ -43,7 +37,7 @@ async function handleAuth(req: NextRequest, pathname: string) {
 
   const role = token?.role as Role | undefined
 
-  // Authenticated user on /login → redirect to role home
+  // Authenticated user on /login -> redirect to home
   if (pathname === "/login") {
     if (role) {
       return NextResponse.redirect(new URL(ROLE_HOME[role], req.url))
@@ -51,7 +45,7 @@ async function handleAuth(req: NextRequest, pathname: string) {
     return NextResponse.next()
   }
 
-  // Check protected route prefixes
+  // Check protected routes
   for (const { prefix, role: required } of PROTECTED_ROUTES) {
     if (pathname.startsWith(prefix)) {
       if (!token) {
@@ -69,7 +63,6 @@ async function handleAuth(req: NextRequest, pathname: string) {
   return NextResponse.next()
 }
 
-// Config must be inline (not re-exported)
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon\\.ico).*)"],
 }
