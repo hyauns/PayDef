@@ -1,22 +1,17 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
 import {
   Shield,
-  Bell,
   Settings,
   ChevronDown,
   Circle,
   User,
   FileText,
   LogOut,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  ExternalLink,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -26,18 +21,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { NotificationBell } from "@/components/nav/notification-bell"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Role = "SUPER_ADMIN" | "MERCHANT"
-
-type NotificationTransaction = {
-  id: string
-  status: "PENDING" | "COMPLETED" | "FAILED" | "REFUNDED" | "DISPUTED"
-  originalAmount: number
-  maskedItemName: string
-  createdAt: string
-}
 
 // ─── Nav Items ────────────────────────────────────────────────────────────────
 const MERCHANT_NAV = [
@@ -58,25 +45,6 @@ const ADMIN_NAV = [
   { label: "Settings",  href: "/settings" },
 ]
 
-// ─── Status Badge ─────────────────────────────────────────────────────────────
-const STATUS_CONFIG = {
-  COMPLETED: { icon: CheckCircle2, color: "text-emerald-400", bg: "bg-emerald-400/10" },
-  FAILED:    { icon: XCircle,      color: "text-red-400",     bg: "bg-red-400/10"     },
-  PENDING:   { icon: Clock,        color: "text-amber-400",   bg: "bg-amber-400/10"   },
-  REFUNDED:  { icon: XCircle,      color: "text-orange-400",  bg: "bg-orange-400/10"  },
-  DISPUTED:  { icon: XCircle,      color: "text-purple-400",  bg: "bg-purple-400/10"  },
-} as const
-
-function StatusBadge({ status }: { status: NotificationTransaction["status"] }) {
-  const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.PENDING
-  return (
-    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono ${cfg.bg} ${cfg.color}`}>
-      <cfg.icon className="w-2.5 h-2.5" />
-      {status}
-    </span>
-  )
-}
-
 // ─── Header ───────────────────────────────────────────────────────────────────
 export function DashboardHeader() {
   const pathname = usePathname()
@@ -89,36 +57,7 @@ export function DashboardHeader() {
   const navItems  = role === "SUPER_ADMIN" ? ADMIN_NAV : MERCHANT_NAV
   const settingsHref = role === "SUPER_ADMIN" ? "/admin/settings" : "/settings"
 
-  // ── Notification state ──────────────────────────────────────────────────────
-  const [notifications, setNotifications] = useState<NotificationTransaction[]>([])
-  const [hasUnread, setHasUnread]         = useState(false)
-
-  const fetchNotifications = useCallback(async () => {
-    if (status !== "authenticated") return
-    try {
-      const res = await fetch("/api/merchant/logs?limit=5")
-      if (res.ok) {
-        const json = await res.json()
-        const txns: NotificationTransaction[] = json.transactions ?? []
-        setNotifications(txns)
-        setHasUnread(txns.length > 0)
-      }
-    } catch {
-      // Non-critical — silently ignore
-    }
-  }, [status])
-
-  useEffect(() => {
-    fetchNotifications()
-    const id = setInterval(fetchNotifications, 30_000)
-    return () => clearInterval(id)
-  }, [fetchNotifications])
-
   // ── Handlers ────────────────────────────────────────────────────────────────
-  const handleBellOpen = (open: boolean) => {
-    if (open) setHasUnread(false)
-  }
-
   const handleLogout = async () => {
     await signOut({ redirect: false })
     router.push("/login")
@@ -195,60 +134,7 @@ export function DashboardHeader() {
           </div>
 
           {/* Notification bell */}
-          <Popover onOpenChange={handleBellOpen}>
-            <PopoverTrigger asChild>
-              <button className="relative p-1.5 text-muted-foreground hover:text-foreground transition-colors border border-border rounded-md">
-                <Bell className="w-4 h-4" />
-                {hasUnread && (
-                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-400 rounded-full" />
-                )}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-80 p-0 bg-card border-border">
-              <div className="px-4 py-3 border-b border-border">
-                <h4 className="text-sm font-mono font-semibold text-foreground">Recent Transactions</h4>
-                <p className="text-xs text-muted-foreground mt-0.5">Latest activity on your account</p>
-              </div>
-              <div className="max-h-64 overflow-y-auto">
-                {notifications.length === 0 ? (
-                  <div className="px-4 py-6 text-center text-xs text-muted-foreground font-mono">
-                    No recent transactions
-                  </div>
-                ) : (
-                  notifications.map((txn) => (
-                    <div
-                      key={txn.id}
-                      className="px-4 py-2.5 border-b border-border/50 hover:bg-secondary/30 transition-colors"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-mono text-foreground truncate">
-                          {txn.maskedItemName || "Transaction"}
-                        </span>
-                        <StatusBadge status={txn.status} />
-                      </div>
-                      <div className="flex items-center justify-between mt-1">
-                        <span className="text-[10px] text-muted-foreground font-mono">
-                          ${Number(txn.originalAmount).toFixed(2)}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground">
-                          {new Date(txn.createdAt).toLocaleDateString()}
-                        </span>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-              <div className="px-4 py-2.5 border-t border-border">
-                <Link
-                  href="/logs"
-                  className="flex items-center justify-center gap-1.5 text-xs font-mono text-cyan-400 hover:text-cyan-300 transition-colors"
-                >
-                  View All Transactions
-                  <ExternalLink className="w-3 h-3" />
-                </Link>
-              </div>
-            </PopoverContent>
-          </Popover>
+          <NotificationBell />
 
           {/* Settings icon */}
           <Link
