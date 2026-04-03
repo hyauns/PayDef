@@ -1,5 +1,5 @@
 import { DefaultSession, DefaultJWT } from "next-auth"
-import type { Role } from "@/lib/auth"
+import type { Role } from "@/lib/auth-config"
 
 // ─── Augment the built-in NextAuth Session + JWT types ────────────────────────
 

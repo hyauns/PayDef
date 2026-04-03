@@ -74,3 +74,7 @@ export const config = {
     "/((?!_next/static|_next/image|favicon\\.ico).*)",
   ],
 }
+
+// Next.js 16 accepts either a default export or a named "proxy" export.
+// Exporting both ensures compatibility regardless of how the runtime resolves it.
+export default proxy
