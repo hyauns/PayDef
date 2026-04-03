@@ -20,12 +20,17 @@ import {
   AlertTriangle,
   Clock,
   SlidersHorizontal,
+  Globe,
+  Package,
+  Link2,
+  Lock,
 } from "lucide-react"
 import { DashboardHeader } from "@/components/dashboard/header"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Status = "Active" | "Limited" | "Warm-up" | "Paused"
+type DomainType = "platform" | "custom"
 
 interface Merchant {
   id: string
@@ -34,16 +39,43 @@ interface Merchant {
   clientId: string
   clientSecret: string
   shieldDomain: string
+  domainType: DomainType
   status: Status
   priority: number // 1–5
   currentVolume: number
   softLimit: number  // lower bound of adaptive range
   hardLimit: number  // upper bound of adaptive range
+  itemMasking: boolean
+  fakeProductName: string
   txCount: number
   createdAt: string
   lastActive: string
   successRate: number
 }
+
+// ─── Platform shield domains provided by Gateway Central ─────────────────────
+const PLATFORM_DOMAINS = [
+  "chococlose.com",
+  "safepay-hub.io",
+  "payshield-cdn.com",
+  "trustedcheck.net",
+  "relay-secure.org",
+  "checkout-proxy.com",
+  "shield-gateway.net",
+  "payvault-cdn.io",
+  "securelay.com",
+]
+
+const FAKE_PRODUCT_PRESETS = [
+  "Digital Service Upgrade",
+  "Premium Content License",
+  "Software Activation Key",
+  "Consulting Service Package",
+  "Online Course Access",
+  "API Credits Bundle",
+  "Cloud Storage Subscription",
+  "Design Asset Pack",
+]
 
 // ─── Seed Data ────────────────────────────────────────────────────────────────
 
@@ -55,11 +87,14 @@ const seedMerchants: Merchant[] = [
     clientId: "AeBFXkzLmNoPQrStUvWxYz1234567890abcdef",
     clientSecret: "EGfghIjkLMNopQRstUVwxYZ0987654321zyxwv",
     shieldDomain: "chococlose.com",
+    domainType: "platform",
     status: "Active",
     priority: 5,
     currentVolume: 4250,
     softLimit: 4200,
     hardLimit: 4800,
+    itemMasking: true,
+    fakeProductName: "Digital Service Upgrade",
     txCount: 187,
     createdAt: "2024-01-15",
     lastActive: "2 min ago",
@@ -72,11 +107,14 @@ const seedMerchants: Merchant[] = [
     clientId: "BcDEFgHiJklMNoPqRsTuVwXy9876543210fedcba",
     clientSecret: "FHijkLmNoOPqRSTuvWXyz1234567890abcdefgh",
     shieldDomain: "safepay-hub.io",
+    domainType: "platform",
     status: "Limited",
     priority: 4,
     currentVolume: 4780,
     softLimit: 4600,
     hardLimit: 5000,
+    itemMasking: true,
+    fakeProductName: "Premium Content License",
     txCount: 214,
     createdAt: "2024-02-03",
     lastActive: "8 min ago",
@@ -89,11 +127,14 @@ const seedMerchants: Merchant[] = [
     clientId: "CdEFGhIjKlMnOpQrStUvWx1234509876abcdefij",
     clientSecret: "GIjklMnOpPQrSTuvwXYZ0987612345zyxwvuts",
     shieldDomain: "payshield-cdn.com",
+    domainType: "platform",
     status: "Active",
     priority: 3,
     currentVolume: 1320,
     softLimit: 3000,
     hardLimit: 3500,
+    itemMasking: false,
+    fakeProductName: "Software Activation Key",
     txCount: 58,
     createdAt: "2024-02-18",
     lastActive: "34 min ago",
@@ -105,12 +146,15 @@ const seedMerchants: Merchant[] = [
     email: "store.relay@commerce.io",
     clientId: "DeEFgHiJKlmnOpqRSTUvwXy5678901234klmnop",
     clientSecret: "HJklmNoPqQRsTuvwXYZ1234509876wvutsrq",
-    shieldDomain: "trustedcheck.net",
+    shieldDomain: "my-custom-pay.com",
+    domainType: "custom",
     status: "Paused",
     priority: 2,
     currentVolume: 0,
     softLimit: 4000,
     hardLimit: 5000,
+    itemMasking: false,
+    fakeProductName: "Consulting Service Package",
     txCount: 0,
     createdAt: "2024-03-01",
     lastActive: "3 days ago",
@@ -123,11 +167,14 @@ const seedMerchants: Merchant[] = [
     clientId: "EfGHIjKlMnOpQrStUvWxYz0987654321mnopqr",
     clientSecret: "IKlmnOpQqRStUvwXYZ9876501234utsrqpon",
     shieldDomain: "relay-secure.org",
+    domainType: "platform",
     status: "Active",
     priority: 4,
     currentVolume: 2900,
     softLimit: 4000,
     hardLimit: 4500,
+    itemMasking: true,
+    fakeProductName: "Online Course Access",
     txCount: 113,
     createdAt: "2024-03-10",
     lastActive: "12 min ago",
@@ -140,11 +187,14 @@ const seedMerchants: Merchant[] = [
     clientId: "FgHIJkLmNoPqRstUVwXyZ1234567890nopqrst",
     clientSecret: "JLmnoOpRrSTuVwxYZ0987623451srqponmlk",
     shieldDomain: "checkout-proxy.com",
+    domainType: "platform",
     status: "Limited",
     priority: 3,
     currentVolume: 4960,
     softLimit: 4800,
     hardLimit: 5000,
+    itemMasking: true,
+    fakeProductName: "API Credits Bundle",
     txCount: 221,
     createdAt: "2024-03-22",
     lastActive: "1 min ago",
@@ -157,11 +207,14 @@ const seedMerchants: Merchant[] = [
     clientId: "GhIJKlMnOpQrStUvWxYz9876543210pqrstuv",
     clientSecret: "KMnopPqQrSTuVwXyz1234567890rqponmlkji",
     shieldDomain: "chococlose.com",
+    domainType: "platform",
     status: "Warm-up",
     priority: 1,
     currentVolume: 320,
     softLimit: 500,
     hardLimit: 800,
+    itemMasking: false,
+    fakeProductName: "Design Asset Pack",
     txCount: 14,
     createdAt: "2024-04-01",
     lastActive: "2 hours ago",
@@ -225,6 +278,23 @@ function PriorityStars({ value }: { value: number }) {
       ))}
       <span className="ml-1.5 text-xs font-mono text-muted-foreground">{value}/5</span>
     </div>
+  )
+}
+
+function ItemMaskingBadge({ enabled, productName }: { enabled: boolean; productName: string }) {
+  if (!enabled) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-[11px] font-mono px-2 py-0.5 rounded-full border bg-zinc-500/10 text-zinc-400 border-zinc-500/20">
+        <Package className="w-3 h-3" />
+        Off
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[11px] font-mono px-2 py-0.5 rounded-full border bg-violet-400/10 text-violet-400 border-violet-400/20 max-w-[160px] truncate" title={productName}>
+      <Package className="w-3 h-3 shrink-0" />
+      <span className="truncate">{productName}</span>
+    </span>
   )
 }
 
@@ -398,22 +468,99 @@ function SlideOver({ merchant, onClose, onSave }: SlideOverProps) {
           </div>
 
           {/* Shield Domain */}
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-              Shield Domain
-            </label>
-            <input
-              value={draft.shieldDomain}
-              onChange={(e) => update({ shieldDomain: e.target.value })}
-              className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
-            />
+          <div className="space-y-3 border border-border rounded-lg p-4 bg-background">
+            <div className="flex items-center gap-2">
+              <Globe className="w-3.5 h-3.5 text-cyan-400" />
+              <p className="text-xs font-mono font-semibold text-foreground">Shield Domain</p>
+            </div>
+            {/* Domain type toggle */}
+            <div className="flex rounded-md overflow-hidden border border-border">
+              {(["platform", "custom"] as DomainType[]).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => update({ domainType: t, shieldDomain: t === "platform" ? PLATFORM_DOMAINS[0] : "" })}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-mono transition-colors ${
+                    draft.domainType === t
+                      ? "bg-cyan-400/10 text-cyan-400 border-r border-border"
+                      : "text-muted-foreground hover:text-foreground bg-transparent"
+                  }`}
+                >
+                  {t === "platform" ? <Lock className="w-3 h-3" /> : <Link2 className="w-3 h-3" />}
+                  {t === "platform" ? "Platform Domain" : "Custom Domain"}
+                </button>
+              ))}
+            </div>
+            {draft.domainType === "platform" ? (
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                  Select Platform Domain
+                </label>
+                <select
+                  value={draft.shieldDomain}
+                  onChange={(e) => update({ shieldDomain: e.target.value })}
+                  className="w-full bg-card border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors appearance-none"
+                >
+                  {PLATFORM_DOMAINS.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+                <p className="text-[10px] font-mono text-muted-foreground">Managed and monitored by Gateway Central</p>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                  Custom Domain
+                </label>
+                <input
+                  value={draft.shieldDomain}
+                  onChange={(e) => update({ shieldDomain: e.target.value })}
+                  placeholder="e.g. my-payment-shield.com"
+                  className="w-full bg-card border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+                />
+                <p className="text-[10px] font-mono text-amber-400">You are responsible for DNS configuration and SSL</p>
+              </div>
+            )}
+            {draft.shieldDomain && (
+              <a
+                href={`https://${draft.shieldDomain}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-[11px] font-mono text-cyan-400 hover:text-cyan-300 transition-colors"
+              >
+                <ExternalLink className="w-3 h-3" />
+                {draft.shieldDomain}
+              </a>
+            )}
           </div>
 
-          {/* Credentials */}
-          <div className="space-y-3">
-            <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">API Credentials</p>
-            <MaskedField value={draft.clientId} label="Client ID" />
-            <MaskedField value={draft.clientSecret} label="Client Secret" />
+          {/* PayPal Credentials */}
+          <div className="space-y-3 border border-border rounded-lg p-4 bg-background">
+            <div className="flex items-center gap-2">
+              <Lock className="w-3.5 h-3.5 text-cyan-400" />
+              <p className="text-xs font-mono font-semibold text-foreground">PayPal API Credentials</p>
+            </div>
+            <p className="text-[11px] font-mono text-muted-foreground">
+              Enter your PayPal REST API Client ID and Secret from the PayPal Developer Dashboard.
+            </p>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Client ID</label>
+              <div className="flex gap-2">
+                <input
+                  value={draft.clientId}
+                  onChange={(e) => update({ clientId: e.target.value })}
+                  placeholder="AeBFXkz..."
+                  className="flex-1 bg-card border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Client Secret</label>
+              <MaskedField value={draft.clientSecret} label="" />
+            </div>
+            <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground bg-secondary/50 rounded-md px-3 py-2">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              Credentials are encrypted at rest with AES-256 and never logged
+            </div>
           </div>
 
           {/* Status */}
@@ -523,6 +670,72 @@ function SlideOver({ merchant, onClose, onSave }: SlideOverProps) {
             </div>
           </div>
 
+          {/* Item Masking */}
+          <div className="space-y-4 border border-border rounded-lg p-4 bg-background">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Package className="w-3.5 h-3.5 text-violet-400" />
+                <p className="text-xs font-mono font-semibold text-foreground">Item Masking</p>
+              </div>
+              {/* Toggle switch */}
+              <button
+                onClick={() => update({ itemMasking: !draft.itemMasking })}
+                className={`relative w-10 h-5 rounded-full transition-colors ${
+                  draft.itemMasking ? "bg-violet-500" : "bg-secondary border border-border"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 w-4 h-4 rounded-full bg-foreground shadow transition-all ${
+                    draft.itemMasking ? "left-5" : "left-0.5"
+                  }`}
+                />
+              </button>
+            </div>
+
+            <p className="text-[11px] font-mono text-muted-foreground">
+              When enabled, PayPal receipts and checkout pages will show a generic product name
+              instead of your actual item description, reducing payment disputes.
+            </p>
+
+            {draft.itemMasking && (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                    Fake Product Name
+                  </label>
+                  <input
+                    value={draft.fakeProductName}
+                    onChange={(e) => update({ fakeProductName: e.target.value })}
+                    placeholder="e.g. Digital Service Upgrade"
+                    className="w-full bg-card border border-border rounded-md px-3 py-2 text-sm font-mono text-violet-400 placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-violet-400/40 focus:border-violet-400/40 transition-colors"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Presets</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {FAKE_PRODUCT_PRESETS.map((preset) => (
+                      <button
+                        key={preset}
+                        onClick={() => update({ fakeProductName: preset })}
+                        className={`text-[11px] font-mono px-2 py-1 rounded-md border transition-colors ${
+                          draft.fakeProductName === preset
+                            ? "bg-violet-400/10 text-violet-400 border-violet-400/30"
+                            : "bg-secondary text-muted-foreground border-border hover:text-foreground hover:border-border/80"
+                        }`}
+                      >
+                        {preset}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="bg-secondary/50 rounded-md px-3 py-2 text-[11px] font-mono text-muted-foreground">
+                  <span className="text-muted-foreground">PayPal receipt will show: </span>
+                  <span className="text-violet-400 font-semibold">{draft.fakeProductName || "(empty)"}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Danger zone */}
           <div className="border border-red-500/20 rounded-lg p-4 space-y-2 bg-red-500/5">
             <p className="text-[10px] font-mono text-red-400 uppercase tracking-wider font-semibold">Danger Zone</p>
@@ -564,9 +777,12 @@ function AddMerchantModal({ onClose, onAdd }: { onClose: () => void; onAdd: (m: 
     email: "",
     clientId: "",
     clientSecret: "",
-    shieldDomain: "",
+    domainType: "platform" as DomainType,
+    shieldDomain: PLATFORM_DOMAINS[0],
     softLimit: 4000,
     hardLimit: 5000,
+    itemMasking: false,
+    fakeProductName: "Digital Service Upgrade",
   })
 
   const update = (patch: Partial<typeof form>) => setForm((p) => ({ ...p, ...patch }))
@@ -579,12 +795,15 @@ function AddMerchantModal({ onClose, onAdd }: { onClose: () => void; onAdd: (m: 
       email: form.email,
       clientId: form.clientId || "pending-configuration",
       clientSecret: form.clientSecret || "pending-configuration",
-      shieldDomain: form.shieldDomain || "unassigned.com",
+      shieldDomain: form.shieldDomain || PLATFORM_DOMAINS[0],
+      domainType: form.domainType,
       status: "Warm-up",
       priority: 1,
       currentVolume: 0,
       softLimit: form.softLimit,
       hardLimit: form.hardLimit,
+      itemMasking: form.itemMasking,
+      fakeProductName: form.fakeProductName,
       txCount: 0,
       createdAt: new Date().toISOString().slice(0, 10),
       lastActive: "never",
@@ -598,20 +817,20 @@ function AddMerchantModal({ onClose, onAdd }: { onClose: () => void; onAdd: (m: 
     <>
       <div className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-md">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+        <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
             <h3 className="text-sm font-semibold font-mono text-foreground">Add Merchant Account</h3>
             <button onClick={onClose} className="p-1.5 text-muted-foreground hover:text-foreground border border-border rounded-md transition-colors">
               <X className="w-4 h-4" />
             </button>
           </div>
-          <div className="p-5 space-y-4">
+          <div className="p-5 space-y-4 overflow-y-auto flex-1">
+            {/* Basic info */}
             {[
               { label: "Account Name", key: "accountName", placeholder: "PP-Main-01" },
               { label: "PayPal Email", key: "email", placeholder: "payments@store.com" },
-              { label: "Client ID", key: "clientId", placeholder: "AeBFXk..." },
-              { label: "Client Secret", key: "clientSecret", placeholder: "EGfghI..." },
-              { label: "Shield Domain", key: "shieldDomain", placeholder: "chococlose.com" },
+              { label: "Client ID", key: "clientId", placeholder: "AeBFXkzLmNoPQrStUvWxYz..." },
+              { label: "Client Secret", key: "clientSecret", placeholder: "EGfghIjkLMNopQRstUVwx..." },
             ].map((f) => (
               <div key={f.key} className="space-y-1.5">
                 <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{f.label}</label>
@@ -623,6 +842,44 @@ function AddMerchantModal({ onClose, onAdd }: { onClose: () => void; onAdd: (m: 
                 />
               </div>
             ))}
+
+            {/* Shield Domain */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Shield Domain</label>
+              <div className="flex rounded-md overflow-hidden border border-border">
+                {(["platform", "custom"] as DomainType[]).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => update({ domainType: t, shieldDomain: t === "platform" ? PLATFORM_DOMAINS[0] : "" })}
+                    className={`flex-1 py-1.5 text-[11px] font-mono transition-colors ${
+                      form.domainType === t
+                        ? "bg-cyan-400/10 text-cyan-400"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {t === "platform" ? "Platform Domain" : "Custom Domain"}
+                  </button>
+                ))}
+              </div>
+              {form.domainType === "platform" ? (
+                <select
+                  value={form.shieldDomain}
+                  onChange={(e) => update({ shieldDomain: e.target.value })}
+                  className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 appearance-none"
+                >
+                  {PLATFORM_DOMAINS.map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
+              ) : (
+                <input
+                  value={form.shieldDomain}
+                  onChange={(e) => update({ shieldDomain: e.target.value })}
+                  placeholder="my-custom-domain.com"
+                  className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+                />
+              )}
+            </div>
+
+            {/* Volume limits */}
             <div className="grid grid-cols-2 gap-3">
               {[
                 { label: "Soft Limit ($)", key: "softLimit" },
@@ -639,8 +896,48 @@ function AddMerchantModal({ onClose, onAdd }: { onClose: () => void; onAdd: (m: 
                 </div>
               ))}
             </div>
+
+            {/* Item masking */}
+            <div className="space-y-3 border border-border rounded-lg p-3 bg-background">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Package className="w-3.5 h-3.5 text-violet-400" />
+                  <span className="text-xs font-mono font-semibold text-foreground">Item Masking</span>
+                </div>
+                <button
+                  onClick={() => update({ itemMasking: !form.itemMasking })}
+                  className={`relative w-10 h-5 rounded-full transition-colors ${
+                    form.itemMasking ? "bg-violet-500" : "bg-secondary border border-border"
+                  }`}
+                >
+                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-foreground shadow transition-all ${form.itemMasking ? "left-5" : "left-0.5"}`} />
+                </button>
+              </div>
+              {form.itemMasking && (
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Fake Product Name</label>
+                  <input
+                    value={form.fakeProductName}
+                    onChange={(e) => update({ fakeProductName: e.target.value })}
+                    placeholder="Digital Service Upgrade"
+                    className="w-full bg-card border border-border rounded-md px-3 py-2 text-sm font-mono text-violet-400 placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-violet-400/40 focus:border-violet-400/40 transition-colors"
+                  />
+                  <div className="flex flex-wrap gap-1">
+                    {FAKE_PRODUCT_PRESETS.slice(0, 4).map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => update({ fakeProductName: p })}
+                        className="text-[10px] font-mono px-2 py-0.5 rounded bg-secondary text-muted-foreground hover:text-foreground border border-border transition-colors"
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-          <div className="flex gap-3 px-5 py-4 border-t border-border">
+          <div className="flex gap-3 px-5 py-4 border-t border-border shrink-0">
             <button onClick={onClose} className="flex-1 px-4 py-2 text-xs font-mono text-muted-foreground border border-border rounded-md hover:bg-secondary transition-colors">
               Cancel
             </button>
@@ -781,6 +1078,7 @@ export default function AccountsPage() {
                     "Credentials",
                     "Status",
                     "Priority",
+                    "Item Masking",
                     "Daily Volume",
                     "",
                   ].map((h) => (
@@ -837,6 +1135,11 @@ export default function AccountsPage() {
                     {/* Priority */}
                     <td className="px-4 py-3">
                       <PriorityStars value={m.priority} />
+                    </td>
+
+                    {/* Item Masking */}
+                    <td className="px-4 py-3">
+                      <ItemMaskingBadge enabled={m.itemMasking} productName={m.fakeProductName} />
                     </td>
 
                     {/* Volume */}

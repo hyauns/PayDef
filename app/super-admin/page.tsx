@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, Fragment } from "react"
 import {
   TrendingUp,
   DollarSign,
@@ -427,9 +427,8 @@ export default function SuperAdminPage() {
                     const isExpanded = expandedTenant === t.id
                     const monthShare = (t.currentMonthVolume / Math.max(...tenants.map((x) => x.currentMonthVolume))) * 100
                     return (
-                      <>
+                      <Fragment key={t.id}>
                         <tr
-                          key={t.id}
                           className="border-b border-border/50 hover:bg-secondary/20 cursor-pointer transition-colors"
                           onClick={() => setExpandedTenant(isExpanded ? null : t.id)}
                         >
@@ -524,7 +523,7 @@ export default function SuperAdminPage() {
                             </td>
                           </tr>
                         )}
-                      </>
+                      </Fragment>
                     )
                   })}
                 </tbody>
