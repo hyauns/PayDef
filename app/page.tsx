@@ -1,16 +1,36 @@
+import { DashboardHeader } from "@/components/dashboard/header"
+import { GlobalMetrics } from "@/components/dashboard/global-metrics"
+import { MerchantAccounts } from "@/components/dashboard/merchant-accounts"
+import { ConnectedStores } from "@/components/dashboard/connected-stores"
+import { LiveFeed } from "@/components/dashboard/live-feed"
+import { ShieldDomains } from "@/components/dashboard/shield-domains"
+import { RotationLogic } from "@/components/dashboard/rotation-logic"
+
 export default function Home() {
   return (
-    <div className="flex min-h-screen items-center justify-center font-sans">
-      <main className="flex w-full max-w-3xl flex-col items-center gap-8 px-6 py-16 text-center sm:items-start sm:text-left">
-        <div className="flex flex-col gap-4">
-          <h1 className="text-4xl font-bold tracking-tight">
-            Gateway Central Dashboard
-          </h1>
-          <p className="max-w-md text-lg text-muted-foreground">
-            To get started, send a prompt or modify this page directly.
-          </p>
+    <div className="min-h-screen bg-background font-mono">
+      <DashboardHeader />
+      <main className="px-4 md:px-6 py-5 space-y-5 max-w-[1600px] mx-auto">
+        {/* Global Metrics */}
+        <GlobalMetrics />
+
+        {/* Rotation Logic + Live Feed — side by side */}
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-5">
+          <RotationLogic />
+          <div className="xl:row-span-2">
+            <LiveFeed />
+          </div>
         </div>
+
+        {/* Merchant Accounts Rotator */}
+        <MerchantAccounts />
+
+        {/* Connected Stores */}
+        <ConnectedStores />
+
+        {/* Shield Domain Health */}
+        <ShieldDomains />
       </main>
     </div>
-  );
+  )
 }
