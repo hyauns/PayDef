@@ -2,11 +2,12 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
+import { signIn } from "next-auth/react"
 import {
   Shield,
   Mail,
   Lock,
-  KeyRound,
   Eye,
   EyeOff,
   ArrowRight,
@@ -16,35 +17,40 @@ import {
 } from "lucide-react"
 
 export default function LoginPage() {
+  const searchParams = useSearchParams()
+  const callbackUrl  = searchParams.get("callbackUrl") ?? undefined
+
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [accessCode, setAccessCode] = useState("")
   const [showPassword, setShowPassword] = useState(false)
-  const [showCode, setShowCode] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
-  const [step, setStep] = useState<"credentials" | "code">("credentials")
 
-  function handleCredentials(e: React.FormEvent) {
+  async function handleSignIn(e: React.FormEvent) {
     e.preventDefault()
     if (!email || !password) {
       setError("Please enter your email and password.")
       return
     }
     setError("")
-    setStep("code")
-  }
+    setLoading(true)
 
-  function handleSignIn(e: React.FormEvent) {
-    e.preventDefault()
-    if (!accessCode) {
-      setError("Secret access code is required.")
+    const result = await signIn("credentials", {
+      email:    email.trim().toLowerCase(),
+      password,
+      redirect: false,
+    })
+
+    if (result?.error) {
+      setError("Invalid email or password. Please try again.")
+      setLoading(false)
       return
     }
-    setError("")
-    setLoading(true)
-    // Simulate async sign-in
-    setTimeout(() => setLoading(false), 2200)
+
+    // Let the middleware redirect to the role-appropriate home page.
+    // Use callbackUrl if present (e.g. deep-link protection), otherwise
+    // fall back to root and let middleware sort role → home.
+    window.location.href = callbackUrl ?? "/"
   }
 
   return (
@@ -111,42 +117,13 @@ export default function LoginPage() {
           <div className="px-7 pt-7 pb-5 border-b border-border">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-sm font-semibold text-foreground">
-                  {step === "credentials" ? "Sign in to your account" : "Verify your identity"}
-                </h1>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {step === "credentials"
-                    ? "Authorized personnel only"
-                    : "Enter the secret access code for this session"}
-                </p>
+                <h1 className="text-sm font-semibold text-foreground">Sign in to your account</h1>
+                <p className="text-xs text-muted-foreground mt-1">Authorized personnel only</p>
               </div>
               <div className="flex items-center gap-1.5 text-xs font-mono text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-2 py-1 rounded-md shrink-0">
                 <ShieldCheck className="w-3 h-3" />
                 TLS 1.3
               </div>
-            </div>
-
-            {/* Step indicator */}
-            <div className="flex items-center gap-2 mt-5">
-              {["credentials", "code"].map((s, i) => (
-                <div key={s} className="flex items-center gap-2">
-                  <div className={`flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-semibold border transition-colors ${
-                    step === s
-                      ? "bg-cyan-400/15 border-cyan-400/40 text-cyan-400"
-                      : i === 0 && step === "code"
-                      ? "bg-emerald-400/10 border-emerald-400/30 text-emerald-400"
-                      : "bg-secondary border-border text-muted-foreground"
-                  }`}>
-                    {i === 0 && step === "code" ? "✓" : i + 1}
-                  </div>
-                  <span className={`text-xs ${step === s ? "text-foreground" : "text-muted-foreground"}`}>
-                    {s === "credentials" ? "Credentials" : "Access Code"}
-                  </span>
-                  {i === 0 && (
-                    <div className={`h-px w-8 transition-colors ${step === "code" ? "bg-emerald-400/30" : "bg-border"}`} />
-                  )}
-                </div>
-              ))}
             </div>
           </div>
 
@@ -161,125 +138,70 @@ export default function LoginPage() {
               </div>
             )}
 
-            {step === "credentials" ? (
-              <form onSubmit={handleCredentials} className="space-y-4">
-                {/* Email */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Email Address
-                  </label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="admin@gateway.internal"
-                      autoComplete="email"
-                      className="w-full bg-input border border-border rounded-md pl-9 pr-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/40 transition-colors"
-                    />
-                  </div>
+            <form onSubmit={handleSignIn} className="space-y-4">
+              {/* Email */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Email Address
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="admin@gateway.internal"
+                    autoComplete="email"
+                    required
+                    className="w-full bg-input border border-border rounded-md pl-9 pr-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/40 transition-colors"
+                  />
                 </div>
+              </div>
 
-                {/* Password */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Password
-                  </label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••••••"
-                      autoComplete="current-password"
-                      className="w-full bg-input border border-border rounded-md pl-9 pr-10 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/40 transition-colors"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((v) => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-                  <div className="flex justify-end">
-                    <Link
-                      href="/forgot-password"
-                      className="text-xs text-muted-foreground hover:text-cyan-400 transition-colors"
-                    >
-                      Forgot password?
-                    </Link>
-                  </div>
+              {/* Password */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••••••"
+                    autoComplete="current-password"
+                    required
+                    className="w-full bg-input border border-border rounded-md pl-9 pr-10 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/40 transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
                 </div>
+              </div>
 
-                <button
-                  type="submit"
-                  className="w-full flex items-center justify-center gap-2 bg-cyan-400 hover:bg-cyan-300 text-background font-semibold text-sm py-2.5 rounded-md transition-colors mt-2 group"
-                >
-                  Continue
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-                </button>
-              </form>
-            ) : (
-              <form onSubmit={handleSignIn} className="space-y-4">
-                {/* Access code */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Secret Access Code
-                  </label>
-                  <div className="relative">
-                    <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                    <input
-                      type={showCode ? "text" : "password"}
-                      value={accessCode}
-                      onChange={(e) => setAccessCode(e.target.value)}
-                      placeholder="Enter your 6-digit code"
-                      autoComplete="one-time-code"
-                      maxLength={8}
-                      className="w-full bg-input border border-border rounded-md pl-9 pr-10 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/40 transition-colors tracking-widest"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowCode((v) => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      {showCode ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Provided by your system administrator. Do not share this code.
-                  </p>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full flex items-center justify-center gap-2 bg-cyan-400 hover:bg-cyan-300 disabled:opacity-60 disabled:cursor-not-allowed text-background font-semibold text-sm py-2.5 rounded-md transition-colors group"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Authenticating...
-                    </>
-                  ) : (
-                    <>
-                      Sign In
-                      <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-                    </>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => { setStep("credentials"); setError("") }}
-                  className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
-                >
-                  Back to credentials
-                </button>
-              </form>
-            )}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-2 bg-cyan-400 hover:bg-cyan-300 disabled:opacity-60 disabled:cursor-not-allowed text-background font-semibold text-sm py-2.5 rounded-md transition-colors mt-2 group"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Authenticating...
+                  </>
+                ) : (
+                  <>
+                    Sign In
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                  </>
+                )}
+              </button>
+            </form>
           </div>
 
           {/* Card footer */}
