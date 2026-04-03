@@ -1,10 +1,10 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
-import useSWR from "swr"
+
 import {
   Shield,
   Bell,
@@ -40,8 +40,7 @@ type NotificationTransaction = {
   createdAt: string
 }
 
-// ─── Fetcher ──────────────────────────────────────────────────────────────────
-const fetcher = (url: string) => fetch(url).then((r) => r.json())
+
 
 // ─── Nav Items ────────────────────────────────────────────────────────────────
 const merchantNavItems = [
@@ -92,12 +91,26 @@ export function DashboardHeader() {
   const userInitial = userName.charAt(0).toUpperCase()
 
   // Fetch recent transactions for notifications
-  const { data: notificationsData } = useSWR<{ transactions: NotificationTransaction[] }>(
-    status === "authenticated" ? "/api/merchant/logs?limit=5" : null,
-    fetcher,
-    { refreshInterval: 30000 }
-  )
-  const notifications = notificationsData?.transactions ?? []
+  const [notifications, setNotifications] = useState<NotificationTransaction[]>([])
+
+  const fetchNotifications = useCallback(async () => {
+    if (status !== "authenticated") return
+    try {
+      const res = await fetch("/api/merchant/logs?limit=5")
+      if (res.ok) {
+        const data = await res.json()
+        setNotifications(data.transactions ?? [])
+      }
+    } catch {
+      // Silently fail — notifications are non-critical
+    }
+  }, [status])
+
+  useEffect(() => {
+    fetchNotifications()
+    const interval = setInterval(fetchNotifications, 30_000)
+    return () => clearInterval(interval)
+  }, [fetchNotifications])
 
   // Clear unread indicator when popover is opened
   const handleNotificationOpen = (open: boolean) => {
@@ -107,7 +120,7 @@ export function DashboardHeader() {
   }
 
   // Dynamic settings link based on role
-  const settingsHref = role === "SUPER_ADMIN" ? "/admin/settings" : "/dashboard/settings"
+  const settingsHref = role === "SUPER_ADMIN" ? "/admin/settings" : "/settings"
 
   // Dynamic nav items based on role
   const navItems = role === "SUPER_ADMIN" ? adminNavItems : merchantNavItems
