@@ -14,7 +14,7 @@ import {
   CheckCircle2,
   Lock,
 } from "lucide-react"
-import { DashboardHeader } from "@/components/nav/top-bar"
+import { DashboardHeader } from "@/components/dashboard/header"
 
 const SECTION_CLASSES = "bg-card border border-border rounded-lg divide-y divide-border"
 const LABEL = "text-[10px] font-mono text-muted-foreground uppercase tracking-wider"

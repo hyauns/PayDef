@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { TrendingUp, TrendingDown, Activity, DollarSign, AlertTriangle, BarChart2 } from "lucide-react"
-import { DashboardHeader } from "@/components/nav/top-bar"
+import { DashboardHeader } from "@/components/dashboard/header"
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,

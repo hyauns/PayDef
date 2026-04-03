@@ -12,7 +12,7 @@ import {
   ChevronDown,
   RefreshCw,
 } from "lucide-react"
-import { DashboardHeader } from "@/components/nav/top-bar"
+import { DashboardHeader } from "@/components/dashboard/header"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
