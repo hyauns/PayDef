@@ -2,7 +2,7 @@ import { DashboardHeader } from "@/components/dashboard/header"
 import { GlobalMetrics } from "@/components/dashboard/global-metrics"
 import { MerchantAccounts } from "@/components/dashboard/merchant-accounts"
 import { ConnectedStores } from "@/components/dashboard/connected-stores"
-import { LiveFeed } from "@/components/dashboard/live-feed"
+import { TransactionFeed } from "@/components/dashboard/transaction-feed"
 import { ShieldDomains } from "@/components/dashboard/shield-domains"
 import { RotationLogic } from "@/components/dashboard/rotation-logic"
 
@@ -18,7 +18,7 @@ export default function Home() {
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-5">
           <RotationLogic />
           <div className="xl:row-span-2">
-            <LiveFeed />
+            <TransactionFeed />
           </div>
         </div>
 
