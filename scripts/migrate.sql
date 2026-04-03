@@ -3,10 +3,18 @@
 -- Mirrors prisma/schema.prisma exactly.
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- Enums
-CREATE TYPE IF NOT EXISTS "Role" AS ENUM ('SUPER_ADMIN', 'MERCHANT');
-CREATE TYPE IF NOT EXISTS "AccountStatus" AS ENUM ('ACTIVE', 'PAUSED', 'WARMING_UP', 'SUSPENDED');
-CREATE TYPE IF NOT EXISTS "TransactionStatus" AS ENUM ('PENDING', 'COMPLETED', 'FAILED', 'REFUNDED', 'DISPUTED');
+-- Enums (conditional creation via pg_type catalog)
+DO $$ BEGIN
+  CREATE TYPE "Role" AS ENUM ('SUPER_ADMIN', 'MERCHANT');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE "AccountStatus" AS ENUM ('ACTIVE', 'PAUSED', 'WARMING_UP', 'SUSPENDED');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE "TransactionStatus" AS ENUM ('PENDING', 'COMPLETED', 'FAILED', 'REFUNDED', 'DISPUTED');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ── tenants ──────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS tenants (
