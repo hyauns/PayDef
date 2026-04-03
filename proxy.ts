@@ -20,7 +20,7 @@ const PROTECTED_ROUTES: { prefix: string; role: Role }[] = [
 ]
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
 
   // Always allow Next.js internals and the auth API

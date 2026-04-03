@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { Suspense, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { signIn } from "next-auth/react"
@@ -16,7 +16,9 @@ import {
   ShieldCheck,
 } from "lucide-react"
 
-export default function LoginPage() {
+// Inner component — allowed to call useSearchParams() because it is
+// rendered inside a <Suspense> boundary in the default export below.
+function LoginForm() {
   const searchParams = useSearchParams()
   const callbackUrl  = searchParams.get("callbackUrl") ?? undefined
 
@@ -227,5 +229,15 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  )
+}
+
+// Default export — wraps LoginForm in Suspense so Next.js can statically
+// prerender the /login shell without blocking on useSearchParams().
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   )
 }
