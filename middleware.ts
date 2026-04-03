@@ -1,64 +1,76 @@
-import { withAuth, NextRequestWithAuth } from "next-auth/middleware"
-import { NextResponse } from "next/server"
-import type { Role } from "@/lib/auth"
-import { ROLE_HOME } from "@/lib/auth"
+// Edge-compatible middleware — ZERO Node.js-only imports (no Prisma, no bcrypt).
+// Auth state is read solely from the signed JWT via next-auth/jwt getToken().
+import { getToken } from "next-auth/jwt"
+import { NextResponse, type NextRequest } from "next/server"
 
-// ─── Route-to-role access map ─────────────────────────────────────────────────
-// Any route prefix listed here requires the given role.
+// ─── Types ───────────────────────────────────────────────────────────────────
+type Role = "SUPER_ADMIN" | "MERCHANT"
+
+// ─── Role → home route ────────────────────────────────────────────────────────
+const ROLE_HOME: Record<Role, string> = {
+  SUPER_ADMIN: "/super-admin",
+  MERCHANT:    "/dashboard",
+}
+
+// ─── Protected route map ─────────────────────────────────────────────────────
 const PROTECTED_ROUTES: { prefix: string; role: Role }[] = [
   { prefix: "/super-admin", role: "SUPER_ADMIN" },
   { prefix: "/admin",       role: "SUPER_ADMIN" },
   { prefix: "/dashboard",   role: "MERCHANT"    },
 ]
 
-// Public routes that require NO authentication
-const PUBLIC_PATHS = ["/login", "/api/auth", "/favicon", "/_next", "/icon", "/apple-icon"]
+// ─── Middleware ───────────────────────────────────────────────────────────────
+export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl
 
-export default withAuth(
-  function middleware(req: NextRequestWithAuth) {
-    const { pathname } = req.nextUrl
-    const token = req.nextauth.token
+  // Always allow Next.js internals and the auth API
+  if (
+    pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/_next") ||
+    pathname.match(/\.(ico|svg|png|jpg|jpeg|gif|webp|css|js|woff2?)$/)
+  ) {
+    return NextResponse.next()
+  }
 
-    // ── Unauthenticated → /login ──────────────────────────────────────────────
-    if (!token) {
-      const loginUrl = new URL("/login", req.url)
-      loginUrl.searchParams.set("callbackUrl", pathname)
-      return NextResponse.redirect(loginUrl)
-    }
+  // Decode the JWT — returns null when unauthenticated
+  const token = await getToken({
+    req,
+    secret: process.env.NEXTAUTH_SECRET,
+  })
 
-    const role = token.role as Role | undefined
+  const role = token?.role as Role | undefined
 
-    // ── Role-based route enforcement ──────────────────────────────────────────
-    for (const { prefix, role: required } of PROTECTED_ROUTES) {
-      if (pathname.startsWith(prefix)) {
-        if (role !== required) {
-          // Wrong role → redirect to their own home
-          const home = role ? ROLE_HOME[role] : "/login"
-          return NextResponse.redirect(new URL(home, req.url))
-        }
-        // Correct role → allow
-        return NextResponse.next()
-      }
-    }
-
-    // ── Authenticated user hits /login → send to role home ───────────────────
-    if (pathname === "/login" && role) {
+  // ── Authenticated user hits /login → redirect to their home ──────────────
+  if (pathname === "/login") {
+    if (role) {
       return NextResponse.redirect(new URL(ROLE_HOME[role], req.url))
     }
-
     return NextResponse.next()
-  },
-  {
-    callbacks: {
-      // Run middleware for ALL matched routes — we handle auth checks manually
-      authorized: () => true,
-    },
   }
-)
 
-// ─── Matcher: exclude truly static assets ────────────────────────────────────
+  // ── Check protected route prefixes ────────────────────────────────────────
+  for (const { prefix, role: required } of PROTECTED_ROUTES) {
+    if (pathname.startsWith(prefix)) {
+      if (!token) {
+        // Not logged in → /login with callbackUrl
+        const loginUrl = new URL("/login", req.url)
+        loginUrl.searchParams.set("callbackUrl", pathname)
+        return NextResponse.redirect(loginUrl)
+      }
+      if (role !== required) {
+        // Wrong role → their own home
+        return NextResponse.redirect(new URL(role ? ROLE_HOME[role] : "/login", req.url))
+      }
+      return NextResponse.next()
+    }
+  }
+
+  return NextResponse.next()
+}
+
+// ─── Matcher ─────────────────────────────────────────────────────────────────
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon\\.ico).*)",
   ],
 }
