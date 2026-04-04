@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/reset-volume",
+      "schedule": "0 0 * * *"
+    }
+  ]
+}

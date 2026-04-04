@@ -1,6 +1,7 @@
 import { NextAuthOptions } from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
+import { randomUUID } from "crypto"
 import { getSql, type UserRow } from "@/lib/neon"
 
 // ─── Role constants (mirrors Prisma enum) ─────────────────────────────────────
@@ -45,12 +46,12 @@ export const authOptions: NextAuthOptions = {
         // Lookup user by email using raw SQL (no Prisma generated client needed)
         const email = credentials.email.toLowerCase().trim()
         const sql = getSql()
-        const rows = await sql<UserRow[]>`
+        const rows = (await sql`
           SELECT id, email, password_hash, role, tenant_id
           FROM   users
           WHERE  email = ${email}
           LIMIT  1
-        `
+        `) as unknown as UserRow[]
         const user = rows[0] ?? null
 
         if (!user) {
@@ -76,12 +77,36 @@ export const authOptions: NextAuthOptions = {
   ],
 
   callbacks: {
-    // Persist role + userId inside the JWT token
+    // Persist role + userId + jti inside the JWT token
     async jwt({ token, user }) {
       if (user) {
         token.userId   = user.id
         token.role     = (user as any).role as Role
         token.tenantId = (user as any).tenantId as string | undefined
+        // Generate a unique token identifier for session tracking & revocation
+        token.jti      = randomUUID()
+
+        // Log login event to system_logs (best-effort, non-blocking)
+        try {
+          const sql = getSql()
+          await sql`
+            INSERT INTO system_logs (action, status, level, metadata, tenant_id)
+            VALUES (
+              'USER_LOGIN',
+              'OK',
+              'info',
+              ${JSON.stringify({
+                userId: user.id,
+                email: user.email,
+                role: (user as any).role,
+                jti: token.jti,
+              })}::jsonb,
+              ${(user as any).tenantId ?? null}
+            )
+          `
+        } catch {
+          // Non-critical: don't block login if audit logging fails
+        }
       }
       return token
     },

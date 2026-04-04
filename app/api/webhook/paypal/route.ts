@@ -1,31 +1,64 @@
 /**
- * PayPal Webhook Listener — /api/webhook/paypal
+ * PayPal Webhook Listener — POST /api/webhook/paypal
  *
- * Handles PAYMENT.CAPTURE.COMPLETED events:
- * 1. Verifies webhook signature (if PAYPAL_WEBHOOK_ID is set)
- * 2. Updates transaction status to COMPLETED
- * 3. Increments merchant account currentVolume
- * 4. Calculates & stores gateway fee (2%)
- * 5. Sends async notification to store's webhookUrl
+ * ┌─────────────────────────────────────────────────────────────────────┐
+ * │  SECURITY: Real PayPal Signature Verification                      │
+ * │                                                                     │
+ * │  1. Extract PayPal security headers (transmission-id, cert-url,    │
+ * │     auth-algo, transmission-sig, transmission-time)                 │
+ * │  2. Parse the event body to find the transaction → merchant_id     │
+ * │  3. Resolve the webhook_id:                                         │
+ * │     a. Per-account: merchant_accounts.paypal_webhook_id             │
+ * │     b. Fallback: PAYPAL_WEBHOOK_ID env var                          │
+ * │  4. Call PayPal POST /v1/notifications/verify-webhook-signature     │
+ * │  5. If verification fails → 401 + log the failed attempt           │
+ * │  6. If verification succeeds → process the event atomically        │
+ * └─────────────────────────────────────────────────────────────────────┘
+ *
+ * Supported events:
+ *  • PAYMENT.CAPTURE.COMPLETED  → mark transaction COMPLETED
+ *  • PAYMENT.CAPTURE.DENIED    → mark transaction FAILED
+ *  • PAYMENT.CAPTURE.REFUNDED  → mark transaction REFUNDED
+ *  • CUSTOMER.DISPUTE.CREATED  → mark transaction DISPUTED
  */
 import { NextRequest, NextResponse } from "next/server"
 import { getSql, getPool } from "@/lib/neon"
+import { getUserAgent } from "@/lib/paypal"
 
-// Gateway fee percentage (2%)
+// ─── Constants ────────────────────────────────────────────────────────────────
+
 const GATEWAY_FEE_PERCENT = 0.02
 
+const PAYPAL_BASE =
+  process.env.PAYPAL_ENV === "live"
+    ? "https://api-m.paypal.com"
+    : "https://api-m.sandbox.paypal.com"
+
+/** Cert URL must point to a real PayPal domain — blocks spoofed certs */
+const ALLOWED_CERT_DOMAINS = [
+  "api.paypal.com",
+  "api.sandbox.paypal.com",
+  "www.paypal.com",
+  "www.sandbox.paypal.com",
+]
+
 // ─── Types ────────────────────────────────────────────────────────────────────
+
 interface PayPalWebhookEvent {
   id: string
   event_type: string
   resource: {
-    id: string               // capture ID
+    id: string               // capture ID, authorization ID, or dispute ID
     status: string
-    amount: {
+    amount?: {
       value: string
       currency_code: string
     }
     custom_id?: string       // our transaction ID
+    parent_payment?: string  // order ID (present in authorization events)
+    disputed_transactions?: {
+      seller_transaction_id?: string
+    }[]
     supplementary_data?: {
       related_ids?: {
         order_id?: string
@@ -44,49 +77,403 @@ interface TransactionRow {
   paypal_order_id: string | null
 }
 
+interface MerchantWebhookRow {
+  paypal_webhook_id: string | null
+  client_id: string
+  client_secret: string
+}
+
 interface StoreRow {
   webhook_url: string | null
 }
 
-// ─── Webhook Signature Verification (optional) ────────────────────────────────
-async function verifyWebhookSignature(
-  req: NextRequest,
-  body: string
-): Promise<boolean> {
-  const webhookId = process.env.PAYPAL_WEBHOOK_ID
-  if (!webhookId) {
-    // If no webhook ID configured, skip verification (dev mode)
-    console.warn("[PayPal Webhook] PAYPAL_WEBHOOK_ID not set, skipping signature verification")
-    return true
+// ─── PayPal OAuth (for verify-webhook-signature API) ──────────────────────────
+
+/**
+ * Gets a platform-level OAuth token for the verify-webhook-signature call.
+ * Uses PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET env vars (platform credentials).
+ * Falls back to the merchant account's credentials if platform-level aren't set.
+ */
+async function getPlatformAccessToken(
+  clientId?: string,
+  clientSecret?: string
+): Promise<string> {
+  const cId     = clientId     ?? process.env.PAYPAL_CLIENT_ID
+  const cSecret = clientSecret ?? process.env.PAYPAL_CLIENT_SECRET
+
+  if (!cId || !cSecret) {
+    throw new Error(
+      "Cannot verify webhook: no PayPal credentials available. " +
+      "Set PAYPAL_CLIENT_ID + PAYPAL_CLIENT_SECRET, or configure per-account credentials."
+    )
   }
 
-  const transmissionId = req.headers.get("paypal-transmission-id")
+  const res = await fetch(`${PAYPAL_BASE}/v1/oauth2/token`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Authorization": `Basic ${Buffer.from(`${cId}:${cSecret}`).toString("base64")}`,
+      "User-Agent": getUserAgent(cId),
+    },
+    body: "grant_type=client_credentials",
+  })
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`PayPal OAuth error [${res.status}]: ${text}`)
+  }
+
+  const data = await res.json() as { access_token: string }
+  return data.access_token
+}
+
+// ─── Signature Verification ───────────────────────────────────────────────────
+
+interface SignatureHeaders {
+  transmissionId:   string
+  transmissionTime: string
+  certUrl:          string
+  transmissionSig:  string
+  authAlgo:         string
+}
+
+/**
+ * Extracts and validates required PayPal security headers.
+ * Returns null if any header is missing.
+ */
+function extractSignatureHeaders(req: NextRequest): SignatureHeaders | null {
+  const transmissionId   = req.headers.get("paypal-transmission-id")
   const transmissionTime = req.headers.get("paypal-transmission-time")
-  const certUrl = req.headers.get("paypal-cert-url")
-  const transmissionSig = req.headers.get("paypal-transmission-sig")
-  const authAlgo = req.headers.get("paypal-auth-algo")
+  const certUrl          = req.headers.get("paypal-cert-url")
+  const transmissionSig  = req.headers.get("paypal-transmission-sig")
+  const authAlgo         = req.headers.get("paypal-auth-algo")
 
   if (!transmissionId || !transmissionTime || !certUrl || !transmissionSig || !authAlgo) {
-    console.error("[PayPal Webhook] Missing signature headers")
-    return false
+    return null
   }
 
-  // For production, implement full signature verification using PayPal's verify-webhook-signature API
-  // For now, we accept the webhook if all headers are present
-  // TODO: Call PayPal's POST /v1/notifications/verify-webhook-signature endpoint
-  return true
+  // Validate cert URL domain — prevents spoofed certificate attacks
+  try {
+    const certDomain = new URL(certUrl).hostname
+    if (!ALLOWED_CERT_DOMAINS.some((d) => certDomain.endsWith(d))) {
+      console.error(`[PayPal Webhook] Suspicious cert URL domain: ${certDomain}`)
+      return null
+    }
+  } catch {
+    console.error(`[PayPal Webhook] Invalid cert URL: ${certUrl}`)
+    return null
+  }
+
+  return { transmissionId, transmissionTime, certUrl, transmissionSig, authAlgo }
+}
+
+/**
+ * Calls PayPal's POST /v1/notifications/verify-webhook-signature endpoint.
+ *
+ * This is the official way to verify that a webhook was genuinely sent by
+ * PayPal and has not been tampered with.
+ *
+ * @param headers  — extracted PayPal security headers
+ * @param body     — raw request body (as string, not parsed)
+ * @param webhookId — the Webhook ID configured in PayPal's developer portal
+ * @param accessToken — platform-level OAuth token
+ * @returns "SUCCESS" | "FAILURE"
+ */
+async function callPayPalVerify(
+  headers: SignatureHeaders,
+  body: string,
+  webhookId: string,
+  accessToken: string
+): Promise<"SUCCESS" | "FAILURE"> {
+  const verifyPayload = {
+    auth_algo:         headers.authAlgo,
+    cert_url:          headers.certUrl,
+    transmission_id:   headers.transmissionId,
+    transmission_sig:  headers.transmissionSig,
+    transmission_time: headers.transmissionTime,
+    webhook_id:        webhookId,
+    webhook_event:     JSON.parse(body),
+  }
+
+  const res = await fetch(`${PAYPAL_BASE}/v1/notifications/verify-webhook-signature`, {
+    method: "POST",
+    headers: {
+      "Content-Type":  "application/json",
+      "Authorization": `Bearer ${accessToken}`,
+      "User-Agent":    getUserAgent(webhookId),
+    },
+    body: JSON.stringify(verifyPayload),
+    signal: AbortSignal.timeout(10000), // 10s timeout
+  })
+
+  if (!res.ok) {
+    const text = await res.text()
+    console.error(`[PayPal Webhook] Verify API error [${res.status}]: ${text}`)
+    return "FAILURE"
+  }
+
+  const result = await res.json() as { verification_status: string }
+  return result.verification_status === "SUCCESS" ? "SUCCESS" : "FAILURE"
+}
+
+/**
+ * Full verification flow:
+ *  1. Extract headers
+ *  2. Resolve webhook ID (per-account → global fallback → dev skip)
+ *  3. Get OAuth token
+ *  4. Call PayPal verify API
+ */
+async function verifyWebhookSignature(
+  req: NextRequest,
+  body: string,
+  webhookId?: string | null,
+  merchantCredentials?: { clientId: string; clientSecret: string }
+): Promise<{ verified: boolean; reason?: string }> {
+  // Dev mode: if no webhook ID available at all, skip with warning
+  const effectiveWebhookId = webhookId ?? process.env.PAYPAL_WEBHOOK_ID
+  if (!effectiveWebhookId) {
+    console.warn(
+      "[PayPal Webhook] No webhook ID configured (account or env). " +
+      "Skipping verification — SET PAYPAL_WEBHOOK_ID for production."
+    )
+    return { verified: true, reason: "dev_mode_skip" }
+  }
+
+  // Extract and validate security headers
+  const headers = extractSignatureHeaders(req)
+  if (!headers) {
+    return { verified: false, reason: "missing_or_invalid_headers" }
+  }
+
+  try {
+    // Get OAuth token — prefer platform credentials, fall back to merchant
+    const accessToken = await getPlatformAccessToken(
+      merchantCredentials?.clientId,
+      merchantCredentials?.clientSecret
+    )
+
+    const result = await callPayPalVerify(headers, body, effectiveWebhookId, accessToken)
+
+    if (result === "SUCCESS") {
+      return { verified: true }
+    }
+
+    return { verified: false, reason: "paypal_verification_failed" }
+  } catch (err) {
+    console.error("[PayPal Webhook] Verification error:", err)
+    return { verified: false, reason: `verification_error: ${(err as Error).message}` }
+  }
+}
+
+// ─── Transaction Reference Resolver ───────────────────────────────────────────
+
+/**
+ * Extracts our internal transaction ID from a webhook event.
+ * Supports PAYMENT.CAPTURE.* (custom_id, order_id) and
+ * CUSTOMER.DISPUTE.* (seller_transaction_id).
+ */
+function resolveTransactionRef(event: PayPalWebhookEvent): {
+  transactionId?: string
+  paypalOrderId?: string
+} {
+  // PAYMENT.CAPTURE.* events
+  const transactionId = event.resource.custom_id
+  const paypalOrderId = event.resource.supplementary_data?.related_ids?.order_id
+
+  // CUSTOMER.DISPUTE.* events reference the PayPal transaction ID
+  // We'll need to match via paypal_capture_id or paypal_order_id
+  if (!transactionId && !paypalOrderId) {
+    const disputeTxId = event.resource.disputed_transactions?.[0]?.seller_transaction_id
+    if (disputeTxId) {
+      return { paypalOrderId: disputeTxId }
+    }
+  }
+
+  return { transactionId, paypalOrderId }
+}
+
+// ─── Event-Specific Handlers ──────────────────────────────────────────────
+
+type EventResult = {
+  status: string
+  transaction_id?: string
+  [key: string]: unknown
+}
+
+// ─── PAYMENT.AUTHORIZATION.CREATED ─────────────────────────────────────
+
+async function handleAuthorizationCreated(
+  client: any,
+  transaction: TransactionRow,
+  event: PayPalWebhookEvent
+): Promise<EventResult> {
+  if (transaction.status !== "AUTHORIZED" && transaction.status !== "PENDING") {
+    await client.query("ROLLBACK")
+    return { status: "already_processed", transaction_id: transaction.id }
+  }
+
+  const authorizationId = event.resource.id
+
+  // Save the authorization_id so the store can use it for manual capture
+  await client.query(
+    `UPDATE transactions
+     SET authorization_id = $1,
+         status = 'AUTHORIZED',
+         updated_at = NOW()
+     WHERE id = $2`,
+    [authorizationId, transaction.id]
+  )
+
+  await client.query("COMMIT")
+
+  return {
+    status: "processed",
+    transaction_id: transaction.id,
+    authorization_id: authorizationId,
+    new_status: "AUTHORIZED",
+  }
+}
+
+async function handleCaptureCompleted(
+  client: any,
+  transaction: TransactionRow,
+  event: PayPalWebhookEvent
+): Promise<EventResult> {
+  if (transaction.status === "COMPLETED") {
+    await client.query("ROLLBACK")
+    return { status: "already_processed", transaction_id: transaction.id }
+  }
+
+  const captureId      = event.resource.id
+  const originalAmount = parseFloat(transaction.original_amount)
+  const gatewayFee     = originalAmount * GATEWAY_FEE_PERCENT
+
+  await client.query(
+    `UPDATE transactions
+     SET status = 'COMPLETED',
+         paypal_capture_id = $1,
+         gateway_fee = $2,
+         updated_at = NOW()
+     WHERE id = $3`,
+    [captureId, gatewayFee.toFixed(2), transaction.id]
+  )
+
+  await client.query("COMMIT")
+
+  return {
+    status: "processed",
+    transaction_id: transaction.id,
+    capture_id: captureId,
+    gateway_fee: gatewayFee.toFixed(2),
+  }
+}
+
+async function handleCaptureDenied(
+  client: any,
+  transaction: TransactionRow,
+  event: PayPalWebhookEvent
+): Promise<EventResult> {
+  if (transaction.status === "FAILED") {
+    await client.query("ROLLBACK")
+    return { status: "already_processed", transaction_id: transaction.id }
+  }
+
+  await client.query(
+    `UPDATE transactions
+     SET status = 'FAILED',
+         updated_at = NOW()
+     WHERE id = $1`,
+    [transaction.id]
+  )
+
+  // Reverse the optimistic volume increment from checkout
+  await client.query(
+    `UPDATE merchant_accounts
+     SET current_volume = GREATEST(0, current_volume - $1),
+         updated_at = NOW()
+     WHERE id = $2`,
+    [parseFloat(transaction.original_amount), transaction.merchant_id]
+  )
+
+  await client.query("COMMIT")
+
+  return { status: "processed", transaction_id: transaction.id, new_status: "FAILED" }
+}
+
+async function handleCaptureRefunded(
+  client: any,
+  transaction: TransactionRow,
+  event: PayPalWebhookEvent
+): Promise<EventResult> {
+  if (transaction.status === "REFUNDED") {
+    await client.query("ROLLBACK")
+    return { status: "already_processed", transaction_id: transaction.id }
+  }
+
+  await client.query(
+    `UPDATE transactions
+     SET status = 'REFUNDED',
+         updated_at = NOW()
+     WHERE id = $1`,
+    [transaction.id]
+  )
+
+  // Reverse volume for refunded transactions
+  await client.query(
+    `UPDATE merchant_accounts
+     SET current_volume = GREATEST(0, current_volume - $1),
+         updated_at = NOW()
+     WHERE id = $2`,
+    [parseFloat(transaction.original_amount), transaction.merchant_id]
+  )
+
+  await client.query("COMMIT")
+
+  return { status: "processed", transaction_id: transaction.id, new_status: "REFUNDED" }
+}
+
+async function handleDisputeCreated(
+  client: any,
+  transaction: TransactionRow,
+  event: PayPalWebhookEvent
+): Promise<EventResult> {
+  if (transaction.status === "DISPUTED") {
+    await client.query("ROLLBACK")
+    return { status: "already_processed", transaction_id: transaction.id }
+  }
+
+  await client.query(
+    `UPDATE transactions
+     SET status = 'DISPUTED',
+         updated_at = NOW()
+     WHERE id = $1`,
+    [transaction.id]
+  )
+
+  await client.query("COMMIT")
+
+  return { status: "processed", transaction_id: transaction.id, new_status: "DISPUTED" }
+}
+
+// ─── Supported Event Types ────────────────────────────────────────────────────
+
+const SUPPORTED_EVENTS: Record<
+  string,
+  (client: any, tx: TransactionRow, event: PayPalWebhookEvent) => Promise<EventResult>
+> = {
+  "PAYMENT.AUTHORIZATION.CREATED": handleAuthorizationCreated,
+  "PAYMENT.CAPTURE.COMPLETED":     handleCaptureCompleted,
+  "PAYMENT.CAPTURE.DENIED":        handleCaptureDenied,
+  "PAYMENT.CAPTURE.REFUNDED":      handleCaptureRefunded,
+  "CUSTOMER.DISPUTE.CREATED":      handleDisputeCreated,
 }
 
 // ─── POST Handler ─────────────────────────────────────────────────────────────
+
 export async function POST(req: NextRequest) {
   const bodyText = await req.text()
-  
-  // Verify webhook signature
-  const isValid = await verifyWebhookSignature(req, bodyText)
-  if (!isValid) {
-    return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 })
-  }
 
+  // ── Parse webhook event ──────────────────────────────────────────────────
   let event: PayPalWebhookEvent
   try {
     event = JSON.parse(bodyText)
@@ -94,29 +481,78 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
   }
 
-  // Only handle PAYMENT.CAPTURE.COMPLETED events
-  if (event.event_type !== "PAYMENT.CAPTURE.COMPLETED") {
-    // Acknowledge but ignore other event types
+  // ── Check if this is a supported event type ──────────────────────────────
+  const handler = SUPPORTED_EVENTS[event.event_type]
+  if (!handler) {
+    // Acknowledge but ignore unsupported event types
     return NextResponse.json({ status: "ignored", event_type: event.event_type })
   }
 
-  const captureId = event.resource.id
-  const paypalOrderId = event.resource.supplementary_data?.related_ids?.order_id
-  const transactionId = event.resource.custom_id
+  // ── Resolve transaction reference ────────────────────────────────────────
+  const { transactionId, paypalOrderId } = resolveTransactionRef(event)
 
   if (!transactionId && !paypalOrderId) {
-    console.error("[PayPal Webhook] No transaction reference found in webhook payload")
+    console.error("[PayPal Webhook] No transaction reference in event:", event.id)
     return NextResponse.json({ error: "Missing transaction reference" }, { status: 400 })
   }
 
+  // ── Look up the transaction → merchant account → webhook ID ──────────────
+  // We need the merchant_id to resolve the per-account webhook_id for
+  // signature verification. This query is read-only (no lock) since we
+  // haven't started the mutation transaction yet.
   const sql = getSql()
-  const pool = getPool()
+
+  let txLookupResult
+  if (transactionId) {
+    txLookupResult = await sql`
+      SELECT t.merchant_id, ma.paypal_webhook_id, ma.client_id, ma.client_secret
+      FROM transactions t
+      JOIN merchant_accounts ma ON t.merchant_id = ma.id
+      WHERE t.id = ${transactionId}
+      LIMIT 1
+    `
+  } else {
+    txLookupResult = await sql`
+      SELECT t.merchant_id, ma.paypal_webhook_id, ma.client_id, ma.client_secret
+      FROM transactions t
+      JOIN merchant_accounts ma ON t.merchant_id = ma.id
+      WHERE t.paypal_order_id = ${paypalOrderId}
+      LIMIT 1
+    `
+  }
+
+  const lookupRow = txLookupResult[0] as MerchantWebhookRow | undefined
+
+  // ── Verify webhook signature (multi-tenant) ──────────────────────────────
+  // Priority: per-account webhook_id → global PAYPAL_WEBHOOK_ID → dev skip
+  const { verified, reason } = await verifyWebhookSignature(
+    req,
+    bodyText,
+    lookupRow?.paypal_webhook_id,
+    lookupRow
+      ? { clientId: lookupRow.client_id, clientSecret: lookupRow.client_secret }
+      : undefined
+  )
+
+  if (!verified) {
+    console.error(
+      `[PayPal Webhook] Signature verification FAILED for event ${event.id}: ${reason}`,
+      { event_type: event.event_type, transactionId, paypalOrderId }
+    )
+    return NextResponse.json(
+      { error: "Invalid webhook signature", reason },
+      { status: 401 }
+    )
+  }
+
+  // ── Process the event atomically ─────────────────────────────────────────
+  const pool   = getPool()
   const client = await pool.connect()
 
   try {
     await client.query("BEGIN")
 
-    // Find the transaction by custom_id (our transaction ID) or paypal_order_id
+    // Lock the transaction row
     let transactionQuery: string
     let transactionParams: string[]
 
@@ -147,64 +583,37 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Transaction not found" }, { status: 404 })
     }
 
-    // Skip if already processed
-    if (transaction.status === "COMPLETED") {
-      await client.query("ROLLBACK")
-      return NextResponse.json({ status: "already_processed", transaction_id: transaction.id })
+    // Dispatch to the appropriate event handler
+    const result = await handler(client, transaction, event)
+
+    // ── Send store webhook notification (fire-and-forget) ──────────────────
+    if (result.status === "processed") {
+      const storeResult = await sql`
+        SELECT webhook_url FROM stores WHERE id = ${transaction.store_id}
+      ` as unknown as StoreRow[]
+      const store = storeResult[0]
+
+      if (store?.webhook_url) {
+        sendStoreWebhook(store.webhook_url, {
+          event:             `payment.${event.event_type.split(".").pop()?.toLowerCase()}`,
+          transaction_id:    transaction.id,
+          paypal_order_id:   transaction.paypal_order_id,
+          amount:            parseFloat(transaction.original_amount).toFixed(2),
+          status:            result.new_status ?? "COMPLETED",
+          timestamp:         new Date().toISOString(),
+          ...( result.capture_id       ? { paypal_capture_id: result.capture_id } : {}),
+          ...( result.authorization_id ? { authorization_id: result.authorization_id } : {}),
+          ...( result.gateway_fee      ? { gateway_fee: result.gateway_fee, net_amount: (parseFloat(transaction.original_amount) - parseFloat(result.gateway_fee as string)).toFixed(2) } : {}),
+        }).catch((err) => {
+          console.error("[PayPal Webhook] Failed to send store notification:", err)
+        })
+      }
     }
 
-    // Calculate gateway fee (2% of original amount)
-    const originalAmount = parseFloat(transaction.original_amount)
-    const gatewayFee = originalAmount * GATEWAY_FEE_PERCENT
-
-    // Update transaction to COMPLETED with capture ID and gateway fee
-    await client.query(
-      `UPDATE transactions
-       SET status = 'COMPLETED',
-           paypal_capture_id = $1,
-           gateway_fee = $2,
-           updated_at = NOW()
-       WHERE id = $3`,
-      [captureId, gatewayFee.toFixed(2), transaction.id]
-    )
-
-    // Note: currentVolume was already incremented during checkout (optimistic lock)
-    // We don't increment again here to avoid double-counting
-
-    await client.query("COMMIT")
-
-    // Get store's webhook URL for notification
-    const storeResult = await sql<StoreRow[]>`
-      SELECT webhook_url FROM stores WHERE id = ${transaction.store_id}
-    `
-    const store = storeResult[0]
-
-    // Send async webhook notification to store (fire and forget)
-    if (store?.webhook_url) {
-      sendStoreWebhook(store.webhook_url, {
-        event: "payment.completed",
-        transaction_id: transaction.id,
-        paypal_order_id: transaction.paypal_order_id,
-        paypal_capture_id: captureId,
-        amount: originalAmount.toFixed(2),
-        gateway_fee: gatewayFee.toFixed(2),
-        net_amount: (originalAmount - gatewayFee).toFixed(2),
-        status: "COMPLETED",
-        timestamp: new Date().toISOString(),
-      }).catch((err) => {
-        console.error("[PayPal Webhook] Failed to send store notification:", err)
-      })
-    }
-
-    return NextResponse.json({
-      status: "processed",
-      transaction_id: transaction.id,
-      capture_id: captureId,
-      gateway_fee: gatewayFee.toFixed(2),
-    })
+    return NextResponse.json(result)
   } catch (error) {
-    await client.query("ROLLBACK")
-    console.error("[PayPal Webhook] Error processing webhook:", error)
+    await client.query("ROLLBACK").catch(() => null)
+    console.error("[PayPal Webhook] Error processing event:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   } finally {
     client.release()
@@ -212,6 +621,7 @@ export async function POST(req: NextRequest) {
 }
 
 // ─── Store Webhook Notification ───────────────────────────────────────────────
+
 async function sendStoreWebhook(
   webhookUrl: string,
   payload: Record<string, unknown>
@@ -227,10 +637,10 @@ async function sendStoreWebhook(
         headers: {
           "Content-Type": "application/json",
           "X-Webhook-Source": "payment-gateway",
-          "X-Webhook-Event": "payment.completed",
+          "X-Webhook-Event": String(payload.event ?? "payment.update"),
         },
         body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(10000), // 10 second timeout
+        signal: AbortSignal.timeout(10000),
       })
 
       if (response.ok) {
@@ -245,7 +655,6 @@ async function sendStoreWebhook(
       console.warn(`[Store Webhook] Attempt ${attempt}/${maxRetries} failed:`, err)
     }
 
-    // Exponential backoff: 1s, 2s, 4s
     if (attempt < maxRetries) {
       await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)))
     }
@@ -254,11 +663,12 @@ async function sendStoreWebhook(
   throw new Error(`Failed to notify store webhook after ${maxRetries} attempts`)
 }
 
-// ─── GET Handler (for webhook verification) ───────────────────────────────────
+// ─── GET Handler (endpoint health check) ──────────────────────────────────────
+
 export async function GET() {
   return NextResponse.json({
     status: "ok",
     message: "PayPal webhook endpoint is active",
-    supported_events: ["PAYMENT.CAPTURE.COMPLETED"],
+    supported_events: Object.keys(SUPPORTED_EVENTS),
   })
 }

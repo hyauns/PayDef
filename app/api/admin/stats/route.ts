@@ -74,11 +74,11 @@ export async function GET() {
     totalStores,
     totalAccounts,
     totalTransactions,
-    statusBreakdown: statusBreakdown.map((row: { status: string; count: string }) => ({
+    statusBreakdown: (statusBreakdown as unknown as { status: string; count: string }[]).map((row) => ({
       status: row.status,
       count: parseInt(row.count, 10),
     })),
-    dailyVolume: dailyVolume.map((row: { date: string; volume: string; tx_count: string }) => ({
+    dailyVolume: (dailyVolume as unknown as { date: string; volume: string; tx_count: string }[]).map((row) => ({
       date: row.date,
       volume: parseFloat(row.volume),
       txCount: parseInt(row.tx_count, 10),

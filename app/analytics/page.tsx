@@ -1,61 +1,46 @@
 "use client"
 
 import { useState } from "react"
-import { TrendingUp, TrendingDown, Activity, DollarSign, AlertTriangle, BarChart2 } from "lucide-react"
+import useSWR from "swr"
+import { TrendingUp, TrendingDown, Activity, DollarSign, AlertTriangle, BarChart2, Loader2 } from "lucide-react"
 import { DashboardHeader } from "@/components/dashboard/header"
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Range = "24h" | "7d" | "30d"
 
-// ─── Data generators ──────────────────────────────────────────────────────────
-
-function revenueData(range: Range) {
-  if (range === "24h") {
-    return Array.from({ length: 24 }, (_, i) => ({
-      label: `${String(i).padStart(2, "0")}:00`,
-      revenue: Math.round(800 + Math.sin(i / 3) * 400 + Math.random() * 200),
-      transactions: Math.round(18 + Math.random() * 14),
-    }))
+interface AnalyticsResponse {
+  range: string
+  summary: {
+    totalRevenue: number
+    totalTransactions: number
+    completedCount: number
+    failedCount: number
+    refundedCount: number
+    disputedCount: number
+    successRate: number
+    refundRate: number
+    disputeRate: number
+    avgTransaction: number
+    gatewayFees: number
+    activeAccounts: number
+    totalAccounts: number
   }
-  if (range === "7d") {
-    const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-    return days.map((label) => ({
-      label,
-      revenue: Math.round(12000 + Math.random() * 8000),
-      transactions: Math.round(280 + Math.random() * 160),
-    }))
-  }
-  return Array.from({ length: 30 }, (_, i) => ({
-    label: `Apr ${i + 1}`,
-    revenue: Math.round(10000 + Math.sin(i / 5) * 4000 + Math.random() * 3000),
-    transactions: Math.round(220 + Math.random() * 180),
-  }))
+  timeSeries: { label: string; revenue: number; transactions: number }[]
+  merchantData: { name: string; volume: number; txCount: number }[]
+  storeData: { name: string; value: number }[]
 }
 
-const merchantData = [
-  { name: "PP-Main-01",     volume: 42500, txCount: 187 },
-  { name: "PP-Relay-02",    volume: 38200, txCount: 214 },
-  { name: "PP-Node-03",     volume: 27100, txCount: 58  },
-  { name: "PP-Backup-04",   volume: 19800, txCount: 94  },
-  { name: "PP-Alt-05",      volume: 29000, txCount: 113 },
-  { name: "PP-Overflow-06", volume: 48600, txCount: 221 },
-  { name: "PP-Warmup-07",   volume: 3200,  txCount: 14  },
-]
+// ─── SWR Fetcher ──────────────────────────────────────────────────────────────
 
-const storeData = [
-  { name: "Tire Shop Pro",  value: 31200 },
-  { name: "Yoga Bliss",     value: 18700 },
-  { name: "Pet Paradise",   value: 24100 },
-  { name: "TechNova",       value: 42800 },
-  { name: "GlowUp Beauty",  value: 15300 },
-  { name: "FitGear Store",  value: 27600 },
-  { name: "UrbanKicks",     value: 19700 },
-]
+const fetcher = (url: string) => fetch(url).then(r => {
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return r.json()
+})
 
 // Colors — passed as JS values, not CSS vars (recharts requirement)
 const PIE_COLORS = ["#22d3ee", "#34d399", "#fbbf24", "#f87171", "#a78bfa", "#fb923c", "#60a5fa"]
@@ -113,7 +98,7 @@ function SectionHeader({ icon, title, sub }: { icon: React.ReactNode; title: str
   )
 }
 
-// ─── Custom Tooltip ───────────────────────────────────────────────────────────
+// ─── Custom Tooltips ──────────────────────────────────────────────────────────
 
 function RevenueTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
@@ -138,12 +123,34 @@ function BarTooltip({ active, payload, label }: any) {
 
 function PieTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null
-  const total = storeData.reduce((s, d) => s + d.value, 0)
-  const pct = ((payload[0].value / total) * 100).toFixed(1)
   return (
     <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs font-mono shadow-xl">
       <p className="text-foreground font-semibold">{payload[0].name}</p>
-      <p style={{ color: payload[0].payload.fill }}>{fmtFull(payload[0].value)} ({pct}%)</p>
+      <p style={{ color: payload[0].payload.fill }}>{fmtFull(payload[0].value)}</p>
+    </div>
+  )
+}
+
+// ─── Loading Skeleton ─────────────────────────────────────────────────────────
+
+function SkeletonCard() {
+  return (
+    <div className="bg-card border border-border rounded-lg p-4 space-y-3 animate-pulse">
+      <div className="h-3 w-20 bg-secondary rounded" />
+      <div className="h-7 w-24 bg-secondary rounded" />
+      <div className="h-3 w-32 bg-secondary rounded" />
+    </div>
+  )
+}
+
+function SkeletonChart({ height = 280 }: { height?: number }) {
+  return (
+    <div className="bg-card border border-border rounded-lg overflow-hidden animate-pulse">
+      <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+        <div className="h-4 w-4 bg-secondary rounded" />
+        <div className="h-4 w-40 bg-secondary rounded" />
+      </div>
+      <div className="p-4" style={{ height }}><div className="w-full h-full bg-secondary/30 rounded" /></div>
     </div>
   )
 }
@@ -152,17 +159,24 @@ function PieTooltip({ active, payload }: any) {
 
 export default function AnalyticsPage() {
   const [range, setRange] = useState<Range>("7d")
-  const data = revenueData(range)
 
-  const totalRevenue = data.reduce((s, d) => s + d.revenue, 0)
-  const totalTxns    = data.reduce((s, d) => s + d.transactions, 0)
-  const storeTotal   = storeData.reduce((s, d) => s + d.value, 0)
+  const { data, error, isLoading } = useSWR<AnalyticsResponse>(
+    `/api/merchant/analytics?range=${range}`,
+    fetcher,
+    { refreshInterval: 30_000, revalidateOnFocus: true }
+  )
 
   const RANGES: { key: Range; label: string }[] = [
     { key: "24h", label: "Last 24h" },
     { key: "7d",  label: "7 Days"   },
     { key: "30d", label: "30 Days"  },
   ]
+
+  const s = data?.summary
+  const timeSeries    = data?.timeSeries ?? []
+  const merchantData  = data?.merchantData ?? []
+  const storeData     = data?.storeData ?? []
+  const storeTotal    = storeData.reduce((sum, d) => sum + d.value, 0)
 
   return (
     <div className="min-h-screen bg-background font-mono">
@@ -197,273 +211,332 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
+        {/* ── Error State ──────────────────────────────────────────────────── */}
+        {error && (
+          <div className="flex items-start gap-3 bg-red-400/5 border border-red-400/20 rounded-lg px-4 py-3">
+            <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            <div className="text-xs font-mono">
+              <span className="text-red-400 font-semibold">Failed to load analytics data.</span>
+              <span className="text-muted-foreground"> Please check your connection and try again.</span>
+            </div>
+          </div>
+        )}
+
         {/* ── Performance Metric Cards ─────────────────────────────────────── */}
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-          <MetricCard
-            label="Total Revenue"
-            value={fmtK(totalRevenue)}
-            sub={`${totalTxns.toLocaleString()} transactions`}
-            trend="+12.4% vs prior period"
-            trendUp
-            accent="border-cyan-400/30"
-          />
-          <MetricCard
-            label="Success Rate"
-            value="97.3%"
-            sub="↑ 0.8pp this period"
-            trend="+0.8pp improvement"
-            trendUp
-            accent="border-emerald-400/30"
-          />
-          <MetricCard
-            label="Avg Transaction"
-            value="$184.20"
-            sub="median $142.50"
-            trend="+$8.40 vs prior"
-            trendUp
-          />
-          <MetricCard
-            label="Dispute Rate"
-            value="0.41%"
-            sub="8 open disputes"
-            trend="-0.12pp vs prior"
-            trendUp
-            accent="border-emerald-400/20"
-          />
-          <MetricCard
-            label="Refund Rate"
-            value="1.8%"
-            sub="$3,210 refunded"
-            trend="+0.3pp vs prior"
-            trendUp={false}
-            accent="border-amber-400/20"
-          />
-          <MetricCard
-            label="Active Accounts"
-            value="5 / 7"
-            sub="2 paused or warm-up"
-            accent="border-border"
-          />
-        </div>
+        {isLoading || !s ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+            <MetricCard
+              label="Total Revenue"
+              value={fmtK(s.totalRevenue)}
+              sub={`${s.totalTransactions.toLocaleString()} transactions`}
+              accent="border-cyan-400/30"
+            />
+            <MetricCard
+              label="Success Rate"
+              value={`${s.successRate}%`}
+              sub={`${s.completedCount} completed`}
+              trend={s.successRate >= 95 ? "Healthy" : "Below target"}
+              trendUp={s.successRate >= 95}
+              accent="border-emerald-400/30"
+            />
+            <MetricCard
+              label="Avg Transaction"
+              value={`$${s.avgTransaction.toFixed(2)}`}
+              sub={`${s.totalTransactions} total`}
+            />
+            <MetricCard
+              label="Dispute Rate"
+              value={`${s.disputeRate}%`}
+              sub={`${s.disputedCount} disputes`}
+              trend={s.disputeRate <= 0.5 ? "Within threshold" : "Elevated"}
+              trendUp={s.disputeRate <= 0.5}
+              accent={s.disputeRate <= 0.5 ? "border-emerald-400/20" : "border-red-400/20"}
+            />
+            <MetricCard
+              label="Refund Rate"
+              value={`${s.refundRate}%`}
+              sub={`${s.refundedCount} refunded`}
+              trend={s.refundRate <= 2 ? "Normal" : "Elevated"}
+              trendUp={s.refundRate <= 2}
+              accent="border-amber-400/20"
+            />
+            <MetricCard
+              label="Active Accounts"
+              value={`${s.activeAccounts} / ${s.totalAccounts}`}
+              sub={`${s.totalAccounts - s.activeAccounts} paused or warm-up`}
+              accent="border-border"
+            />
+          </div>
+        )}
 
         {/* ── Revenue Area Chart ───────────────────────────────────────────── */}
-        <div className="bg-card border border-border rounded-lg overflow-hidden">
-          <SectionHeader
-            icon={<Activity className="w-4 h-4" />}
-            title="Revenue vs. Time"
-            sub={`Showing ${range === "24h" ? "hourly" : range === "7d" ? "daily" : "daily"} breakdown`}
-          />
-          <div className="p-4">
-            <ResponsiveContainer width="100%" height={280}>
-              <AreaChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={CYAN}    stopOpacity={0.25} />
-                    <stop offset="95%" stopColor={CYAN}    stopOpacity={0}    />
-                  </linearGradient>
-                  <linearGradient id="txnGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={EMERALD} stopOpacity={0.2}  />
-                    <stop offset="95%" stopColor={EMERALD} stopOpacity={0}    />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fill: "#71717a", fontSize: 10, fontFamily: "monospace" }}
-                  axisLine={false}
-                  tickLine={false}
-                  interval="preserveStartEnd"
-                />
-                <YAxis
-                  yAxisId="rev"
-                  tickFormatter={fmtK}
-                  tick={{ fill: "#71717a", fontSize: 10, fontFamily: "monospace" }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={52}
-                />
-                <YAxis
-                  yAxisId="txn"
-                  orientation="right"
-                  tick={{ fill: "#71717a", fontSize: 10, fontFamily: "monospace" }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={36}
-                />
-                <Tooltip content={<RevenueTooltip />} />
-                <Area
-                  yAxisId="rev"
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke={CYAN}
-                  strokeWidth={2}
-                  fill="url(#revenueGrad)"
-                  dot={false}
-                  activeDot={{ r: 4, fill: CYAN }}
-                />
-                <Area
-                  yAxisId="txn"
-                  type="monotone"
-                  dataKey="transactions"
-                  stroke={EMERALD}
-                  strokeWidth={1.5}
-                  fill="url(#txnGrad)"
-                  dot={false}
-                  activeDot={{ r: 3, fill: EMERALD }}
-                  strokeDasharray="4 2"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-            <div className="flex items-center gap-6 mt-2 pl-2">
-              <div className="flex items-center gap-2">
-                <span className="w-6 h-0.5 bg-cyan-400 inline-block rounded" />
-                <span className="text-[10px] font-mono text-muted-foreground">Revenue (USD)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-6 h-0.5 bg-emerald-400 inline-block rounded border-dashed" />
-                <span className="text-[10px] font-mono text-muted-foreground">Transactions</span>
-              </div>
+        {isLoading ? (
+          <SkeletonChart />
+        ) : (
+          <div className="bg-card border border-border rounded-lg overflow-hidden">
+            <SectionHeader
+              icon={<Activity className="w-4 h-4" />}
+              title="Revenue vs. Time"
+              sub={`Showing ${range === "24h" ? "hourly" : "daily"} breakdown`}
+            />
+            <div className="p-4">
+              {timeSeries.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
+                  <BarChart2 className="w-8 h-8 opacity-30" />
+                  <p className="text-sm font-mono">No transaction data for this period</p>
+                </div>
+              ) : (
+                <>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <AreaChart data={timeSeries} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor={CYAN}    stopOpacity={0.25} />
+                          <stop offset="95%" stopColor={CYAN}    stopOpacity={0}    />
+                        </linearGradient>
+                        <linearGradient id="txnGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor={EMERALD} stopOpacity={0.2}  />
+                          <stop offset="95%" stopColor={EMERALD} stopOpacity={0}    />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+                      <XAxis
+                        dataKey="label"
+                        tick={{ fill: "#71717a", fontSize: 10, fontFamily: "monospace" }}
+                        axisLine={false}
+                        tickLine={false}
+                        interval="preserveStartEnd"
+                      />
+                      <YAxis
+                        yAxisId="rev"
+                        tickFormatter={fmtK}
+                        tick={{ fill: "#71717a", fontSize: 10, fontFamily: "monospace" }}
+                        axisLine={false}
+                        tickLine={false}
+                        width={52}
+                      />
+                      <YAxis
+                        yAxisId="txn"
+                        orientation="right"
+                        tick={{ fill: "#71717a", fontSize: 10, fontFamily: "monospace" }}
+                        axisLine={false}
+                        tickLine={false}
+                        width={36}
+                      />
+                      <Tooltip content={<RevenueTooltip />} />
+                      <Area
+                        yAxisId="rev"
+                        type="monotone"
+                        dataKey="revenue"
+                        stroke={CYAN}
+                        strokeWidth={2}
+                        fill="url(#revenueGrad)"
+                        dot={false}
+                        activeDot={{ r: 4, fill: CYAN }}
+                      />
+                      <Area
+                        yAxisId="txn"
+                        type="monotone"
+                        dataKey="transactions"
+                        stroke={EMERALD}
+                        strokeWidth={1.5}
+                        fill="url(#txnGrad)"
+                        dot={false}
+                        activeDot={{ r: 3, fill: EMERALD }}
+                        strokeDasharray="4 2"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                  <div className="flex items-center gap-6 mt-2 pl-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-0.5 bg-cyan-400 inline-block rounded" />
+                      <span className="text-[10px] font-mono text-muted-foreground">Revenue (USD)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-0.5 bg-emerald-400 inline-block rounded border-dashed" />
+                      <span className="text-[10px] font-mono text-muted-foreground">Transactions</span>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
-        </div>
+        )}
 
         {/* ── Distribution Charts Row ───────────────────────────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {isLoading ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <SkeletonChart height={300} />
+            <SkeletonChart height={300} />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
-          {/* Volume per Merchant — Bar Chart */}
-          <div className="bg-card border border-border rounded-lg overflow-hidden">
-            <SectionHeader
-              icon={<BarChart2 className="w-4 h-4" />}
-              title="Volume per Merchant Account"
-              sub="Total USD processed by each PayPal account"
-            />
-            <div className="p-4">
-              <ResponsiveContainer width="100%" height={240}>
-                <BarChart
-                  data={merchantData}
-                  margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
-                  barCategoryGap="30%"
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" horizontal vertical={false} />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fill: "#71717a", fontSize: 9, fontFamily: "monospace" }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tickFormatter={fmtK}
-                    tick={{ fill: "#71717a", fontSize: 10, fontFamily: "monospace" }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={48}
-                  />
-                  <Tooltip content={<BarTooltip />} />
-                  <Bar dataKey="volume" radius={[3, 3, 0, 0]}>
-                    {merchantData.map((entry, index) => {
-                      const maxVol = Math.max(...merchantData.map((d) => d.volume))
-                      const isTop = entry.volume === maxVol
-                      return (
-                        <Cell
-                          key={entry.name}
-                          fill={isTop ? CYAN : "#22d3ee44"}
+            {/* Volume per Merchant — Bar Chart */}
+            <div className="bg-card border border-border rounded-lg overflow-hidden">
+              <SectionHeader
+                icon={<BarChart2 className="w-4 h-4" />}
+                title="Volume per Merchant Account"
+                sub="Total USD processed by each PayPal account"
+              />
+              <div className="p-4">
+                {merchantData.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
+                    <BarChart2 className="w-6 h-6 opacity-30" />
+                    <p className="text-xs font-mono">No merchant volume data</p>
+                  </div>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height={240}>
+                      <BarChart
+                        data={merchantData}
+                        margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
+                        barCategoryGap="30%"
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#27272a" horizontal vertical={false} />
+                        <XAxis
+                          dataKey="name"
+                          tick={{ fill: "#71717a", fontSize: 9, fontFamily: "monospace" }}
+                          axisLine={false}
+                          tickLine={false}
                         />
-                      )
-                    })}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-              <div className="mt-3 space-y-1.5">
-                {merchantData
-                  .sort((a, b) => b.volume - a.volume)
-                  .slice(0, 3)
-                  .map((m, i) => (
-                    <div key={m.name} className="flex items-center justify-between text-xs font-mono">
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground w-4">#{i + 1}</span>
-                        <span className="text-foreground">{m.name}</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-muted-foreground">{m.txCount} txns</span>
-                        <span className="text-cyan-400 font-semibold">{fmtFull(m.volume)}</span>
+                        <YAxis
+                          tickFormatter={fmtK}
+                          tick={{ fill: "#71717a", fontSize: 10, fontFamily: "monospace" }}
+                          axisLine={false}
+                          tickLine={false}
+                          width={48}
+                        />
+                        <Tooltip content={<BarTooltip />} />
+                        <Bar dataKey="volume" radius={[3, 3, 0, 0]}>
+                          {merchantData.map((entry, index) => {
+                            const maxVol = Math.max(...merchantData.map((d) => d.volume))
+                            const isTop = entry.volume === maxVol && entry.volume > 0
+                            return (
+                              <Cell
+                                key={entry.name}
+                                fill={isTop ? CYAN : "#22d3ee44"}
+                              />
+                            )
+                          })}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                    <div className="mt-3 space-y-1.5">
+                      {[...merchantData]
+                        .sort((a, b) => b.volume - a.volume)
+                        .slice(0, 3)
+                        .map((m, i) => (
+                          <div key={m.name} className="flex items-center justify-between text-xs font-mono">
+                            <div className="flex items-center gap-2">
+                              <span className="text-muted-foreground w-4">#{i + 1}</span>
+                              <span className="text-foreground">{m.name}</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="text-muted-foreground">{m.txCount} txns</span>
+                              <span className="text-cyan-400 font-semibold">{fmtFull(m.volume)}</span>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Volume per Store — Pie Chart */}
+            <div className="bg-card border border-border rounded-lg overflow-hidden">
+              <SectionHeader
+                icon={<DollarSign className="w-4 h-4" />}
+                title="Volume per Store"
+                sub="Share of total gateway traffic by client store"
+              />
+              <div className="p-4">
+                {storeData.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
+                    <DollarSign className="w-6 h-6 opacity-30" />
+                    <p className="text-xs font-mono">No store volume data</p>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-4">
+                    <ResponsiveContainer width={200} height={200}>
+                      <PieChart>
+                        <Pie
+                          data={storeData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={55}
+                          outerRadius={90}
+                          paddingAngle={2}
+                          dataKey="value"
+                          strokeWidth={0}
+                        >
+                          {storeData.map((entry, index) => (
+                            <Cell
+                              key={entry.name}
+                              fill={PIE_COLORS[index % PIE_COLORS.length]}
+                              opacity={0.85}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip content={<PieTooltip />} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="flex-1 space-y-2 min-w-0">
+                      {[...storeData]
+                        .sort((a, b) => b.value - a.value)
+                        .map((store, i) => {
+                          const pct = storeTotal > 0 ? ((store.value / storeTotal) * 100).toFixed(1) : "0.0"
+                          return (
+                            <div key={store.name} className="flex items-center justify-between gap-2 text-xs font-mono">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span
+                                  className="w-2 h-2 rounded-full shrink-0"
+                                  style={{ background: PIE_COLORS[i % PIE_COLORS.length] }}
+                                />
+                                <span className="text-foreground truncate">{store.name}</span>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className="text-muted-foreground">{pct}%</span>
+                                <span className="text-foreground">{fmtK(store.value)}</span>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      <div className="pt-2 border-t border-border flex items-center justify-between text-xs font-mono">
+                        <span className="text-muted-foreground">Total</span>
+                        <span className="text-foreground font-semibold">{fmtFull(storeTotal)}</span>
                       </div>
                     </div>
-                  ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
+        )}
 
-          {/* Volume per Store — Pie Chart */}
-          <div className="bg-card border border-border rounded-lg overflow-hidden">
-            <SectionHeader
-              icon={<DollarSign className="w-4 h-4" />}
-              title="Volume per Store"
-              sub="Share of total gateway traffic by client store"
-            />
-            <div className="p-4">
-              <div className="flex items-center gap-4">
-                <ResponsiveContainer width={200} height={200}>
-                  <PieChart>
-                    <Pie
-                      data={storeData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={55}
-                      outerRadius={90}
-                      paddingAngle={2}
-                      dataKey="value"
-                      strokeWidth={0}
-                    >
-                      {storeData.map((entry, index) => (
-                        <Cell
-                          key={entry.name}
-                          fill={PIE_COLORS[index % PIE_COLORS.length]}
-                          opacity={0.85}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip content={<PieTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="flex-1 space-y-2 min-w-0">
-                  {storeData
-                    .sort((a, b) => b.value - a.value)
-                    .map((store, i) => {
-                      const pct = ((store.value / storeTotal) * 100).toFixed(1)
-                      return (
-                        <div key={store.name} className="flex items-center justify-between gap-2 text-xs font-mono">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span
-                              className="w-2 h-2 rounded-full shrink-0"
-                              style={{ background: PIE_COLORS[i % PIE_COLORS.length] }}
-                            />
-                            <span className="text-foreground truncate">{store.name}</span>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-muted-foreground">{pct}%</span>
-                            <span className="text-foreground">{fmtK(store.value)}</span>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  <div className="pt-2 border-t border-border flex items-center justify-between text-xs font-mono">
-                    <span className="text-muted-foreground">Total</span>
-                    <span className="text-foreground font-semibold">{fmtFull(storeTotal)}</span>
-                  </div>
+        {/* ── Top merchant alert (only if data loaded and there are merchants) ── */}
+        {!isLoading && merchantData.length > 0 && (() => {
+          const totalVol = merchantData.reduce((s, d) => s + d.volume, 0)
+          const top = [...merchantData].sort((a, b) => b.volume - a.volume)[0]
+          const topPct = totalVol > 0 ? ((top.volume / totalVol) * 100).toFixed(0) : "0"
+          if (parseInt(topPct) >= 25) {
+            return (
+              <div className="flex items-start gap-3 bg-amber-400/5 border border-amber-400/20 rounded-lg px-4 py-3">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div className="text-xs font-mono">
+                  <span className="text-amber-400 font-semibold">{top.name}</span>
+                  <span className="text-muted-foreground"> is carrying {topPct}% of total network volume — consider rebalancing rotation weights to reduce concentration risk.</span>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Alert strip ───────────────────────────────────────────────────── */}
-        <div className="flex items-start gap-3 bg-amber-400/5 border border-amber-400/20 rounded-lg px-4 py-3">
-          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-          <div className="text-xs font-mono">
-            <span className="text-amber-400 font-semibold">PP-Overflow-06</span>
-            <span className="text-muted-foreground"> is carrying 26% of total network volume — consider rebalancing rotation weights to reduce concentration risk.</span>
-          </div>
-        </div>
+            )
+          }
+          return null
+        })()}
 
       </main>
     </div>

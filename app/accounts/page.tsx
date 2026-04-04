@@ -1,7 +1,7 @@
 // Cache invalidation: 2026-04-04
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import {
   Plus,
   ExternalLink,
@@ -25,12 +25,16 @@ import {
   Package,
   Link2,
   Lock,
+  Wifi,
+  Info,
+  Ban,
+  Loader2,
 } from "lucide-react"
 import { DashboardHeader } from "@/components/dashboard/header"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Status = "Active" | "Limited" | "Warm-up" | "Paused"
+type Status = "Active" | "Limited" | "Warm-up" | "Paused" | "Suspended"
 type DomainType = "platform" | "custom"
 
 interface Merchant {
@@ -39,6 +43,7 @@ interface Merchant {
   email: string
   clientId: string
   clientSecret: string
+  proxyUrl: string
   shieldDomain: string
   domainType: DomainType
   status: Status
@@ -78,150 +83,7 @@ const FAKE_PRODUCT_PRESETS = [
   "Design Asset Pack",
 ]
 
-// ─── Seed Data ────────────────────────────────────────────────────────────────
-
-const seedMerchants: Merchant[] = [
-  {
-    id: "pp-001",
-    accountName: "PP-Main-01",
-    email: "payments.primary@store.com",
-    clientId: "AeBFXkzLmNoPQrStUvWxYz1234567890abcdef",
-    clientSecret: "EGfghIjkLMNopQRstUVwxYZ0987654321zyxwv",
-    shieldDomain: "chococlose.com",
-    domainType: "platform",
-    status: "Active",
-    priority: 5,
-    currentVolume: 4250,
-    softLimit: 4200,
-    hardLimit: 4800,
-    itemMasking: true,
-    fakeProductName: "Digital Service Upgrade",
-    txCount: 187,
-    createdAt: "2024-01-15",
-    lastActive: "2 min ago",
-    successRate: 98.4,
-  },
-  {
-    id: "pp-002",
-    accountName: "PP-Relay-02",
-    email: "gateway.relay@shopify.net",
-    clientId: "BcDEFgHiJklMNoPqRsTuVwXy9876543210fedcba",
-    clientSecret: "FHijkLmNoOPqRSTuvWXyz1234567890abcdefgh",
-    shieldDomain: "safepay-hub.io",
-    domainType: "platform",
-    status: "Limited",
-    priority: 4,
-    currentVolume: 4780,
-    softLimit: 4600,
-    hardLimit: 5000,
-    itemMasking: true,
-    fakeProductName: "Premium Content License",
-    txCount: 214,
-    createdAt: "2024-02-03",
-    lastActive: "8 min ago",
-    successRate: 96.1,
-  },
-  {
-    id: "pp-003",
-    accountName: "PP-Node-03",
-    email: "checkout.node2@retail.co",
-    clientId: "CdEFGhIjKlMnOpQrStUvWx1234509876abcdefij",
-    clientSecret: "GIjklMnOpPQrSTuvwXYZ0987612345zyxwvuts",
-    shieldDomain: "payshield-cdn.com",
-    domainType: "platform",
-    status: "Active",
-    priority: 3,
-    currentVolume: 1320,
-    softLimit: 3000,
-    hardLimit: 3500,
-    itemMasking: false,
-    fakeProductName: "Software Activation Key",
-    txCount: 58,
-    createdAt: "2024-02-18",
-    lastActive: "34 min ago",
-    successRate: 99.1,
-  },
-  {
-    id: "pp-004",
-    accountName: "PP-Backup-04",
-    email: "store.relay@commerce.io",
-    clientId: "DeEFgHiJKlmnOpqRSTUvwXy5678901234klmnop",
-    clientSecret: "HJklmNoPqQRsTuvwXYZ1234509876wvutsrq",
-    shieldDomain: "my-custom-pay.com",
-    domainType: "custom",
-    status: "Paused",
-    priority: 2,
-    currentVolume: 0,
-    softLimit: 4000,
-    hardLimit: 5000,
-    itemMasking: false,
-    fakeProductName: "Consulting Service Package",
-    txCount: 0,
-    createdAt: "2024-03-01",
-    lastActive: "3 days ago",
-    successRate: 91.5,
-  },
-  {
-    id: "pp-005",
-    accountName: "PP-Alt-05",
-    email: "alt.paypal@merchant.co",
-    clientId: "EfGHIjKlMnOpQrStUvWxYz0987654321mnopqr",
-    clientSecret: "IKlmnOpQqRStUvwXYZ9876501234utsrqpon",
-    shieldDomain: "relay-secure.org",
-    domainType: "platform",
-    status: "Active",
-    priority: 4,
-    currentVolume: 2900,
-    softLimit: 4000,
-    hardLimit: 4500,
-    itemMasking: true,
-    fakeProductName: "Online Course Access",
-    txCount: 113,
-    createdAt: "2024-03-10",
-    lastActive: "12 min ago",
-    successRate: 97.8,
-  },
-  {
-    id: "pp-006",
-    accountName: "PP-Overflow-06",
-    email: "backup.gateway@pay.net",
-    clientId: "FgHIJkLmNoPqRstUVwXyZ1234567890nopqrst",
-    clientSecret: "JLmnoOpRrSTuVwxYZ0987623451srqponmlk",
-    shieldDomain: "checkout-proxy.com",
-    domainType: "platform",
-    status: "Limited",
-    priority: 3,
-    currentVolume: 4960,
-    softLimit: 4800,
-    hardLimit: 5000,
-    itemMasking: true,
-    fakeProductName: "API Credits Bundle",
-    txCount: 221,
-    createdAt: "2024-03-22",
-    lastActive: "1 min ago",
-    successRate: 94.3,
-  },
-  {
-    id: "pp-007",
-    accountName: "PP-Warmup-07",
-    email: "new.account@gateway.co",
-    clientId: "GhIJKlMnOpQrStUvWxYz9876543210pqrstuv",
-    clientSecret: "KMnopPqQrSTuVwXyz1234567890rqponmlkji",
-    shieldDomain: "chococlose.com",
-    domainType: "platform",
-    status: "Warm-up",
-    priority: 1,
-    currentVolume: 320,
-    softLimit: 500,
-    hardLimit: 800,
-    itemMasking: false,
-    fakeProductName: "Design Asset Pack",
-    txCount: 14,
-    createdAt: "2024-04-01",
-    lastActive: "2 hours ago",
-    successRate: 100,
-  },
-]
+// (Seed data removed — fetched from API)
 
 // ─── Status config ─────────────────────────────────────────────────────────
 
@@ -253,6 +115,13 @@ const statusConfig: Record<Status, { dot: string; text: string; bg: string; bord
     bg: "bg-zinc-500/10",
     border: "border-zinc-500/20",
     icon: <Pause className="w-3 h-3" />,
+  },
+  Suspended: {
+    dot: "bg-red-500",
+    text: "text-red-400",
+    bg: "bg-red-500/10",
+    border: "border-red-500/20",
+    icon: <Ban className="w-3 h-3" />,
   },
 }
 
@@ -303,8 +172,8 @@ function VolumeBar({ current, soft, hard }: { current: number; soft: number; har
   const pct = Math.min((current / hard) * 100, 100)
   const softPct = Math.min((soft / hard) * 100, 100)
   const color =
-    pct >= 98 ? "bg-red-500" :
-    pct >= 90 ? "bg-amber-400" :
+    pct > 90 ? "bg-red-500" :
+    pct > 70 ? "bg-amber-400" :
     "bg-cyan-400"
 
   return (
@@ -390,7 +259,6 @@ function SlideOver({ merchant, onClose, onSave }: SlideOverProps) {
   if (!merchant || !draft) return null
 
   const cfg = statusConfig[draft.status]
-  const statuses: Status[] = ["Active", "Limited", "Warm-up", "Paused"]
 
   const update = (patch: Partial<Merchant>) =>
     setDraft((prev) => (prev ? { ...prev, ...patch } : prev))
@@ -564,11 +432,49 @@ function SlideOver({ merchant, onClose, onSave }: SlideOverProps) {
             </div>
           </div>
 
+          {/* Proxy URL */}
+          <div className="space-y-3 border border-border rounded-lg p-4 bg-background">
+            <div className="flex items-center gap-2">
+              <Wifi className="w-3.5 h-3.5 text-orange-400" />
+              <p className="text-xs font-mono font-semibold text-foreground">Proxy Configuration</p>
+            </div>
+            <p className="text-[11px] font-mono text-muted-foreground">
+              Route PayPal API calls through a proxy to diversify IP origins. Supports HTTP, HTTPS, and SOCKS5 protocols.
+            </p>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Proxy URL</label>
+              {draft.proxyUrl ? (
+                <MaskedField value={draft.proxyUrl} label="" />
+              ) : (
+                <input
+                  value={draft.proxyUrl}
+                  onChange={(e) => update({ proxyUrl: e.target.value })}
+                  placeholder="http://user:pass@proxy.example.com:8080"
+                  className="w-full bg-card border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-orange-400/40 focus:border-orange-400/40 transition-colors"
+                />
+              )}
+              {draft.proxyUrl && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => update({ proxyUrl: "" })}
+                    className="text-[11px] font-mono text-red-400 hover:text-red-300 transition-colors"
+                  >
+                    Remove Proxy
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground bg-secondary/50 rounded-md px-3 py-2">
+              <ShieldCheck className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+              Proxy URL may contain credentials — it is masked in the UI and never logged
+            </div>
+          </div>
+
           {/* Status */}
           <div className="space-y-2">
             <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Status</label>
             <div className="grid grid-cols-2 gap-2">
-              {statuses.map((s) => {
+              {(["Active", "Warm-up", "Limited", "Paused", "Suspended"] as Status[]).map((s) => {
                 const c = statusConfig[s]
                 const active = draft.status === s
                 return (
@@ -587,6 +493,27 @@ function SlideOver({ merchant, onClose, onSave }: SlideOverProps) {
                 )
               })}
             </div>
+            {/* Warm-up Info Tooltip */}
+            {draft.status === "Warm-up" && (
+              <div className="flex items-start gap-2 mt-2 px-3 py-2.5 rounded-md bg-sky-400/5 border border-sky-400/20">
+                <Info className="w-3.5 h-3.5 text-sky-400 shrink-0 mt-0.5" />
+                <div className="text-[11px] font-mono text-sky-300/80 leading-relaxed">
+                  <p className="font-semibold text-sky-400 mb-1">Warm-up Mode Active</p>
+                  <p>• Max <span className="text-sky-400">$50</span> per transaction to build account trust</p>
+                  <p>• Progressive daily cap: <span className="text-sky-400">$100</span> (Day 1) → <span className="text-sky-400">$500</span> (Day 7+)</p>
+                  <p>• Account is deprioritised for orders over $100</p>
+                </div>
+              </div>
+            )}
+            {draft.status === "Suspended" && (
+              <div className="flex items-start gap-2 mt-2 px-3 py-2.5 rounded-md bg-red-500/5 border border-red-500/20">
+                <Ban className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+                <p className="text-[11px] font-mono text-red-300/80">
+                  Suspended accounts are excluded from the rotation pool entirely.
+                  No transactions will be routed to this account.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Priority */}
@@ -778,6 +705,8 @@ function AddMerchantModal({ onClose, onAdd }: { onClose: () => void; onAdd: (m: 
     email: "",
     clientId: "",
     clientSecret: "",
+    proxyUrl: "",
+    status: "Warm-up" as Status,
     domainType: "platform" as DomainType,
     shieldDomain: PLATFORM_DOMAINS[0],
     softLimit: 4000,
@@ -785,33 +714,73 @@ function AddMerchantModal({ onClose, onAdd }: { onClose: () => void; onAdd: (m: 
     itemMasking: false,
     fakeProductName: "Digital Service Upgrade",
   })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
 
   const update = (patch: Partial<typeof form>) => setForm((p) => ({ ...p, ...patch }))
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!form.accountName || !form.email) return
-    const newMerchant: Merchant = {
-      id: `pp-${Date.now()}`,
-      accountName: form.accountName,
-      email: form.email,
-      clientId: form.clientId || "pending-configuration",
-      clientSecret: form.clientSecret || "pending-configuration",
-      shieldDomain: form.shieldDomain || PLATFORM_DOMAINS[0],
-      domainType: form.domainType,
-      status: "Warm-up",
-      priority: 1,
-      currentVolume: 0,
-      softLimit: form.softLimit,
-      hardLimit: form.hardLimit,
-      itemMasking: form.itemMasking,
-      fakeProductName: form.fakeProductName,
-      txCount: 0,
-      createdAt: new Date().toISOString().slice(0, 10),
-      lastActive: "never",
-      successRate: 0,
+    setSaving(true)
+    setError("")
+
+    try {
+      // Map UI status to DB enum
+      const statusMap: Record<string, string> = {
+        "Active": "ACTIVE",
+        "Warm-up": "WARMING_UP",
+      }
+
+      const res = await fetch("/api/merchant/accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.accountName,
+          email: form.email,
+          clientId: form.clientId,
+          clientSecret: form.clientSecret,
+          proxyUrl: form.proxyUrl || undefined,
+          shieldDomain: form.shieldDomain || undefined,
+          status: statusMap[form.status] || "WARMING_UP",
+          softLimit: form.softLimit,
+          hardLimit: form.hardLimit,
+          priority: 1,
+          itemMasking: form.itemMasking,
+          fakeProductName: form.fakeProductName,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? "Failed to create account")
+
+      const acct = data.account
+      const newMerchant: Merchant = {
+        id: acct.id,
+        accountName: acct.name,
+        email: acct.email,
+        clientId: acct.clientId,
+        clientSecret: "(encrypted)",
+        proxyUrl: acct.proxyUrl ?? "",
+        shieldDomain: acct.shieldDomain ?? PLATFORM_DOMAINS[0],
+        domainType: PLATFORM_DOMAINS.includes(acct.shieldDomain) ? "platform" : "custom",
+        status: form.status,
+        priority: acct.priority ?? 1,
+        currentVolume: 0,
+        softLimit: acct.softLimit ?? form.softLimit,
+        hardLimit: acct.dailyLimit ?? form.hardLimit,
+        itemMasking: acct.itemMasking ?? false,
+        fakeProductName: acct.fakeProductName ?? "Digital Service Upgrade",
+        txCount: 0,
+        createdAt: new Date(acct.createdAt).toISOString().slice(0, 10),
+        lastActive: "never",
+        successRate: 0,
+      }
+      onAdd(newMerchant)
+      onClose()
+    } catch (err: any) {
+      setError(err.message ?? "Failed to create account")
+    } finally {
+      setSaving(false)
     }
-    onAdd(newMerchant)
-    onClose()
   }
 
   return (
@@ -836,13 +805,61 @@ function AddMerchantModal({ onClose, onAdd }: { onClose: () => void; onAdd: (m: 
               <div key={f.key} className="space-y-1.5">
                 <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{f.label}</label>
                 <input
-                  value={form[f.key as keyof typeof form].toString()}
+                  value={String(form[f.key as keyof typeof form])}
                   onChange={(e) => update({ [f.key]: e.target.value })}
                   placeholder={f.placeholder}
                   className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
                 />
               </div>
             ))}
+
+            {/* Proxy URL */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                <Wifi className="w-3 h-3 text-orange-400" />
+                Proxy URL (optional)
+              </label>
+              <input
+                value={form.proxyUrl}
+                onChange={(e) => update({ proxyUrl: e.target.value })}
+                placeholder="http://user:pass@proxy.example.com:8080"
+                className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-orange-400/40 focus:border-orange-400/40 transition-colors"
+              />
+              <p className="text-[10px] font-mono text-muted-foreground">Supports HTTP, HTTPS, and SOCKS5 protocols</p>
+            </div>
+
+            {/* Initial Status */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Initial Status</label>
+              <div className="flex rounded-md overflow-hidden border border-border">
+                {(["Active", "Warm-up"] as Status[]).map((s) => {
+                  const c = statusConfig[s]
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => update({ status: s })}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] font-mono transition-colors ${
+                        form.status === s
+                          ? `${c.bg} ${c.text}`
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${form.status === s ? c.dot : "bg-border"}`} />
+                      {s}
+                    </button>
+                  )
+                })}
+              </div>
+              {form.status === "Warm-up" && (
+                <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-sky-400/5 border border-sky-400/20">
+                  <Info className="w-3 h-3 text-sky-400 shrink-0 mt-0.5" />
+                  <p className="text-[10px] font-mono text-sky-300/80">
+                    Warm-up mode limits txns to $50 with a progressive daily cap ($100→$500 over 7 days)
+                  </p>
+                </div>
+              )}
+            </div>
 
             {/* Shield Domain */}
             <div className="space-y-2">
@@ -883,14 +900,14 @@ function AddMerchantModal({ onClose, onAdd }: { onClose: () => void; onAdd: (m: 
             {/* Volume limits */}
             <div className="grid grid-cols-2 gap-3">
               {[
-                { label: "Soft Limit ($)", key: "softLimit" },
-                { label: "Hard Limit ($)", key: "hardLimit" },
+                { label: "Soft Limit ($)", key: "softLimit" as const },
+                { label: "Hard Limit ($)", key: "hardLimit" as const },
               ].map((f) => (
                 <div key={f.key} className="space-y-1.5">
                   <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{f.label}</label>
                   <input
                     type="number"
-                    value={form[f.key as keyof typeof form]}
+                    value={form[f.key]}
                     onChange={(e) => update({ [f.key]: Number(e.target.value) })}
                     className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
                   />
@@ -938,16 +955,25 @@ function AddMerchantModal({ onClose, onAdd }: { onClose: () => void; onAdd: (m: 
               )}
             </div>
           </div>
+
+          {error && (
+            <div className="mx-5 mb-0 flex items-center gap-2 text-xs font-mono text-red-400 bg-red-400/5 border border-red-400/20 rounded-md px-3 py-2">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+              {error}
+            </div>
+          )}
+
           <div className="flex gap-3 px-5 py-4 border-t border-border shrink-0">
             <button onClick={onClose} className="flex-1 px-4 py-2 text-xs font-mono text-muted-foreground border border-border rounded-md hover:bg-secondary transition-colors">
               Cancel
             </button>
             <button
               onClick={handleAdd}
-              disabled={!form.accountName || !form.email}
-              className="flex-1 px-4 py-2 text-xs font-mono text-background bg-cyan-400 hover:bg-cyan-300 disabled:opacity-40 disabled:cursor-not-allowed rounded-md transition-colors font-semibold"
+              disabled={!form.accountName || !form.email || !form.clientId || !form.clientSecret || saving}
+              className="flex-1 px-4 py-2 text-xs font-mono text-background bg-cyan-400 hover:bg-cyan-300 disabled:opacity-40 disabled:cursor-not-allowed rounded-md transition-colors font-semibold flex items-center justify-center gap-1.5"
             >
-              Add Account
+              {saving && <Loader2 className="w-3 h-3 animate-spin" />}
+              {saving ? "Creating..." : "Add Account"}
             </button>
           </div>
         </div>
@@ -958,28 +984,145 @@ function AddMerchantModal({ onClose, onAdd }: { onClose: () => void; onAdd: (m: 
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+// Map DB status → UI status
+function mapDbStatus(dbStatus: string, isLimited?: boolean): Status {
+  if (isLimited) return "Limited"
+  switch (dbStatus) {
+    case "ACTIVE": return "Active"
+    case "WARMING_UP": return "Warm-up"
+    case "PAUSED": return "Paused"
+    case "SUSPENDED": return "Suspended"
+    default: return "Active"
+  }
+}
+
+// Map UI status → DB status
+function mapUiStatus(uiStatus: Status): string {
+  switch (uiStatus) {
+    case "Active": return "ACTIVE"
+    case "Warm-up": return "WARMING_UP"
+    case "Paused": return "PAUSED"
+    case "Suspended": return "SUSPENDED"
+    case "Limited": return "ACTIVE"  // Limited is UI-only
+    default: return "ACTIVE"
+  }
+}
+
+function mapApiToMerchant(a: any): Merchant {
+  return {
+    id: a.id,
+    accountName: a.name,
+    email: a.email ?? "",
+    clientId: a.clientId,
+    clientSecret: "(encrypted)",
+    proxyUrl: a.proxyUrl ?? "",
+    shieldDomain: a.shieldDomain ?? "",
+    domainType: PLATFORM_DOMAINS.includes(a.shieldDomain) ? "platform" : "custom",
+    status: mapDbStatus(a.status, a.isLimited),
+    priority: a.priority ?? 1,
+    currentVolume: a.currentVolume ?? 0,
+    softLimit: a.softLimit ?? 4000,
+    hardLimit: a.dailyLimit ?? 5000,
+    itemMasking: a.itemMasking ?? false,
+    fakeProductName: a.fakeProductName ?? "Digital Service Upgrade",
+    txCount: a.transactionCount ?? 0,
+    createdAt: a.createdAt ? new Date(a.createdAt).toISOString().slice(0, 10) : "—",
+    lastActive: a.updatedAt ? new Date(a.updatedAt).toLocaleString() : "—",
+    successRate: a.successRate ?? 0,
+  }
+}
+
 export default function AccountsPage() {
-  const [merchants, setMerchants] = useState<Merchant[]>(seedMerchants)
+  const [merchants, setMerchants] = useState<Merchant[]>([])
+  const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
   const [selected, setSelected] = useState<Merchant | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [openMenu, setOpenMenu] = useState<string | null>(null)
   const [filterStatus, setFilterStatus] = useState<Status | "All">("All")
 
+  // Fetch real data from API
+  const fetchAccounts = useCallback(() => {
+    fetch("/api/merchant/accounts")
+      .then(r => r.json())
+      .then(data => {
+        setMerchants((data.accounts ?? []).map(mapApiToMerchant))
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => { fetchAccounts() }, [fetchAccounts])
+
+  // Auto-refresh every 10 seconds
+  useEffect(() => {
+    const interval = setInterval(fetchAccounts, 10_000)
+    return () => clearInterval(interval)
+  }, [fetchAccounts])
+
   const filtered = filterStatus === "All"
     ? merchants
     : merchants.filter((m) => m.status === filterStatus)
 
-  const handleSave = (updated: Merchant) => {
+  const handleSave = useCallback(async (updated: Merchant) => {
+    // Optimistic UI
     setMerchants((prev) => prev.map((m) => (m.id === updated.id ? updated : m)))
     setSelected(null)
-  }
 
-  const toggleStatus = (id: string, action: "pause" | "resume") => {
+    // Persist to backend
+    try {
+      await fetch(`/api/merchant/accounts/${updated.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: updated.accountName,
+          email: updated.email,
+          clientId: updated.clientId,
+          shieldDomain: updated.shieldDomain,
+          proxyUrl: updated.proxyUrl,
+          status: mapUiStatus(updated.status),
+          priority: updated.priority,
+          softLimit: updated.softLimit,
+          hardLimit: updated.hardLimit,
+          itemMasking: updated.itemMasking,
+          fakeProductName: updated.fakeProductName,
+        }),
+      })
+    } catch {}
+  }, [])
+
+  const toggleStatus = useCallback(async (id: string, action: "pause" | "resume") => {
+    const newStatus = action === "pause" ? "Paused" : "Active"
     setMerchants((prev) =>
-      prev.map((m) => m.id === id ? { ...m, status: action === "pause" ? "Paused" : "Active" } : m)
+      prev.map((m) => m.id === id ? { ...m, status: newStatus as Status } : m)
     )
     setOpenMenu(null)
-  }
+
+    try {
+      await fetch(`/api/merchant/accounts/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: action === "pause" ? "PAUSED" : "ACTIVE" }),
+      })
+    } catch {}
+  }, [])
+
+  const handleDelete = useCallback(async (id: string) => {
+    if (!confirm("Remove this account from the rotation pool?")) return
+    setMerchants((prev) => prev.filter((m) => m.id !== id))
+    try {
+      await fetch(`/api/merchant/accounts/${id}`, { method: "DELETE" })
+    } catch {}
+  }, [])
+
+  const handleSync = useCallback(async () => {
+    setSyncing(true)
+    try {
+      await fetch("/api/merchant/accounts/sync", { method: "POST" })
+      fetchAccounts()
+    } catch {}
+    setSyncing(false)
+  }, [fetchAccounts])
 
   const handleAdd = (m: Merchant) => {
     setMerchants((prev) => [...prev, m])
@@ -991,7 +1134,7 @@ export default function AccountsPage() {
   }))
 
   const totalVolume = merchants.reduce((sum, m) => sum + m.currentVolume, 0)
-  const activeCount = merchants.filter((m) => m.status === "Active").length
+  const activeCount = merchants.filter((m) => m.status === "Active" || m.status === "Limited").length
 
   return (
     <div className="min-h-screen bg-background font-mono">
@@ -1008,9 +1151,13 @@ export default function AccountsPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground hover:text-foreground border border-border rounded-md px-3 py-1.5 hover:bg-secondary transition-colors">
-              <RefreshCw className="w-3.5 h-3.5" />
-              Sync
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground hover:text-foreground border border-border rounded-md px-3 py-1.5 hover:bg-secondary transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
+              {syncing ? "Syncing..." : "Sync"}
             </button>
             <button
               onClick={() => setShowAdd(true)}
@@ -1049,7 +1196,7 @@ export default function AccountsPage() {
           {/* Toolbar */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-wrap gap-3">
             <div className="flex items-center gap-1.5">
-              {(["All", "Active", "Limited", "Warm-up", "Paused"] as const).map((s) => (
+              {(["All", "Active", "Limited", "Warm-up", "Paused", "Suspended"] as const).map((s) => (
                 <button
                   key={s}
                   onClick={() => setFilterStatus(s)}
@@ -1187,7 +1334,10 @@ export default function AccountsPage() {
                             </button>
                           )}
                           <div className="border-t border-border my-1" />
-                          <button className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-secondary text-red-400 transition-colors">
+                          <button
+                            onClick={() => { handleDelete(m.id); setOpenMenu(null) }}
+                            className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-secondary text-red-400 transition-colors"
+                          >
                             <Trash2 className="w-3.5 h-3.5" />
                             Remove
                           </button>

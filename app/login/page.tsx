@@ -1,9 +1,9 @@
 "use client"
 
-import { Suspense, useState } from "react"
+import { Suspense, useState, useEffect } from "react"
 import Link from "next/link"
-import { useSearchParams } from "next/navigation"
-import { signIn } from "next-auth/react"
+import { useSearchParams, useRouter } from "next/navigation"
+import { signIn, useSession } from "next-auth/react"
 import {
   Shield,
   Mail,
@@ -14,19 +14,33 @@ import {
   AlertCircle,
   Loader2,
   ShieldCheck,
+  CheckCircle2,
 } from "lucide-react"
 
 // Inner component — allowed to call useSearchParams() because it is
 // rendered inside a <Suspense> boundary in the default export below.
 function LoginForm() {
   const searchParams = useSearchParams()
-  const callbackUrl  = searchParams.get("callbackUrl") ?? undefined
+  const callbackUrl  = searchParams.get("callbackUrl") ?? "/dashboard"
+  const revokedError = searchParams.get("error") === "SessionRevoked"
+  const router = useRouter()
+  const { data: session, status } = useSession()
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
+  const [error, setError] = useState(
+    revokedError ? "Your session has been revoked by an administrator. Please sign in again." : ""
+  )
+  const [success, setSuccess] = useState(false)
+
+  // Auto-redirect if already logged in (but not if session was just revoked)
+  useEffect(() => {
+    if (status === "authenticated" && session && !revokedError) {
+      router.replace("/dashboard")
+    }
+  }, [status, session, router, revokedError])
 
   async function handleSignIn(e: React.FormEvent) {
     e.preventDefault()
@@ -49,10 +63,12 @@ function LoginForm() {
       return
     }
 
-    // Let the middleware redirect to the role-appropriate home page.
-    // Use callbackUrl if present (e.g. deep-link protection), otherwise
-    // fall back to root and let middleware sort role → home.
-    window.location.href = callbackUrl ?? "/"
+    // Show success toast, then redirect to dashboard
+    setSuccess(true)
+    setLoading(false)
+    setTimeout(() => {
+      window.location.href = callbackUrl
+    }, 1200)
   }
 
   return (
@@ -132,8 +148,16 @@ function LoginForm() {
           {/* Form body */}
           <div className="px-7 py-6">
 
+            {/* Success banner */}
+            {success && (
+              <div className="flex items-center gap-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-md px-3 py-2.5 mb-5 animate-in fade-in slide-in-from-top-1 duration-300">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <p className="text-xs text-emerald-400 font-mono">Welcome back! Redirecting to your dashboard...</p>
+              </div>
+            )}
+
             {/* Error banner */}
-            {error && (
+            {error && !success && (
               <div className="flex items-center gap-2.5 bg-red-500/10 border border-red-500/20 rounded-md px-3 py-2.5 mb-5">
                 <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
                 <p className="text-xs text-red-400">{error}</p>

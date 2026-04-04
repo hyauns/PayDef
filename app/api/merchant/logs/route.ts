@@ -1,12 +1,40 @@
 /**
  * GET /api/merchant/logs
- * Transaction history with pagination, search, and filtering.
- * Tenant-scoped for MERCHANT users.
+ *
+ * High-density transaction log with pagination, search, and multi-filter.
+ * Tenant-scoped — MERCHANT users only see their own transactions.
+ *
+ * Query params:
+ *   ?page=1           — page number (1-indexed, default 1)
+ *   ?limit=20         — rows per page (1–100, default 20)
+ *   ?search=...       — searches orderId, paypalOrderId, item names, store/account names
+ *   ?status=PENDING   — filter by transaction status (PENDING|COMPLETED|FAILED|REFUNDED|DISPUTED)
+ *   ?storeId=uuid     — filter by store
+ *   ?accountId=uuid   — filter by merchant account
+ *   ?startDate=ISO    — created_at >= this date
+ *   ?endDate=ISO      — created_at <= this date
+ *
+ * Response shape:
+ *   {
+ *     transactions: [...],    — enriched with store name, account name, both item names
+ *     pagination: { page, limit, total, totalPages, hasMore }
+ *   }
+ *
+ * Security:
+ *   • tenant_id filter applied to EVERY query (MERCHANT users)
+ *   • api_key_hash / client_secret NEVER selected
+ *   • created_at / updated_at returned as ISO strings
  */
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-config"
-import { getSql } from "@/lib/neon"
+import { getPool } from "@/lib/neon"
+
+// ─── Allowed status values ────────────────────────────────────────────────────
+
+const VALID_STATUSES = ["PENDING", "COMPLETED", "FAILED", "REFUNDED", "DISPUTED"] as const
+
+// ─── Handler ──────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -21,141 +49,160 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "No tenant associated" }, { status: 403 })
   }
 
+  // ── Parse query params ────────────────────────────────────────────────────
   const { searchParams } = new URL(req.url)
-  const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10))
-  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10)))
+  const page   = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10))
+  const limit  = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10)))
   const offset = (page - 1) * limit
 
-  // Filters
-  const search = searchParams.get("search")?.trim() ?? ""
-  const status = searchParams.get("status")?.toUpperCase()
-  const storeId = searchParams.get("storeId")
-  const accountId = searchParams.get("accountId")
-  const startDate = searchParams.get("startDate")
-  const endDate = searchParams.get("endDate")
+  const search    = searchParams.get("search")?.trim() ?? ""
+  const status    = searchParams.get("status")?.toUpperCase() ?? ""
+  const storeId   = searchParams.get("storeId") ?? ""
+  const accountId = searchParams.get("accountId") ?? ""
+  const startDate = searchParams.get("startDate") ?? ""
+  const endDate   = searchParams.get("endDate") ?? ""
 
-  const sql = getSql()
-
-  // Build WHERE conditions
+  // ── Build dynamic WHERE clause ────────────────────────────────────────────
   const conditions: string[] = []
   const values: (string | number)[] = []
-  let paramIndex = 1
+  let paramIdx = 1
 
-  // Tenant scoping for MERCHANT users
+  // CRITICAL: tenant_id isolation for MERCHANT users
   if (role === "MERCHANT") {
-    conditions.push(`t.tenant_id = $${paramIndex++}`)
+    conditions.push(`t.tenant_id = $${paramIdx++}`)
     values.push(tenantId!)
   }
 
-  if (status && ["PENDING", "COMPLETED", "FAILED", "REFUNDED", "DISPUTED"].includes(status)) {
-    conditions.push(`t.status = $${paramIndex++}`)
+  // Status filter
+  if (status && (VALID_STATUSES as readonly string[]).includes(status)) {
+    conditions.push(`t.status = $${paramIdx++}`)
     values.push(status)
   }
 
+  // Store filter
   if (storeId) {
-    conditions.push(`t.store_id = $${paramIndex++}`)
+    conditions.push(`t.store_id = $${paramIdx++}`)
     values.push(storeId)
   }
 
+  // Account filter
   if (accountId) {
-    conditions.push(`t.merchant_id = $${paramIndex++}`)
+    conditions.push(`t.merchant_id = $${paramIdx++}`)
     values.push(accountId)
   }
 
+  // Date range
   if (startDate) {
-    conditions.push(`t.created_at >= $${paramIndex++}`)
+    conditions.push(`t.created_at >= $${paramIdx++}`)
     values.push(startDate)
   }
-
   if (endDate) {
-    conditions.push(`t.created_at <= $${paramIndex++}`)
+    conditions.push(`t.created_at <= $${paramIdx++}`)
     values.push(endDate)
   }
 
+  // Full-text search across multiple fields
   if (search) {
     conditions.push(`(
-      t.id::text ILIKE $${paramIndex} OR
-      t.paypal_order_id ILIKE $${paramIndex} OR
-      t.masked_item_name ILIKE $${paramIndex} OR
-      s.name ILIKE $${paramIndex}
+      t.id::text ILIKE $${paramIdx} OR
+      t.paypal_order_id ILIKE $${paramIdx} OR
+      t.paypal_capture_id ILIKE $${paramIdx} OR
+      t.original_item_name ILIKE $${paramIdx} OR
+      t.masked_item_name ILIKE $${paramIdx} OR
+      t.customer_email ILIKE $${paramIdx} OR
+      s.name ILIKE $${paramIdx} OR
+      ma.name ILIKE $${paramIdx}
     )`)
     values.push(`%${search}%`)
-    paramIndex++
+    paramIdx++
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""
 
-  // Count total for pagination
-  const countQuery = `
+  // ── SQL: count total matching rows ────────────────────────────────────────
+  const countSql = `
     SELECT COUNT(*) AS total
     FROM transactions t
     LEFT JOIN stores s ON t.store_id = s.id
+    LEFT JOIN merchant_accounts ma ON t.merchant_id = ma.id
     ${whereClause}
   `
 
-  // Main query with joins
-  const dataQuery = `
-    SELECT 
+  // ── SQL: fetch page of transactions ───────────────────────────────────────
+  // Includes JOINed store name and account name for display.
+  // NEVER selects: api_key_hash, client_secret
+  const dataSql = `
+    SELECT
       t.id,
       t.tenant_id,
       t.store_id,
       t.merchant_id,
       t.original_amount,
+      t.original_currency,
+      t.original_item_name,
+      t.masked_item_name,
       t.gateway_fee,
       t.status,
-      t.masked_item_name,
       t.paypal_order_id,
       t.paypal_capture_id,
+      t.customer_email,
       t.buyer_ip,
       t.buyer_country,
+      t.ip_address,
       t.created_at,
       t.updated_at,
-      s.name AS store_name,
-      ma.client_id AS account_client_id,
-      ma.shield_domain AS account_shield_domain
+      s.name        AS store_name,
+      ma.name       AS account_name,
+      ma.client_id  AS account_client_id
     FROM transactions t
     LEFT JOIN stores s ON t.store_id = s.id
     LEFT JOIN merchant_accounts ma ON t.merchant_id = ma.id
     ${whereClause}
     ORDER BY t.created_at DESC
-    LIMIT $${paramIndex++} OFFSET $${paramIndex++}
+    LIMIT $${paramIdx++} OFFSET $${paramIdx++}
   `
 
-  values.push(limit, offset)
+  const dataValues = [...values, limit, offset]
 
-  // Execute queries using raw sql template with dynamic values
-  // Since neon tagged template doesn't support dynamic WHERE, we use Pool
-  const { getPool } = await import("@/lib/neon")
+  // ── Execute queries ─────────────────────────────────────────────────────
+  // Uses Pool (not tagged template) because of the dynamic WHERE clause
   const pool = getPool()
 
   const [countResult, dataResult] = await Promise.all([
-    pool.query(countQuery, values.slice(0, -2)),
-    pool.query(dataQuery, values),
+    pool.query(countSql, values),
+    pool.query(dataSql, dataValues),
   ])
 
-  const total = parseInt(countResult.rows[0]?.total ?? "0", 10)
+  const total      = parseInt(countResult.rows[0]?.total ?? "0", 10)
   const totalPages = Math.ceil(total / limit)
 
+  // ── Map rows → response ─────────────────────────────────────────────────
+  const transactions = dataResult.rows.map((tx: Record<string, unknown>) => ({
+    id:                tx.id,
+    tenantId:          tx.tenant_id,
+    storeId:           tx.store_id,
+    storeName:         tx.store_name ?? null,
+    merchantId:        tx.merchant_id,
+    accountName:       tx.account_name ?? null,
+    accountClientId:   tx.account_client_id ?? null,
+    originalAmount:    parseFloat(tx.original_amount as string),
+    originalCurrency:  tx.original_currency ?? "USD",
+    originalItemName:  tx.original_item_name ?? null,   // for admin audit
+    maskedItemName:    tx.masked_item_name,
+    gatewayFee:        parseFloat(tx.gateway_fee as string),
+    status:            tx.status,
+    paypalOrderId:     tx.paypal_order_id ?? null,
+    paypalCaptureId:   tx.paypal_capture_id ?? null,
+    customerEmail:     tx.customer_email ?? null,
+    buyerIp:           tx.buyer_ip ?? null,
+    buyerCountry:      tx.buyer_country ?? null,
+    ipAddress:         tx.ip_address ?? null,
+    createdAt:         tx.created_at,                    // ISO string from Neon
+    updatedAt:         tx.updated_at,
+  }))
+
   return NextResponse.json({
-    transactions: dataResult.rows.map((tx) => ({
-      id: tx.id,
-      tenantId: tx.tenant_id,
-      storeId: tx.store_id,
-      storeName: tx.store_name,
-      merchantId: tx.merchant_id,
-      accountClientId: tx.account_client_id,
-      accountShieldDomain: tx.account_shield_domain,
-      originalAmount: parseFloat(tx.original_amount),
-      gatewayFee: parseFloat(tx.gateway_fee),
-      status: tx.status,
-      maskedItemName: tx.masked_item_name,
-      paypalOrderId: tx.paypal_order_id,
-      paypalCaptureId: tx.paypal_capture_id,
-      buyerIp: tx.buyer_ip,
-      buyerCountry: tx.buyer_country,
-      createdAt: tx.created_at,
-      updatedAt: tx.updated_at,
-    })),
+    transactions,
     pagination: {
       page,
       limit,

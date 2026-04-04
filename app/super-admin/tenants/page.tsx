@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useState, Fragment } from "react"
+import { useState, useEffect, Fragment } from "react"
 import {
   Search,
   Filter,
@@ -26,6 +26,10 @@ import {
   Check,
   Minus,
   ExternalLink,
+  Plus,
+  Loader2,
+  Eye,
+  EyeOff,
 } from "lucide-react"
 import { DashboardHeader } from "@/components/dashboard/header"
 
@@ -53,72 +57,9 @@ interface Tenant {
   suspendReason?: string
 }
 
-// ─── Seed Data ─────────────────────────────────────────────────────────────────
+// ─── Seed Data (fallback if API fails) ──────────────────────────────────────
 
-const SEED_TENANTS: Tenant[] = [
-  {
-    id: "t-001", business: "AlphaCommerce", ownerEmail: "ops@alphacommerce.io",
-    plan: "Enterprise", status: "Active", country: "US",
-    totalVolume: 1_842_500, monthlyVolume: 312_400, commissionRate: 2.5,
-    merchantAccounts: 12, stores: 34, joinedAt: "2023-03-12", lastActive: "2 min ago",
-  },
-  {
-    id: "t-002", business: "BetaRetail Group", ownerEmail: "admin@betaretail.com",
-    plan: "Pro", status: "Active", country: "GB",
-    totalVolume: 984_200, monthlyVolume: 178_600, commissionRate: 3.0,
-    merchantAccounts: 7, stores: 19, joinedAt: "2023-07-08", lastActive: "18 min ago",
-  },
-  {
-    id: "t-003", business: "GammaPay Solutions", ownerEmail: "billing@gammapay.net",
-    plan: "Enterprise", status: "Active", country: "DE",
-    totalVolume: 2_310_000, monthlyVolume: 498_000, commissionRate: 2.0,
-    merchantAccounts: 18, stores: 52, joinedAt: "2022-11-20", lastActive: "5 min ago",
-  },
-  {
-    id: "t-004", business: "DeltaShops", ownerEmail: "tech@deltashops.co",
-    plan: "Pro", status: "Suspended", country: "CA",
-    totalVolume: 412_000, monthlyVolume: 0, commissionRate: 3.0,
-    merchantAccounts: 4, stores: 8, joinedAt: "2024-01-05", lastActive: "14 days ago",
-    suspendReason: "Chargeback ratio exceeded 2% threshold",
-  },
-  {
-    id: "t-005", business: "EpsilonStore", ownerEmail: "hello@epsilonstore.io",
-    plan: "Basic", status: "Trial", country: "AU",
-    totalVolume: 8_400, monthlyVolume: 8_400, commissionRate: 4.5,
-    merchantAccounts: 1, stores: 2, joinedAt: "2025-03-28", lastActive: "1 hour ago",
-  },
-  {
-    id: "t-006", business: "ZetaMarket", ownerEmail: "cto@zetamarket.com",
-    plan: "Enterprise", status: "Active", country: "SG",
-    totalVolume: 3_120_000, monthlyVolume: 620_000, commissionRate: 1.8,
-    merchantAccounts: 24, stores: 71, joinedAt: "2022-06-14", lastActive: "just now",
-  },
-  {
-    id: "t-007", business: "EtaCommerce", ownerEmail: "ops@etacommerce.app",
-    plan: "Pro", status: "Active", country: "FR",
-    totalVolume: 540_000, monthlyVolume: 98_000, commissionRate: 2.8,
-    merchantAccounts: 6, stores: 15, joinedAt: "2023-10-30", lastActive: "32 min ago",
-  },
-  {
-    id: "t-008", business: "ThetaStore Inc.", ownerEmail: "admin@thetastore.shop",
-    plan: "Basic", status: "Suspended", country: "IN",
-    totalVolume: 62_000, monthlyVolume: 0, commissionRate: 4.5,
-    merchantAccounts: 2, stores: 3, joinedAt: "2024-08-12", lastActive: "3 days ago",
-    suspendReason: "Payment dispute — pending review",
-  },
-  {
-    id: "t-009", business: "IotaRetail", ownerEmail: "finance@iotaretail.net",
-    plan: "Pro", status: "Active", country: "BR",
-    totalVolume: 724_800, monthlyVolume: 145_600, commissionRate: 3.2,
-    merchantAccounts: 8, stores: 22, joinedAt: "2023-05-17", lastActive: "9 min ago",
-  },
-  {
-    id: "t-010", business: "KappaPay", ownerEmail: "dev@kappapay.io",
-    plan: "Enterprise", status: "Active", country: "NL",
-    totalVolume: 1_580_000, monthlyVolume: 280_000, commissionRate: 2.2,
-    merchantAccounts: 14, stores: 41, joinedAt: "2023-01-09", lastActive: "4 min ago",
-  },
-]
+const SEED_TENANTS: Tenant[] = []
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -361,10 +302,192 @@ function TenantExpandedRow({ tenant }: { tenant: Tenant }) {
   )
 }
 
+// ─── Create Tenant Modal ──────────────────────────────────────────────────────
+
+function CreateTenantModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void
+  onCreated: (tenant: Tenant) => void
+}) {
+  const [name, setName] = useState("")
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [plan, setPlan] = useState<Plan>("Basic")
+  const [showPw, setShowPw] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
+
+  const planMap: Record<Plan, string> = { Basic: "STARTER", Pro: "PRO", Enterprise: "ENTERPRISE" }
+
+  const canSubmit =
+    name.trim().length >= 2 &&
+    email.includes("@") &&
+    password.length >= 8 &&
+    !saving
+
+  const handleSubmit = async () => {
+    if (!canSubmit) return
+    setSaving(true)
+    setError("")
+
+    try {
+      const res = await fetch("/api/admin/tenants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim(),
+          password,
+          plan: planMap[plan],
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? "Failed to create tenant")
+
+      const statusMap: Record<string, TenantStatus> = { ACTIVE: "Active", SUSPENDED: "Suspended", TRIAL: "Trial" }
+      const revPlanMap: Record<string, Plan> = { STARTER: "Basic", BASIC: "Basic", PRO: "Pro", ENTERPRISE: "Enterprise" }
+
+      onCreated({
+        id: data.id,
+        business: data.name,
+        ownerEmail: data.ownerEmail ?? email,
+        plan: revPlanMap[data.plan?.toUpperCase()] ?? "Basic",
+        status: statusMap[data.status?.toUpperCase()] ?? "Active",
+        country: "—",
+        totalVolume: 0,
+        monthlyVolume: 0,
+        commissionRate: data.gatewayFeePercent ?? 2.0,
+        merchantAccounts: 0,
+        stores: 0,
+        joinedAt: new Date().toISOString().slice(0, 10),
+        lastActive: "—",
+      })
+      onClose()
+    } catch (err: any) {
+      setError(err.message ?? "Failed to create tenant")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
+      <div className="bg-card border border-border rounded-lg w-full max-w-md p-5 space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Create New Tenant</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              This will create both the tenant account and the merchant user login.
+            </p>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {error && (
+          <div className="flex items-center gap-2 text-xs font-mono text-red-400 bg-red-400/5 border border-red-400/20 rounded-md px-3 py-2">
+            <XCircle className="w-3.5 h-3.5 shrink-0" />
+            {error}
+          </div>
+        )}
+
+        <div className="space-y-3">
+          {/* Business Name */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Business Name</label>
+            <input
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Acme Corp"
+              className="w-full bg-secondary border border-border rounded-md px-3 py-2 text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-cyan-400/50"
+            />
+          </div>
+
+          {/* Email */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Owner Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="admin@acmecorp.com"
+              className="w-full bg-secondary border border-border rounded-md px-3 py-2 text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-cyan-400/50"
+            />
+          </div>
+
+          {/* Password */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Password</label>
+            <div className="relative">
+              <input
+                type={showPw ? "text" : "password"}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="Min 8 characters"
+                className="w-full bg-secondary border border-border rounded-md px-3 pr-10 py-2 text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-cyan-400/50"
+              />
+              <button
+                onClick={() => setShowPw(p => !p)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                {showPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+            {password.length > 0 && password.length < 8 && (
+              <p className="text-[10px] font-mono text-red-400">Minimum 8 characters required</p>
+            )}
+          </div>
+
+          {/* Plan */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Plan</label>
+            <div className="grid grid-cols-3 gap-2">
+              {(["Basic", "Pro", "Enterprise"] as Plan[]).map(p => (
+                <button
+                  key={p}
+                  onClick={() => setPlan(p)}
+                  className={`px-3 py-1.5 text-xs font-mono rounded-md border transition-colors ${
+                    plan === p
+                      ? planColors[p]
+                      : "bg-secondary border-border text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button
+            onClick={onClose}
+            className="px-3 py-1.5 text-xs font-mono text-muted-foreground bg-secondary border border-border rounded-md hover:text-foreground"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!canSubmit}
+            className="px-3 py-1.5 text-xs font-mono text-background bg-cyan-400 border border-cyan-400 rounded-md hover:bg-cyan-300 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+          >
+            {saving && <Loader2 className="w-3 h-3 animate-spin" />}
+            {saving ? "Creating..." : "Create Tenant"}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function TenantsPage() {
   const [tenants, setTenants] = useState<Tenant[]>(SEED_TENANTS)
+  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [filterPlan, setFilterPlan] = useState<Plan | "All">("All")
   const [filterStatus, setFilterStatus] = useState<TenantStatus | "All">("All")
@@ -375,6 +498,39 @@ export default function TenantsPage() {
   const [suspendTarget, setSuspendTarget] = useState<Tenant | null>(null)
   const [feeTarget, setFeeTarget] = useState<Tenant | null>(null)
   const [impersonateTarget, setImpersonateTarget] = useState<Tenant | null>(null)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+
+  // Fetch real tenant data from API
+  useEffect(() => {
+    fetch("/api/admin/tenants")
+      .then(r => r.json())
+      .then(data => {
+        if (data.tenants && data.tenants.length > 0) {
+          const mapped: Tenant[] = data.tenants.map((t: any) => {
+            const statusMap: Record<string, TenantStatus> = { ACTIVE: "Active", SUSPENDED: "Suspended", TRIAL: "Trial" }
+            const planMap: Record<string, Plan> = { STARTER: "Basic", BASIC: "Basic", PRO: "Pro", ENTERPRISE: "Enterprise" }
+            return {
+              id:               t.id,
+              business:         t.name,
+              ownerEmail:       t.ownerEmail ?? "—",
+              plan:             planMap[t.plan?.toUpperCase()] ?? "Basic",
+              status:           statusMap[t.status?.toUpperCase()] ?? "Active",
+              country:          "—",
+              totalVolume:      t.totalVolume ?? 0,
+              monthlyVolume:    t.monthlyVolume ?? 0,
+              commissionRate:   t.gatewayFeePercent ?? 2.0,
+              merchantAccounts: t.accountCount ?? 0,
+              stores:           t.storeCount ?? 0,
+              joinedAt:         t.createdAt ? new Date(t.createdAt).toISOString().slice(0, 10) : "—",
+              lastActive:       "—",
+            }
+          })
+          setTenants(mapped)
+        }
+      })
+      .catch(() => {}) // Keep seed data on error
+      .finally(() => setLoading(false))
+  }, [])
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc")
@@ -401,17 +557,33 @@ export default function TenantsPage() {
 
   const handleSuspend = (reason: string) => {
     if (!suspendTarget) return
+    // Wire to API
+    fetch("/api/admin/tenants", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: suspendTarget.id, status: "SUSPENDED" }),
+    }).catch(() => {})
     setTenants(prev => prev.map(t => t.id === suspendTarget.id ? { ...t, status: "Suspended", suspendReason: reason } : t))
     setSuspendTarget(null)
   }
 
   const handleFeeUpdate = (rate: number) => {
     if (!feeTarget) return
+    fetch("/api/admin/tenants", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: feeTarget.id, gatewayFeePercent: rate }),
+    }).catch(() => {})
     setTenants(prev => prev.map(t => t.id === feeTarget.id ? { ...t, commissionRate: rate } : t))
     setFeeTarget(null)
   }
 
   const handleUnsuspend = (id: string) => {
+    fetch("/api/admin/tenants", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, status: "ACTIVE" }),
+    }).catch(() => {})
     setTenants(prev => prev.map(t => t.id === id ? { ...t, status: "Active", suspendReason: undefined } : t))
     setOpenMenu(null)
   }
@@ -449,6 +621,13 @@ export default function TenantsPage() {
             <span className="text-xs font-mono text-muted-foreground bg-secondary border border-border px-2.5 py-1.5 rounded-md">
               {tenants.length} tenants total
             </span>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono font-semibold text-background bg-cyan-400 rounded-md hover:bg-cyan-300 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Create Tenant
+            </button>
           </div>
         </div>
 
@@ -556,10 +735,17 @@ export default function TenantsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 && (
+                {loading && [...Array(5)].map((_, i) => (
+                  <tr key={i} className="border-b border-border/60">
+                    <td colSpan={8} className="px-4 py-4">
+                      <div className="h-4 bg-secondary/60 rounded animate-pulse" style={{ width: `${60 + (i * 7) % 30}%` }} />
+                    </td>
+                  </tr>
+                ))}
+                {!loading && filtered.length === 0 && (
                   <tr>
                     <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground text-xs">
-                      No tenants match your filters.
+                      {tenants.length === 0 ? "No tenants found. Data will appear once tenants are created." : "No tenants match your filters."}
                     </td>
                   </tr>
                 )}
@@ -740,6 +926,12 @@ export default function TenantsPage() {
       )}
       {impersonateTarget && (
         <ImpersonateModal tenant={impersonateTarget} onClose={() => setImpersonateTarget(null)} />
+      )}
+      {showCreateModal && (
+        <CreateTenantModal
+          onClose={() => setShowCreateModal(false)}
+          onCreated={(tenant) => setTenants(prev => [tenant, ...prev])}
+        />
       )}
 
       {/* Click-outside handler for context menus */}

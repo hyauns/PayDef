@@ -1,9 +1,9 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ArrowRightLeft, Zap } from "lucide-react"
+import { ArrowRightLeft, Zap, Loader2 } from "lucide-react"
 
-// ─── Types & data ─────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type TxStatus = "completed" | "pending" | "failed"
 
@@ -17,33 +17,13 @@ interface Transaction {
   timestamp: Date
 }
 
-const STORES = ["Tire Shop Pro", "Yoga Bliss", "Pet Paradise", "TechNova", "GlowUp Beauty", "FitGear Store", "UrbanKicks"]
-const ACCOUNTS = ["PP-Main-01", "PP-Backup-02", "PP-Euro-03", "PP-Scale-04", "PP-Reserve-05"]
-const DOMAINS = ["chococlose.com", "velotrack.io", "safepulse.net", "bridgepay.co", "shieldvault.dev"]
-
-function rand<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)]
-}
-
-function makeTx(): Transaction {
-  const statuses: TxStatus[] = ["completed", "completed", "completed", "pending", "failed"]
-  return {
-    id: `TX-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
-    store: rand(STORES),
-    amount: parseFloat((Math.random() * 980 + 20).toFixed(2)),
-    paypalAccount: rand(ACCOUNTS),
-    shieldDomain: rand(DOMAINS),
-    status: rand(statuses),
-    timestamp: new Date(),
-  }
-}
-
 function timeAgo(d: Date): string {
   const s = Math.floor((Date.now() - d.getTime()) / 1000)
   if (s < 10) return "just now"
   if (s < 60) return `${s}s ago`
   if (s < 3600) return `${Math.floor(s / 60)}m ago`
-  return `${Math.floor(s / 3600)}h ago`
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`
+  return `${Math.floor(s / 86400)}d ago`
 }
 
 const STATUS_CFG: Record<TxStatus, { bg: string; text: string; label: string }> = {
@@ -74,36 +54,67 @@ function FeedSkeleton() {
   )
 }
 
-// ─── Feed list (client-only render) ──────────────────────────────────────────
+// ─── Feed list (fetches real data from API) ──────────────────────────────────
 
 function FeedList() {
   const [feed, setFeed] = useState<Transaction[]>([])
+  const [loading, setLoading] = useState(true)
   const [, setTick] = useState(0)
 
+  const fetchTransactions = async () => {
+    try {
+      const res = await fetch("/api/merchant/logs?limit=20")
+      if (!res.ok) return
+
+      const data = await res.json()
+      const txns: any[] = data.transactions ?? []
+
+      setFeed(
+        txns.map(tx => ({
+          id: tx.id?.slice(0, 12) ?? `TX-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+          store: tx.storeName ?? "Unknown",
+          amount: parseFloat(tx.originalAmount ?? 0),
+          paypalAccount: tx.accountName ?? "—",
+          shieldDomain: "—",
+          status: mapStatus(tx.status),
+          timestamp: new Date(tx.createdAt ?? Date.now()),
+        }))
+      )
+    } catch {
+      // Silently fail — keep showing whatever we have
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
-    // Populate initial feed on client only — never runs on server
-    setFeed(
-      Array.from({ length: 8 }, (_, i) => ({
-        ...makeTx(),
-        timestamp: new Date(Date.now() - i * 14_000),
-      }))
-    )
+    fetchTransactions()
 
-    const feedInterval = setInterval(() => {
-      setFeed(prev => [makeTx(), ...prev.slice(0, 19)])
-    }, 3_500)
+    // Poll for new transactions every 8 seconds
+    const pollInterval = setInterval(fetchTransactions, 8_000)
 
-    const tickInterval = setInterval(() => {
-      setTick(n => n + 1)
-    }, 5_000)
+    // Update relative timestamps every 5 seconds
+    const tickInterval = setInterval(() => setTick(n => n + 1), 5_000)
 
     return () => {
-      clearInterval(feedInterval)
+      clearInterval(pollInterval)
       clearInterval(tickInterval)
     }
   }, [])
 
-  if (feed.length === 0) return <FeedSkeleton />
+  if (loading) return <FeedSkeleton />
+
+  if (feed.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-center px-4 py-10">
+        <div>
+          <ArrowRightLeft className="w-6 h-6 text-border mx-auto mb-2" />
+          <p className="text-xs font-mono text-muted-foreground">No transactions yet</p>
+          <p className="text-[10px] font-mono text-muted-foreground mt-1">Transactions will appear here as they come in</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="overflow-y-auto flex-1 max-h-[420px]">
@@ -111,7 +122,7 @@ function FeedList() {
         const cfg = STATUS_CFG[tx.status]
         return (
           <div
-            key={tx.id}
+            key={`${tx.id}-${i}`}
             className={`flex items-start gap-3 px-4 py-2.5 border-b border-border/40 hover:bg-secondary/20 transition-all ${i === 0 ? "bg-cyan-400/5" : ""}`}
           >
             <div className="mt-0.5 shrink-0">
@@ -128,8 +139,12 @@ function FeedList() {
               </div>
               <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                 <span className="font-mono text-xs text-cyan-400">{tx.paypalAccount}</span>
-                <span className="text-muted-foreground text-xs">via</span>
-                <span className="font-mono text-xs text-muted-foreground truncate">{tx.shieldDomain}</span>
+                {tx.shieldDomain !== "—" && (
+                  <>
+                    <span className="text-muted-foreground text-xs">via</span>
+                    <span className="font-mono text-xs text-muted-foreground truncate">{tx.shieldDomain}</span>
+                  </>
+                )}
               </div>
               <div className="flex items-center gap-2 mt-1">
                 <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${cfg.bg} ${cfg.text}`}>
@@ -144,6 +159,13 @@ function FeedList() {
       })}
     </div>
   )
+}
+
+function mapStatus(raw: string): TxStatus {
+  const s = (raw ?? "").toUpperCase()
+  if (s === "COMPLETED" || s === "CAPTURED") return "completed"
+  if (s === "FAILED" || s === "DECLINED" || s === "ERROR") return "failed"
+  return "pending"
 }
 
 // ─── Public export ────────────────────────────────────────────────────────────

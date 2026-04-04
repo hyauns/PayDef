@@ -2,9 +2,20 @@
 @import 'tw-animate-css';
 
 @keyframes pulse-badge {
-  0%   { transform: scale(1);   opacity: 1; }
-  50%  { transform: scale(1.5); opacity: 0.7; }
-  100% { transform: scale(1);   opacity: 1; }
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.5);
+    opacity: 0.7;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 @custom-variant dark (&:is(.dark *));
@@ -89,6 +100,47 @@
   --sidebar-ring: oklch(0.72 0.17 195);
 }
 
+/* ── Vietnamese font switching ──────────────────────────────────────────────
+   When data-lang="vi" is set on the landing page wrapper, override --font-sans
+   with Be Vietnam Pro. This font was chosen because:
+     1. Geometric construction closely matches Geist's proportions and x-height
+     2. Full Vietnamese Unicode block support (1,000+ glyphs with diacritics)
+     3. Identical weight range (400/600/700) means zero layout shift on switch
+     4. "swap" display strategy prevents invisible text during load
+   The mono font intentionally stays Geist Mono — numeric values, code labels,
+   and stat figures always render in the same monospaced face regardless of lang.
+   On [data-lang="vi"], swap --font-sans to Be Vietnam Pro.  A subtle 120ms
+   opacity dip masks the font-family change (which is not CSS-animatable).
+   ─────────────────────────────────────────────────────────────────────────── */
+[data-lang] {
+  transition: opacity 120ms ease;
+}
+
+[data-lang].lang-switching {
+  opacity: 0;
+}
+
+[data-lang="vi"] {
+  --font-sans: var(--font-be-vietnam), 'Be Vietnam Pro', 'Geist', sans-serif;
+}
+
+/* Tailwind's font-sans utility compiles to a static value at build time and
+   won't inherit the runtime --font-sans override automatically. Explicitly
+   apply font-family: var(--font-sans) to every text element under [data-lang]
+   so the VI font reaches headings, buttons, and links too. */
+[data-lang] p,
+[data-lang] li,
+[data-lang] label,
+[data-lang] h1,
+[data-lang] h2,
+[data-lang] h3,
+[data-lang] h4,
+[data-lang] button,
+[data-lang] a,
+[data-lang] .prose-text {
+  font-family: var(--font-sans);
+}
+
 @theme inline {
   --font-sans: 'Geist', 'Geist Fallback';
   --font-mono: 'Geist Mono', 'Geist Mono Fallback';
@@ -134,6 +186,7 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }

@@ -25,7 +25,7 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
   CREATE TYPE transaction_status AS ENUM (
-    'PENDING', 'COMPLETED', 'FAILED', 'REFUNDED', 'DISPUTED'
+    'PENDING', 'AUTHORIZED', 'COMPLETED', 'FAILED', 'REFUNDED', 'DISPUTED'
   );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
@@ -37,6 +37,8 @@ CREATE TABLE IF NOT EXISTS tenants (
   id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   name                TEXT        NOT NULL,
   plan                TEXT        NOT NULL DEFAULT 'STARTER',
+  status              TEXT        NOT NULL DEFAULT 'ACTIVE',
+  owner_email         TEXT,
   gateway_fee_percent NUMERIC(5,2) NOT NULL DEFAULT 2.00,
   created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -45,7 +47,9 @@ CREATE TABLE IF NOT EXISTS tenants (
 -- Add columns that may be missing from an earlier schema version
 ALTER TABLE tenants
   ADD COLUMN IF NOT EXISTS plan                TEXT         NOT NULL DEFAULT 'STARTER',
-  ADD COLUMN IF NOT EXISTS gateway_fee_percent NUMERIC(5,2) NOT NULL DEFAULT 2.00;
+  ADD COLUMN IF NOT EXISTS gateway_fee_percent NUMERIC(5,2) NOT NULL DEFAULT 2.00,
+  ADD COLUMN IF NOT EXISTS status              TEXT         NOT NULL DEFAULT 'ACTIVE',
+  ADD COLUMN IF NOT EXISTS owner_email         TEXT;
 
 -- ---------------------------------------------------------------------------
 -- 2. users
@@ -101,10 +105,13 @@ CREATE TABLE IF NOT EXISTS merchant_accounts (
   client_id       TEXT           NOT NULL,
   client_secret   TEXT           NOT NULL,
   shield_domain   TEXT,
+  proxy_url       TEXT,
   daily_limit     NUMERIC(12,2)  NOT NULL DEFAULT 5000.00,
   current_volume  NUMERIC(12,2)  NOT NULL DEFAULT 0.00,
   priority        INTEGER        NOT NULL DEFAULT 1,
   status          account_status NOT NULL DEFAULT 'ACTIVE',
+  warmup_started_at    TIMESTAMPTZ,
+  daily_limit_override NUMERIC(12,2),
   volume_reset_at TIMESTAMPTZ,
   created_at      TIMESTAMPTZ    NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ    NOT NULL DEFAULT NOW()
@@ -114,7 +121,10 @@ ALTER TABLE merchant_accounts
   ADD COLUMN IF NOT EXISTS store_id  UUID REFERENCES stores (id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS name      TEXT NOT NULL DEFAULT 'Unnamed Account',
   ADD COLUMN IF NOT EXISTS email     TEXT,
-  ADD COLUMN IF NOT EXISTS shield_domain TEXT;
+  ADD COLUMN IF NOT EXISTS shield_domain TEXT,
+  ADD COLUMN IF NOT EXISTS proxy_url TEXT,
+  ADD COLUMN IF NOT EXISTS warmup_started_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS daily_limit_override NUMERIC(12,2);
 
 CREATE INDEX IF NOT EXISTS merchant_accounts_tenant_id_idx        ON merchant_accounts (tenant_id);
 CREATE INDEX IF NOT EXISTS merchant_accounts_tenant_status_idx    ON merchant_accounts (tenant_id, status);
@@ -137,6 +147,8 @@ CREATE TABLE IF NOT EXISTS transactions (
   status            transaction_status NOT NULL DEFAULT 'PENDING',
   paypal_order_id   TEXT,
   paypal_capture_id TEXT,
+  authorization_id  TEXT,
+  intent            TEXT               NOT NULL DEFAULT 'CAPTURE',
   customer_email    TEXT,
   buyer_ip          TEXT,
   buyer_country     CHAR(2),
@@ -149,7 +161,9 @@ ALTER TABLE transactions
   ADD COLUMN IF NOT EXISTS original_currency  TEXT NOT NULL DEFAULT 'USD',
   ADD COLUMN IF NOT EXISTS original_item_name TEXT,
   ADD COLUMN IF NOT EXISTS customer_email     TEXT,
-  ADD COLUMN IF NOT EXISTS ip_address         TEXT;
+  ADD COLUMN IF NOT EXISTS ip_address         TEXT,
+  ADD COLUMN IF NOT EXISTS authorization_id   TEXT,
+  ADD COLUMN IF NOT EXISTS intent             TEXT NOT NULL DEFAULT 'CAPTURE';
 
 CREATE INDEX IF NOT EXISTS transactions_tenant_id_idx        ON transactions (tenant_id);
 CREATE INDEX IF NOT EXISTS transactions_tenant_store_idx     ON transactions (tenant_id, store_id);
@@ -179,6 +193,27 @@ CREATE INDEX IF NOT EXISTS billing_records_transaction_idx ON billing_records (t
 -- ---------------------------------------------------------------------------
 -- Automatic updated_at trigger (applied to all timestamped tables)
 -- ---------------------------------------------------------------------------
+-- 8. shield_domains
+--    Central rotation pool of shield domains used to mask PayPal URLs.
+--    tenant_id NULL = shared pool; set = reserved for that tenant.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS shield_domains (
+  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  domain      TEXT        NOT NULL UNIQUE,
+  is_active   BOOLEAN     NOT NULL DEFAULT TRUE,
+  tenant_id   UUID        REFERENCES tenants(id) ON DELETE SET NULL,
+  health_ok   BOOLEAN     NOT NULL DEFAULT TRUE,
+  last_check  TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS shield_domains_active_idx
+  ON shield_domains (is_active) WHERE is_active = TRUE;
+
+-- ---------------------------------------------------------------------------
+-- Auto-update updated_at triggers
+-- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
@@ -190,7 +225,7 @@ $$;
 DO $$ 
 DECLARE tbl TEXT;
 BEGIN
-  FOREACH tbl IN ARRAY ARRAY['tenants','users','stores','merchant_accounts','transactions'] LOOP
+  FOREACH tbl IN ARRAY ARRAY['tenants','users','stores','merchant_accounts','transactions','shield_domains'] LOOP
     IF NOT EXISTS (
       SELECT 1 FROM pg_trigger
       WHERE tgname = 'trg_' || tbl || '_updated_at'
