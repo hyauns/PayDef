@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "db:push": "echo 'Use migrate.sql scripts directly with Neon'"
   },
   "dependencies": {
@@ -73,6 +74,8 @@
     "@types/node": "^22",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.2.2",
     "pg": "^8.20.0",
     "postcss": "^8.5",
     "tailwindcss": "^4.2.0",

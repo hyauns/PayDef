@@ -42,6 +42,10 @@ interface MerchantRow {
   proxy_url:     string | null
 }
 
+interface NameRow {
+  name: string
+}
+
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user) {
@@ -209,13 +213,17 @@ export async function POST(req: NextRequest) {
     // ── Telegram notification (fire-and-forget) ──────────────────────────────
     ;(async () => {
       try {
-        const storeRows = await sql`SELECT name FROM stores WHERE id = ${transaction.store_id} LIMIT 1`
-        const acctRows = await sql`SELECT name FROM merchant_accounts WHERE id = ${transaction.merchant_id} LIMIT 1`
+        const storeRows = (await sql`
+          SELECT name FROM stores WHERE id = ${transaction.store_id} LIMIT 1
+        `) as unknown as NameRow[]
+        const acctRows = (await sql`
+          SELECT name FROM merchant_accounts WHERE id = ${transaction.merchant_id} LIMIT 1
+        `) as unknown as NameRow[]
         sendTransactionAlert(
           tenantId,
           originalAmount,
-          (storeRows[0] as any)?.name ?? "Unknown Store",
-          (acctRows[0] as any)?.name ?? "Unknown Account"
+          storeRows[0]?.name ?? "Unknown Store",
+          acctRows[0]?.name ?? "Unknown Account"
         )
       } catch { /* silent */ }
     })()

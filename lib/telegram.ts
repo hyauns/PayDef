@@ -47,11 +47,12 @@ export async function sendTelegramMessage(
 
     const body = await res.text().catch(() => "")
     return { ok: false, error: `HTTP ${res.status}: ${body.slice(0, 200)}` }
-  } catch (err: any) {
-    if (err.name === "AbortError") {
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
       return { ok: false, error: "Telegram API timed out (5s)" }
     }
-    return { ok: false, error: err.message?.slice(0, 200) ?? "Unknown error" }
+    const message = err instanceof Error ? err.message : "Unknown error"
+    return { ok: false, error: message.slice(0, 200) }
   }
 }
 

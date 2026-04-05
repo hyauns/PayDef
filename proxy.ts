@@ -1,5 +1,5 @@
 /**
- * Route Protection Middleware (Vercel Edge Runtime)
+ * Route Protection Proxy (Next.js 16 Node.js Runtime)
  *
  * Handles:
  *  1. Authentication — redirect unauthenticated users to /login
@@ -105,14 +105,14 @@ async function isTokenRevoked(jti: string): Promise<boolean> {
     return blocked
   } catch (err) {
     // Fail-open: if DB is unreachable, don't lock out all users
-    console.error("[middleware] Blacklist check failed:", err)
+    console.error("[proxy] Blacklist check failed:", err)
     return false
   }
 }
 
-// ─── Middleware ────────────────────────────────────────────────────────────────
+// ─── Proxy ─────────────────────────────────────────────────────────────────────
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
 
   // ─── SKIP: Static files, auth API, webhooks, cron, and gateway endpoints ────

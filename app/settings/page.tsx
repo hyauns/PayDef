@@ -8,11 +8,9 @@ import {
   Settings,
   Shield,
   Bell,
-  User,
   Save,
   Eye,
   EyeOff,
-  RefreshCw,
   AlertTriangle,
   CheckCircle2,
   Lock,
@@ -65,6 +63,27 @@ interface MerchantStore {
   apiKeyHash: string
   isActive: boolean
   captureMode: string   // 'INSTANT' | 'MANUAL'
+}
+
+interface MerchantStoreApiRow {
+  id: string
+  name: string
+  webhookUrl?: string | null
+  webhook_url?: string | null
+  apiKeyHash?: string | null
+  api_key_hash?: string | null
+  isActive?: boolean | null
+  is_active?: boolean | null
+  captureMode?: string | null
+  capture_mode?: string | null
+}
+
+interface MerchantStoresResponse {
+  stores: MerchantStoreApiRow[]
+}
+
+function getErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : "Request failed"
 }
 
 // ─── Inline toast ─────────────────────────────────────────────────────────────
@@ -187,8 +206,8 @@ export default function SettingsPage() {
       }
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
-    } catch (err: any) {
-      setSaveError(err.message ?? "Failed to save settings")
+    } catch (err) {
+      setSaveError(getErrorMessage(err))
     } finally {
       setSaving(false)
     }
@@ -308,12 +327,12 @@ export default function SettingsPage() {
   }
 
   // ── Merchant stores (for Merchant view) ────────────────────────────────────
-  const { data: storesData, isLoading: storesLoading } = useSWR(
+  const { data: storesData, isLoading: storesLoading, mutate: mutateStores } = useSWR<MerchantStoresResponse>(
     !isSuperAdmin ? "/api/merchant/stores" : null,
     fetcher,
     { revalidateOnFocus: false }
   )
-  const stores: MerchantStore[] = (storesData?.stores ?? []).map((s: any) => ({
+  const stores: MerchantStore[] = (storesData?.stores ?? []).map((s) => ({
     id: s.id,
     name: s.name,
     webhookUrl: s.webhookUrl ?? s.webhook_url ?? null,
@@ -334,10 +353,15 @@ export default function SettingsPage() {
         body: JSON.stringify({ storeId: store.id, captureMode: newMode }),
       })
       if (res.ok) {
-        // Optimistic update
-        storesData.stores = storesData.stores.map((s: any) =>
-          s.id === store.id ? { ...s, captureMode: newMode, capture_mode: newMode } : s
-        )
+        await mutateStores((current) => {
+          if (!current) return current
+          return {
+            ...current,
+            stores: current.stores.map((s) =>
+              s.id === store.id ? { ...s, captureMode: newMode, capture_mode: newMode } : s
+            ),
+          }
+        }, false)
         setSaved(true)
         setTimeout(() => setSaved(false), 2000)
       } else {
@@ -388,8 +412,8 @@ export default function SettingsPage() {
       }
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
-    } catch (err: any) {
-      setSaveError(err.message ?? "Failed to save")
+    } catch (err) {
+      setSaveError(getErrorMessage(err))
     } finally {
       setSaving(false)
     }

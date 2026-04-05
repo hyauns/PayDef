@@ -117,7 +117,7 @@ export default function LogsPage() {
     return `/api/admin/logs?${params.toString()}`
   }, [page, levelFilter, accountFilter, search])
 
-  const { data, error, isLoading, isValidating, mutate } = useSWR<LogsResponse>(
+  const { data, error, isLoading, isValidating } = useSWR<LogsResponse>(
     buildUrl(),
     fetcher,
     { refreshInterval: 5_000, revalidateOnFocus: true }

@@ -31,6 +31,10 @@ function generateCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString()
 }
 
+function getErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : "Unknown error"
+}
+
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
@@ -105,8 +109,8 @@ export async function POST(req: NextRequest) {
           </div>
         `,
       })
-    } catch (err: any) {
-      console.error("[change-email] Failed to send code:", err.message)
+    } catch (err) {
+      console.error("[change-email] Failed to send code:", getErrorMessage(err))
       return NextResponse.json(
         { error: "Failed to send verification email. Please try again." },
         { status: 502 }

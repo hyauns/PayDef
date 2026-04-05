@@ -116,7 +116,7 @@ export async function GET() {
       `) as unknown as StoreRow[]
 
   // ── Aggregate transaction stats per store ───────────────────────────────────
-  let txStats: Record<string, { count: number; volume: number; completed: number; failed: number; pending: number }> = {}
+  const txStats: Record<string, { count: number; volume: number; completed: number; failed: number; pending: number }> = {}
 
   if (stores.length > 0) {
     const countQuery = role === "SUPER_ADMIN"

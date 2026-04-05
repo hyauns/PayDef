@@ -77,24 +77,26 @@ export async function POST(req: NextRequest) {
     } else {
       health = "Degraded"
     }
-  } catch (err: any) {
+  } catch (err) {
     latencyMs = Math.round(performance.now() - startTime)
+    const error = err instanceof Error ? err : new Error("Connection failed")
+    const errorCause = (error as Error & { cause?: { code?: string } }).cause
 
-    if (err.name === "AbortError") {
+    if (error.name === "AbortError") {
       errorMessage = "Connection timed out (8s)"
       health = "Down"
-    } else if (err.cause?.code === "ENOTFOUND") {
+    } else if (errorCause?.code === "ENOTFOUND") {
       errorMessage = "DNS resolution failed"
       health = "Down"
-    } else if (err.cause?.code === "ECONNREFUSED") {
+    } else if (errorCause?.code === "ECONNREFUSED") {
       errorMessage = "Connection refused"
       health = "Down"
-    } else if (err.message?.includes("certificate")) {
+    } else if (error.message.includes("certificate")) {
       errorMessage = "SSL certificate error"
       sslValid = false
       health = "Degraded"
     } else {
-      errorMessage = err.message ?? "Connection failed"
+      errorMessage = error.message
       health = "Down"
     }
   }

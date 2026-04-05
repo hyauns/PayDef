@@ -153,7 +153,7 @@ export async function GET() {
       `) as unknown as AccountRow[]
 
   // ── Aggregate transaction stats per account ─────────────────────────────────
-  let txStats: Record<string, { count: number; volume: number; completed: number; failed: number }> = {}
+  const txStats: Record<string, { count: number; volume: number; completed: number; failed: number }> = {}
 
   if (accounts.length > 0) {
     const countQuery = role === "SUPER_ADMIN"

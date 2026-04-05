@@ -72,7 +72,10 @@ export async function sendWelcomeEmail(payload: WelcomeEmailPayload): Promise<{
     }
 
     return { success: true, messageId: data?.id }
-  } catch (err: any) {
-    return { success: false, error: err.message ?? "Unknown email error" }
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Unknown email error",
+    }
   }
 }

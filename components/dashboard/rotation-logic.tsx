@@ -70,6 +70,10 @@ const fetcher = (url: string) => fetch(url).then(r => {
   return r.json()
 })
 
+function getErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : "Failed to apply strategy"
+}
+
 // ─── Map DB value → UI mode ───────────────────────────────────────────────────
 
 function dbToUiMode(dbValue: string): RotationMode {
@@ -138,8 +142,8 @@ export function RotationLogic() {
 
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
-    } catch (err: any) {
-      setError(err.message ?? "Failed to apply strategy")
+    } catch (err) {
+      setError(getErrorMessage(err))
     } finally {
       setSaving(false)
     }

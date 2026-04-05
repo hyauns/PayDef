@@ -34,9 +34,6 @@ import { decrypt } from "@/lib/encryption"
 /** Maximum single-transaction value for accounts in warm-up status. */
 export const WARMUP_MAX_TRANSACTION = 50.0
 
-/** Eligible statuses for rotation (PAUSED and SUSPENDED are excluded). */
-const ELIGIBLE_STATUSES = ["ACTIVE", "WARMING_UP"] as const
-
 /**
  * Progressive warm-up daily cap schedule.
  * The daily volume limit for WARMING_UP accounts ramps linearly:

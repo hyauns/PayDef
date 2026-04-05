@@ -59,6 +59,27 @@ interface Merchant {
   successRate: number
 }
 
+interface MerchantApiRow {
+  id: string
+  name: string
+  email?: string | null
+  clientId: string
+  proxyUrl?: string | null
+  shieldDomain?: string | null
+  status: string
+  isLimited?: boolean | null
+  priority?: number | null
+  currentVolume?: number | null
+  softLimit?: number | null
+  dailyLimit?: number | null
+  itemMasking?: boolean | null
+  fakeProductName?: string | null
+  transactionCount?: number | null
+  createdAt?: string | null
+  updatedAt?: string | null
+  successRate?: number | null
+}
+
 // ─── Platform shield domains provided by Gateway Central ─────────────────────
 const PLATFORM_DOMAINS = [
   "chococlose.com",
@@ -135,6 +156,10 @@ function StatusBadge({ status }: { status: Status }) {
       {status}
     </span>
   )
+}
+
+function getErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : "Request failed"
 }
 
 function PriorityStars({ value }: { value: number }) {
@@ -257,8 +282,6 @@ function SlideOver({ merchant, onClose, onSave }: SlideOverProps) {
   }
 
   if (!merchant || !draft) return null
-
-  const cfg = statusConfig[draft.status]
 
   const update = (patch: Partial<Merchant>) =>
     setDraft((prev) => (prev ? { ...prev, ...patch } : prev))
@@ -776,8 +799,8 @@ function AddMerchantModal({ onClose, onAdd }: { onClose: () => void; onAdd: (m: 
       }
       onAdd(newMerchant)
       onClose()
-    } catch (err: any) {
-      setError(err.message ?? "Failed to create account")
+    } catch (err) {
+      setError(getErrorMessage(err))
     } finally {
       setSaving(false)
     }
@@ -1008,7 +1031,9 @@ function mapUiStatus(uiStatus: Status): string {
   }
 }
 
-function mapApiToMerchant(a: any): Merchant {
+function mapApiToMerchant(a: MerchantApiRow): Merchant {
+  const shieldDomain = a.shieldDomain ?? ""
+
   return {
     id: a.id,
     accountName: a.name,
@@ -1016,9 +1041,9 @@ function mapApiToMerchant(a: any): Merchant {
     clientId: a.clientId,
     clientSecret: "(encrypted)",
     proxyUrl: a.proxyUrl ?? "",
-    shieldDomain: a.shieldDomain ?? "",
-    domainType: PLATFORM_DOMAINS.includes(a.shieldDomain) ? "platform" : "custom",
-    status: mapDbStatus(a.status, a.isLimited),
+    shieldDomain,
+    domainType: PLATFORM_DOMAINS.includes(shieldDomain) ? "platform" : "custom",
+    status: mapDbStatus(a.status, a.isLimited ?? undefined),
     priority: a.priority ?? 1,
     currentVolume: a.currentVolume ?? 0,
     softLimit: a.softLimit ?? 4000,
@@ -1034,7 +1059,6 @@ function mapApiToMerchant(a: any): Merchant {
 
 export default function AccountsPage() {
   const [merchants, setMerchants] = useState<Merchant[]>([])
-  const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [selected, setSelected] = useState<Merchant | null>(null)
   const [showAdd, setShowAdd] = useState(false)
@@ -1046,10 +1070,9 @@ export default function AccountsPage() {
     fetch("/api/merchant/accounts")
       .then(r => r.json())
       .then(data => {
-        setMerchants((data.accounts ?? []).map(mapApiToMerchant))
+        setMerchants(((data.accounts ?? []) as MerchantApiRow[]).map(mapApiToMerchant))
       })
       .catch(() => {})
-      .finally(() => setLoading(false))
   }, [])
 
   useEffect(() => { fetchAccounts() }, [fetchAccounts])

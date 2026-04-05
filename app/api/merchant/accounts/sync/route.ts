@@ -49,11 +49,12 @@ async function checkPayPalConnectivity(
 
     const errBody = await res.text().catch(() => "")
     return { connected: false, error: `HTTP ${res.status}: ${errBody.slice(0, 120)}` }
-  } catch (err: any) {
-    if (err.name === "AbortError") {
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
       return { connected: false, error: "Connection timed out (6s)" }
     }
-    return { connected: false, error: err.message?.slice(0, 120) ?? "Connection failed" }
+    const message = err instanceof Error ? err.message : "Connection failed"
+    return { connected: false, error: message.slice(0, 120) }
   }
 }
 

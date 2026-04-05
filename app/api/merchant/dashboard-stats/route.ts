@@ -14,6 +14,14 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-config"
 import { getSql } from "@/lib/neon"
 
+interface TotalRow {
+  total: string
+}
+
+interface CountRow {
+  count: string
+}
+
 export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session?.user) {
@@ -91,11 +99,16 @@ export async function GET() {
       txCountQuery,
     ])
 
-    const todayVolume = parseFloat((todayRows[0] as any)?.total ?? "0")
-    const yesterdayVolume = parseFloat((yesterdayRows[0] as any)?.total ?? "0")
-    const activeDomains = parseInt((domainRows[0] as any)?.active ?? "0", 10)
-    const totalDomains = parseInt((domainRows[0] as any)?.total ?? "0", 10)
-    const txCount = parseInt((txCountRows[0] as any)?.count ?? "0", 10)
+    const todayRow = todayRows[0] as TotalRow | undefined
+    const yesterdayRow = yesterdayRows[0] as TotalRow | undefined
+    const domainRow = domainRows[0] as { active: string; total: string } | undefined
+    const txCountRow = txCountRows[0] as CountRow | undefined
+
+    const todayVolume = parseFloat(todayRow?.total ?? "0")
+    const yesterdayVolume = parseFloat(yesterdayRow?.total ?? "0")
+    const activeDomains = parseInt(domainRow?.active ?? "0", 10)
+    const totalDomains = parseInt(domainRow?.total ?? "0", 10)
+    const txCount = parseInt(txCountRow?.count ?? "0", 10)
 
     // Calculate % change
     let percentChange = 0

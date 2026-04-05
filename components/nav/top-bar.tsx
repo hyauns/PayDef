@@ -1,6 +1,5 @@
 "use client"
 
-import { useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
@@ -26,7 +25,7 @@ import { NotificationBell } from "@/components/nav/notification-bell"
 type Role = "SUPER_ADMIN" | "MERCHANT"
 
 const MERCHANT_NAV = [
-  { label: "Overview",     href: "/" },
+  { label: "Overview",     href: "/dashboard" },
   { label: "Accounts",     href: "/accounts" },
   { label: "Stores",       href: "/stores" },
   { label: "Transactions", href: "/transactions" },
@@ -52,7 +51,7 @@ export function DashboardHeader() {
   const userName     = session?.user?.name ?? session?.user?.email?.split("@")[0] ?? "User"
   const initial      = userName.charAt(0).toUpperCase()
   const navItems     = role === "SUPER_ADMIN" ? ADMIN_NAV : MERCHANT_NAV
-  const settingsHref = role === "SUPER_ADMIN" ? "/admin/settings" : "/settings"
+  const settingsHref = "/settings"
 
   const handleLogout = async () => {
     await signOut({ redirect: false })
@@ -81,7 +80,7 @@ export function DashboardHeader() {
 
         {/* Logo */}
         <Link
-          href={role === "SUPER_ADMIN" ? "/super-admin" : "/"}
+          href={role === "SUPER_ADMIN" ? "/super-admin" : "/dashboard"}
           className="flex items-center gap-2.5 shrink-0"
         >
           <div className="w-7 h-7 bg-cyan-400/10 border border-cyan-400/30 rounded-md flex items-center justify-center">

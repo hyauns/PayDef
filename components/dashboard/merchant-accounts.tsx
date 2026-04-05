@@ -18,6 +18,19 @@ interface Merchant {
   isLimited: boolean
 }
 
+interface MerchantApiRow {
+  id: string
+  name: string
+  email?: string | null
+  shieldDomain?: string | null
+  currentVolume?: number | null
+  softLimit?: number | null
+  dailyLimit?: number | null
+  transactionCount?: number | null
+  status: string
+  isLimited?: boolean | null
+}
+
 const statusConfig: Record<Status, { label: string; dot: string; text: string; bg: string }> = {
   Active: { label: "Active", dot: "bg-emerald-400", text: "text-emerald-400", bg: "bg-emerald-400/10" },
   Limited: { label: "Limited", dot: "bg-amber-400", text: "text-amber-400", bg: "bg-amber-400/10" },
@@ -68,7 +81,7 @@ export function MerchantAccounts() {
       .then(r => r.json())
       .then(data => {
         setMerchants(
-          (data.accounts ?? []).map((a: any) => ({
+          ((data.accounts ?? []) as MerchantApiRow[]).map((a) => ({
             id: a.id,
             name: a.name,
             email: a.email ?? "",
@@ -77,7 +90,7 @@ export function MerchantAccounts() {
             softLimit: a.softLimit ?? 4000,
             dailyLimit: a.dailyLimit ?? 5000,
             txCount: a.transactionCount ?? 0,
-            status: mapDbStatus(a.status, a.isLimited),
+            status: mapDbStatus(a.status, a.isLimited ?? undefined),
             isLimited: a.isLimited ?? false,
           }))
         )

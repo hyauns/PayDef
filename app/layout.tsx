@@ -1,22 +1,8 @@
 import type { Metadata } from 'next'
-import { Geist, Geist_Mono, Be_Vietnam_Pro } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { SessionProvider } from '@/components/auth/session-provider'
 import { Toaster } from 'sonner'
 import './globals.css'
-
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
-
-// Be Vietnam Pro: geometric sans-serif designed for Vietnamese diacritics.
-// Loaded with the "vietnamese" subset so only required glyphs are fetched.
-// Weights 400 + 600 + 700 match the landing page's body/heading usage.
-const beVietnamPro = Be_Vietnam_Pro({
-  subsets: ["latin", "vietnamese"],
-  weight: ["400", "600", "700"],
-  variable: "--font-be-vietnam",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: 'Gateway Central Dashboard',
@@ -48,7 +34,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className={`font-mono antialiased bg-background text-foreground ${beVietnamPro.variable}`}>
+      <body className="font-mono antialiased bg-background text-foreground">
         <SessionProvider>
           {children}
         </SessionProvider>

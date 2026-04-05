@@ -20,6 +20,14 @@ interface Domain {
   lastChecked: string
 }
 
+interface DomainApiRow {
+  id: string
+  domain: string
+  isActive: boolean
+  tenantName?: string | null
+  healthOk?: boolean | null
+}
+
 // ─── Status config ────────────────────────────────────────────────────────────
 
 const statusConfig: Record<DomainStatus, {
@@ -77,11 +85,11 @@ export function ShieldDomains() {
       .then(r => r.json())
       .then(data => {
         setDomains(
-          (data.domains ?? []).map((d: any) => ({
+          ((data.domains ?? []) as DomainApiRow[]).map((d) => ({
             id: d.id,
             domain: d.domain,
             isActive: d.isActive,
-            tenantName: d.tenantName,
+            tenantName: d.tenantName ?? undefined,
             healthOk: d.healthOk ?? true,
             latency: null,     // Will be filled by Test Connectivity
             ssl: true,         // Default until tested

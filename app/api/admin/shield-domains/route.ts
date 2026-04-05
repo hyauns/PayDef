@@ -12,6 +12,31 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-config"
 import { getSql } from "@/lib/neon"
 
+interface ShieldDomainRow {
+  id: string
+  domain: string
+  is_active: boolean
+  tenant_id: string | null
+  tenant_name: string | null
+  health_ok: boolean
+  last_check: string | null
+  created_at: string
+  updated_at: string
+}
+
+interface InsertedShieldDomainRow {
+  id: string
+  domain: string
+  is_active: boolean
+  tenant_id: string | null
+  health_ok: boolean
+  created_at: string
+}
+
+interface PgErrorLike {
+  code?: string
+}
+
 // ─── Auth guard ───────────────────────────────────────────────────────────────
 
 async function requireSuperAdmin() {
@@ -33,26 +58,26 @@ export async function GET(req: NextRequest) {
   const tenantFilter = req.nextUrl.searchParams.get("tenant_id")
   const sql = getSql()
 
-  let domains
+  let domains: ShieldDomainRow[]
   if (tenantFilter) {
-    domains = await sql`
+    domains = (await sql`
       SELECT sd.*, t.name AS tenant_name
       FROM shield_domains sd
       LEFT JOIN tenants t ON t.id = sd.tenant_id
       WHERE sd.tenant_id = ${tenantFilter}
       ORDER BY sd.created_at DESC
-    `
+    `) as unknown as ShieldDomainRow[]
   } else {
-    domains = await sql`
+    domains = (await sql`
       SELECT sd.*, t.name AS tenant_name
       FROM shield_domains sd
       LEFT JOIN tenants t ON t.id = sd.tenant_id
       ORDER BY sd.is_active DESC, sd.created_at DESC
-    `
+    `) as unknown as ShieldDomainRow[]
   }
 
   return NextResponse.json({
-    domains: (domains as unknown as any[]).map((d) => ({
+    domains: domains.map((d) => ({
       id:         d.id,
       domain:     d.domain,
       isActive:   d.is_active,
@@ -94,11 +119,11 @@ export async function POST(req: NextRequest) {
   const sql = getSql()
 
   try {
-    const result = await sql`
+    const result = (await sql`
       INSERT INTO shield_domains (domain, tenant_id, is_active)
       VALUES (${domain}, ${body.tenantId ?? null}, ${body.isActive ?? true})
       RETURNING *
-    `
+    `) as unknown as InsertedShieldDomainRow[]
 
     const d = result[0]
     return NextResponse.json({
@@ -109,8 +134,9 @@ export async function POST(req: NextRequest) {
       healthOk: d.health_ok,
       createdAt: d.created_at,
     }, { status: 201 })
-  } catch (err: any) {
-    if (err?.code === "23505") {
+  } catch (err) {
+    const maybePgError = err as PgErrorLike
+    if (maybePgError.code === "23505") {
       return NextResponse.json({ error: "Domain already exists in the pool." }, { status: 409 })
     }
     throw err
@@ -135,8 +161,6 @@ export async function PATCH(req: NextRequest) {
   if (!body.id) {
     return NextResponse.json({ error: "id is required." }, { status: 400 })
   }
-
-  const sql = getSql()
 
   // Build SET dynamically
   const sets: string[] = []

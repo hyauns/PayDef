@@ -12,6 +12,13 @@ export const ROLES = {
 
 export type Role = (typeof ROLES)[keyof typeof ROLES]
 
+type AuthUser = {
+  id: string
+  email: string
+  role: Role
+  tenantId?: string
+}
+
 // ─── Role → home route mapping ────────────────────────────────────────────────
 export const ROLE_HOME: Record<Role, string> = {
   SUPER_ADMIN: "/super-admin",
@@ -71,7 +78,7 @@ export const authOptions: NextAuthOptions = {
           email:    user.email,
           role:     user.role as Role,
           tenantId: user.tenant_id ?? undefined,
-        }
+        } satisfies AuthUser
       },
     }),
   ],
@@ -80,9 +87,10 @@ export const authOptions: NextAuthOptions = {
     // Persist role + userId + jti inside the JWT token
     async jwt({ token, user }) {
       if (user) {
+        const authUser = user as AuthUser
         token.userId   = user.id
-        token.role     = (user as any).role as Role
-        token.tenantId = (user as any).tenantId as string | undefined
+        token.role     = authUser.role
+        token.tenantId = authUser.tenantId
         // Generate a unique token identifier for session tracking & revocation
         token.jti      = randomUUID()
 
@@ -98,10 +106,10 @@ export const authOptions: NextAuthOptions = {
               ${JSON.stringify({
                 userId: user.id,
                 email: user.email,
-                role: (user as any).role,
+                role: authUser.role,
                 jti: token.jti,
               })}::jsonb,
-              ${(user as any).tenantId ?? null}
+              ${authUser.tenantId ?? null}
             )
           `
         } catch {

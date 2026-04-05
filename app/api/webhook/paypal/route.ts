@@ -42,6 +42,11 @@ const ALLOWED_CERT_DOMAINS = [
   "www.sandbox.paypal.com",
 ]
 
+function isStrictProduction(): boolean {
+  return process.env.VERCEL_ENV === "production" ||
+    (!process.env.VERCEL_ENV && process.env.NODE_ENV === "production")
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface PayPalWebhookEvent {
@@ -85,6 +90,15 @@ interface MerchantWebhookRow {
 
 interface StoreRow {
   webhook_url: string | null
+}
+
+interface QueryResult<Row> {
+  rows: Row[]
+}
+
+interface DbClient {
+  query<Row = unknown>(text: string, params?: unknown[]): Promise<QueryResult<Row>>
+  release(): void
 }
 
 // ─── PayPal OAuth (for verify-webhook-signature API) ──────────────────────────
@@ -219,7 +233,7 @@ async function callPayPalVerify(
 /**
  * Full verification flow:
  *  1. Extract headers
- *  2. Resolve webhook ID (per-account → global fallback → dev skip)
+ *  2. Resolve webhook ID (per-account → global fallback)
  *  3. Get OAuth token
  *  4. Call PayPal verify API
  */
@@ -229,12 +243,19 @@ async function verifyWebhookSignature(
   webhookId?: string | null,
   merchantCredentials?: { clientId: string; clientSecret: string }
 ): Promise<{ verified: boolean; reason?: string }> {
-  // Dev mode: if no webhook ID available at all, skip with warning
   const effectiveWebhookId = webhookId ?? process.env.PAYPAL_WEBHOOK_ID
   if (!effectiveWebhookId) {
+    if (isStrictProduction()) {
+      console.error(
+        "[PayPal Webhook] No webhook ID configured in production. " +
+        "Rejecting webhook until paypal_webhook_id or PAYPAL_WEBHOOK_ID is set."
+      )
+      return { verified: false, reason: "missing_webhook_id" }
+    }
+
     console.warn(
       "[PayPal Webhook] No webhook ID configured (account or env). " +
-      "Skipping verification — SET PAYPAL_WEBHOOK_ID for production."
+      "Skipping verification outside production."
     )
     return { verified: true, reason: "dev_mode_skip" }
   }
@@ -303,7 +324,7 @@ type EventResult = {
 // ─── PAYMENT.AUTHORIZATION.CREATED ─────────────────────────────────────
 
 async function handleAuthorizationCreated(
-  client: any,
+  client: DbClient,
   transaction: TransactionRow,
   event: PayPalWebhookEvent
 ): Promise<EventResult> {
@@ -335,7 +356,7 @@ async function handleAuthorizationCreated(
 }
 
 async function handleCaptureCompleted(
-  client: any,
+  client: DbClient,
   transaction: TransactionRow,
   event: PayPalWebhookEvent
 ): Promise<EventResult> {
@@ -369,9 +390,8 @@ async function handleCaptureCompleted(
 }
 
 async function handleCaptureDenied(
-  client: any,
-  transaction: TransactionRow,
-  event: PayPalWebhookEvent
+  client: DbClient,
+  transaction: TransactionRow
 ): Promise<EventResult> {
   if (transaction.status === "FAILED") {
     await client.query("ROLLBACK")
@@ -401,9 +421,8 @@ async function handleCaptureDenied(
 }
 
 async function handleCaptureRefunded(
-  client: any,
-  transaction: TransactionRow,
-  event: PayPalWebhookEvent
+  client: DbClient,
+  transaction: TransactionRow
 ): Promise<EventResult> {
   if (transaction.status === "REFUNDED") {
     await client.query("ROLLBACK")
@@ -433,9 +452,8 @@ async function handleCaptureRefunded(
 }
 
 async function handleDisputeCreated(
-  client: any,
-  transaction: TransactionRow,
-  event: PayPalWebhookEvent
+  client: DbClient,
+  transaction: TransactionRow
 ): Promise<EventResult> {
   if (transaction.status === "DISPUTED") {
     await client.query("ROLLBACK")
@@ -459,7 +477,7 @@ async function handleDisputeCreated(
 
 const SUPPORTED_EVENTS: Record<
   string,
-  (client: any, tx: TransactionRow, event: PayPalWebhookEvent) => Promise<EventResult>
+  (client: DbClient, tx: TransactionRow, event: PayPalWebhookEvent) => Promise<EventResult>
 > = {
   "PAYMENT.AUTHORIZATION.CREATED": handleAuthorizationCreated,
   "PAYMENT.CAPTURE.COMPLETED":     handleCaptureCompleted,

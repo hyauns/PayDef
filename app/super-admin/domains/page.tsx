@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
-  RefreshCw,
   Search,
   X,
   Shield,
@@ -32,6 +31,11 @@ interface ShieldDomain {
 }
 
 interface TenantOption {
+  id: string
+  name: string
+}
+
+interface TenantApiRow {
   id: string
   name: string
 }
@@ -202,7 +206,7 @@ export default function ShieldDomainsPage() {
     fetch("/api/admin/tenants")
       .then(r => r.json())
       .then(data => {
-        setTenants((data.tenants ?? []).map((t: any) => ({ id: t.id, name: t.name })))
+        setTenants(((data.tenants ?? []) as TenantApiRow[]).map((t) => ({ id: t.id, name: t.name })))
       })
       .catch(() => {})
   }, [])

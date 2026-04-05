@@ -163,7 +163,7 @@ function createFetchOptions(proxyUrl?: string | null): { agent?: HttpsProxyAgent
   try {
     const agent = new HttpsProxyAgent(proxyUrl.trim())
     return { agent }
-  } catch (err) {
+  } catch {
     console.error("[paypal] Invalid proxy URL — falling back to direct connection")
     return {}
   }

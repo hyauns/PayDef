@@ -11,7 +11,6 @@ import {
   LogIn,
   ChevronDown,
   ChevronUp,
-  Building2,
   Mail,
   Globe,
   ShieldCheck,
@@ -57,6 +56,24 @@ interface Tenant {
   suspendReason?: string
 }
 
+interface TenantApiRow {
+  id: string
+  name: string
+  ownerEmail?: string | null
+  plan?: string | null
+  status?: string | null
+  totalVolume?: number | null
+  monthlyVolume?: number | null
+  gatewayFeePercent?: number | null
+  accountCount?: number | null
+  storeCount?: number | null
+  createdAt?: string | null
+}
+
+function getErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : "Request failed"
+}
+
 // ─── Seed Data (fallback if API fails) ──────────────────────────────────────
 
 const SEED_TENANTS: Tenant[] = []
@@ -92,6 +109,16 @@ const statusConfig: Record<TenantStatus, { icon: React.ReactNode; cls: string; l
     cls: "text-violet-400 bg-violet-400/10 border-violet-400/20",
     label: "Trial",
   },
+}
+
+function renderSortIcon(field: SortField, sortField: SortField, sortDir: SortDir) {
+  if (sortField !== field) {
+    return <ArrowUpDown className="w-3 h-3 ml-1 text-muted-foreground opacity-50" />
+  }
+
+  return sortDir === "asc"
+    ? <ChevronUp className="w-3 h-3 ml-1 text-cyan-400" />
+    : <ChevronDown className="w-3 h-3 ml-1 text-cyan-400" />
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -365,8 +392,8 @@ function CreateTenantModal({
         lastActive: "—",
       })
       onClose()
-    } catch (err: any) {
-      setError(err.message ?? "Failed to create tenant")
+    } catch (err) {
+      setError(getErrorMessage(err))
     } finally {
       setSaving(false)
     }
@@ -506,15 +533,17 @@ export default function TenantsPage() {
       .then(r => r.json())
       .then(data => {
         if (data.tenants && data.tenants.length > 0) {
-          const mapped: Tenant[] = data.tenants.map((t: any) => {
+          const mapped: Tenant[] = (data.tenants as TenantApiRow[]).map((t) => {
             const statusMap: Record<string, TenantStatus> = { ACTIVE: "Active", SUSPENDED: "Suspended", TRIAL: "Trial" }
             const planMap: Record<string, Plan> = { STARTER: "Basic", BASIC: "Basic", PRO: "Pro", ENTERPRISE: "Enterprise" }
+            const planKey = t.plan?.toUpperCase()
+            const statusKey = t.status?.toUpperCase()
             return {
               id:               t.id,
               business:         t.name,
               ownerEmail:       t.ownerEmail ?? "—",
-              plan:             planMap[t.plan?.toUpperCase()] ?? "Basic",
-              status:           statusMap[t.status?.toUpperCase()] ?? "Active",
+              plan:             (planKey ? planMap[planKey] : undefined) ?? "Basic",
+              status:           (statusKey ? statusMap[statusKey] : undefined) ?? "Active",
               country:          "—",
               totalVolume:      t.totalVolume ?? 0,
               monthlyVolume:    t.monthlyVolume ?? 0,
@@ -586,13 +615,6 @@ export default function TenantsPage() {
     }).catch(() => {})
     setTenants(prev => prev.map(t => t.id === id ? { ...t, status: "Active", suspendReason: undefined } : t))
     setOpenMenu(null)
-  }
-
-  const SortIcon = ({ field }: { field: SortField }) => {
-    if (sortField !== field) return <ArrowUpDown className="w-3 h-3 ml-1 text-muted-foreground opacity-50" />
-    return sortDir === "asc"
-      ? <ChevronUp className="w-3 h-3 ml-1 text-cyan-400" />
-      : <ChevronDown className="w-3 h-3 ml-1 text-cyan-400" />
   }
 
   // Summary stats
@@ -709,26 +731,26 @@ export default function TenantsPage() {
                     className="text-left px-4 py-2.5 text-muted-foreground font-medium cursor-pointer hover:text-foreground select-none"
                     onClick={() => toggleSort("name")}
                   >
-                    <span className="flex items-center">Business Name<SortIcon field="name" /></span>
+                    <span className="flex items-center">Business Name{renderSortIcon("name", sortField, sortDir)}</span>
                   </th>
                   <th className="text-left px-4 py-2.5 text-muted-foreground font-medium">Owner Email</th>
                   <th
                     className="text-left px-4 py-2.5 text-muted-foreground font-medium cursor-pointer hover:text-foreground select-none"
                     onClick={() => toggleSort("plan")}
                   >
-                    <span className="flex items-center">Plan<SortIcon field="plan" /></span>
+                    <span className="flex items-center">Plan{renderSortIcon("plan", sortField, sortDir)}</span>
                   </th>
                   <th
                     className="text-left px-4 py-2.5 text-muted-foreground font-medium cursor-pointer hover:text-foreground select-none"
                     onClick={() => toggleSort("status")}
                   >
-                    <span className="flex items-center">Status<SortIcon field="status" /></span>
+                    <span className="flex items-center">Status{renderSortIcon("status", sortField, sortDir)}</span>
                   </th>
                   <th
                     className="text-right px-4 py-2.5 text-muted-foreground font-medium cursor-pointer hover:text-foreground select-none"
                     onClick={() => toggleSort("volume")}
                   >
-                    <span className="flex items-center justify-end">Total Volume<SortIcon field="volume" /></span>
+                    <span className="flex items-center justify-end">Total Volume{renderSortIcon("volume", sortField, sortDir)}</span>
                   </th>
                   <th className="text-right px-4 py-2.5 text-muted-foreground font-medium">Commission</th>
                   <th className="text-right px-4 py-2.5 text-muted-foreground font-medium pr-6">Actions</th>

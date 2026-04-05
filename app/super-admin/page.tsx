@@ -130,6 +130,11 @@ function AuditIcon({ action }: { action: string }) {
 interface AuditEntry { id: string; action: string; admin: string; detail: string; createdAt: string }
 interface SessionEntry { id: string; jti: string | null; email: string; role: string; device: string; ip: string; since: string; isCurrent: boolean }
 interface Toast { message: string; type: "success" | "error" }
+interface DomainSummaryEntry { isActive: boolean }
+
+function getErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : "Action failed"
+}
 
 // ─── Toast notification ───────────────────────────────────────────────────────
 
@@ -164,10 +169,10 @@ export default function SuperAdminPage() {
 
   // ── Real data: Stats ────────────────────────────────────────────────────────
   const { data: statsData } = useSWR("/api/admin/stats", fetcher, { revalidateOnFocus: true })
-  const { data: domainData } = useSWR("/api/admin/shield-domains", fetcher, { revalidateOnFocus: true })
+  const { data: domainData } = useSWR<{ domains: DomainSummaryEntry[] }>("/api/admin/shield-domains", fetcher, { revalidateOnFocus: true })
   const stats = statsData ?? null
   const domains = domainData?.domains ?? []
-  const domainCount = { total: domains.length, active: domains.filter((d: any) => d.isActive).length }
+  const domainCount = { total: domains.length, active: domains.filter((d) => d.isActive).length }
 
   // ── Real data: Gateway Controls ─────────────────────────────────────────────
   const { data: ctrlData, mutate: mutateControls } = useSWR("/api/admin/gateway-controls", fetcher, { revalidateOnFocus: true })
@@ -300,8 +305,8 @@ export default function SuperAdminPage() {
           if (!res.ok) throw new Error(data.error ?? "Action failed")
           showToast(data.message ?? "Action completed successfully", "success")
           mutateAudit()
-        } catch (err: any) {
-          showToast(err.message ?? "Action failed", "error")
+        } catch (err) {
+          showToast(getErrorMessage(err), "error")
         } finally {
           setActionLoading(null)
         }

@@ -299,8 +299,6 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "id is required." }, { status: 400 })
   }
 
-  const sql = getSql()
-
   // Build dynamic SET clauses
   const updates: string[] = []
   const values: unknown[] = []

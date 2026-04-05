@@ -17,6 +17,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSql } from "@/lib/neon"
 
+function isStrictProduction(): boolean {
+  return process.env.VERCEL_ENV === "production" ||
+    (!process.env.VERCEL_ENV && process.env.NODE_ENV === "production")
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ResetRow {
@@ -31,8 +36,12 @@ interface ResetRow {
 function verifyCronSecret(req: NextRequest): boolean {
   const cronSecret = process.env.CRON_SECRET
   if (!cronSecret) {
-    // Dev mode — allow if no secret is configured
-    console.warn("[cron/reset-volume] CRON_SECRET not set — accepting request (dev mode)")
+    if (isStrictProduction()) {
+      console.error("[cron/reset-volume] CRON_SECRET is missing in production — rejecting request")
+      return false
+    }
+
+    console.warn("[cron/reset-volume] CRON_SECRET not set — accepting request outside production")
     return true
   }
 

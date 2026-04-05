@@ -36,7 +36,6 @@ import { maskItemName, buildShieldUrls } from "@/lib/masking"
 import { decrypt } from "@/lib/encryption"
 import {
   type MerchantAccountRow,
-  MerchantRotationError,
   filterEligibleAccounts,
   selectByStrategy,
   getEffectiveDailyLimit,

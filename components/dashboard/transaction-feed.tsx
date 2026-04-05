@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ArrowRightLeft, Zap, Loader2 } from "lucide-react"
+import { ArrowRightLeft, Zap } from "lucide-react"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -15,6 +15,15 @@ interface Transaction {
   shieldDomain: string
   status: TxStatus
   timestamp: Date
+}
+
+interface FeedTransactionApiRow {
+  id?: string | null
+  storeName?: string | null
+  originalAmount?: number | string | null
+  accountName?: string | null
+  status?: string | null
+  createdAt?: string | null
 }
 
 function timeAgo(d: Date): string {
@@ -67,18 +76,24 @@ function FeedList() {
       if (!res.ok) return
 
       const data = await res.json()
-      const txns: any[] = data.transactions ?? []
+      const txns = (data.transactions ?? []) as FeedTransactionApiRow[]
 
       setFeed(
-        txns.map(tx => ({
-          id: tx.id?.slice(0, 12) ?? `TX-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
-          store: tx.storeName ?? "Unknown",
-          amount: parseFloat(tx.originalAmount ?? 0),
-          paypalAccount: tx.accountName ?? "—",
-          shieldDomain: "—",
-          status: mapStatus(tx.status),
-          timestamp: new Date(tx.createdAt ?? Date.now()),
-        }))
+        txns.map(tx => {
+          const amount = typeof tx.originalAmount === "number"
+            ? tx.originalAmount
+            : parseFloat(tx.originalAmount ?? "0")
+
+          return {
+            id: tx.id?.slice(0, 12) ?? `TX-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+            store: tx.storeName ?? "Unknown",
+            amount,
+            paypalAccount: tx.accountName ?? "—",
+            shieldDomain: "—",
+            status: mapStatus(tx.status ?? ""),
+            timestamp: new Date(tx.createdAt ?? Date.now()),
+          }
+        })
       )
     } catch {
       // Silently fail — keep showing whatever we have

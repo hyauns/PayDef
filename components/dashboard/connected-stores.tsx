@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Key, Eye, EyeOff, Plus, ExternalLink, Loader2 } from "lucide-react"
+import { Key, EyeOff, Plus, ExternalLink, Loader2 } from "lucide-react"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -15,6 +15,17 @@ interface Store {
   totalVolume: number
   transactionCount: number
   isActive: boolean
+  createdAt: string
+}
+
+interface StoreApiRow {
+  id: string
+  name: string
+  tenantName?: string
+  webhookUrl?: string | null
+  totalVolume?: number | null
+  transactionCount?: number | null
+  isActive?: boolean | null
   createdAt: string
 }
 
@@ -70,7 +81,7 @@ function StoreInfoModal({ store, onClose }: { store: Store; onClose: () => void 
               <EyeOff className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
             </div>
             <p className="text-[10px] font-mono text-muted-foreground mt-2">
-              For security, API keys are only shown once on creation. Use "Regenerate" in Stores to get a new one.
+              For security, API keys are only shown once on creation. Use &quot;Regenerate&quot; in Stores to get a new one.
             </p>
           </div>
         </div>
@@ -91,7 +102,7 @@ export function ConnectedStores() {
       .then(r => r.json())
       .then(data => {
         setStores(
-          (data.stores ?? []).map((s: any) => ({
+          ((data.stores ?? []) as StoreApiRow[]).map((s) => ({
             id: s.id,
             name: s.name,
             tenantName: s.tenantName,

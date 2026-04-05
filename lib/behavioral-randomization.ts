@@ -161,8 +161,7 @@ function selectCategory(
 function splitItem(
   totalCents: number,
   currencyCode: string,
-  transactionId: string,
-  originalName: string
+  transactionId: string
 ): LineItem[] {
   // Determine split count: 2 or 3
   const splitCount = seededRandom(transactionId, 400) > 0.5 ? 3 : 2
@@ -258,7 +257,7 @@ export function randomizePayload(
     // ── Path A: Item Splitting ────────────────────────────────────────────
     // Splitting already handles category rotation and name selection.
     // No additional jitter on split items — the split itself IS the randomization.
-    finalItems = splitItem(totalCents, currencyCode, transactionId, items[0].name)
+    finalItems = splitItem(totalCents, currencyCode, transactionId)
   } else {
     // ── Path B: Jitter existing items ─────────────────────────────────────
     // Apply amount jitter to each item, then correct the last item to

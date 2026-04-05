@@ -315,8 +315,8 @@ export async function GET(req: NextRequest) {
       merchantData,
       storeData,
     })
-  } catch (err: any) {
-    console.error("[analytics] Error:", err.message ?? err)
+  } catch (err) {
+    console.error("[analytics] Error:", err instanceof Error ? err.message : err)
     // Return safe empty response instead of a 500
     return NextResponse.json(EMPTY_RESPONSE)
   }

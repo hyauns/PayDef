@@ -9,6 +9,7 @@
  */
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
+import { getToken } from "next-auth/jwt"
 import { authOptions } from "@/lib/auth-config"
 import { getSql } from "@/lib/neon"
 
@@ -27,11 +28,12 @@ interface LoginLogRow {
 
 // ─── GET: List active sessions ────────────────────────────────────────────────
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user || session.user.role !== "SUPER_ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
 
   const sql = getSql()
 
@@ -65,7 +67,7 @@ export async function GET() {
       ip:        meta.ip ?? "—",
       since:     row.created_at,
       expiresAt: expiresAt.toISOString(),
-      isCurrent: meta.jti === (session as any)?.token?.jti,
+      isCurrent: meta.jti === token?.jti,
     }
   })
 

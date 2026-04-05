@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import useSWR from "swr"
-import { TrendingUp, TrendingDown, Activity, DollarSign, AlertTriangle, BarChart2, Loader2 } from "lucide-react"
+import { TrendingUp, TrendingDown, Activity, DollarSign, AlertTriangle, BarChart2 } from "lucide-react"
 import { DashboardHeader } from "@/components/dashboard/header"
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -33,6 +33,20 @@ interface AnalyticsResponse {
   timeSeries: { label: string; revenue: number; transactions: number }[]
   merchantData: { name: string; volume: number; txCount: number }[]
   storeData: { name: string; value: number }[]
+}
+
+interface TooltipDatum {
+  value?: number
+  name?: string
+  payload?: {
+    fill?: string
+  }
+}
+
+interface ChartTooltipProps {
+  active?: boolean
+  label?: string
+  payload?: TooltipDatum[]
 }
 
 // ─── SWR Fetcher ──────────────────────────────────────────────────────────────
@@ -100,7 +114,7 @@ function SectionHeader({ icon, title, sub }: { icon: React.ReactNode; title: str
 
 // ─── Custom Tooltips ──────────────────────────────────────────────────────────
 
-function RevenueTooltip({ active, payload, label }: any) {
+function RevenueTooltip({ active, payload, label }: ChartTooltipProps) {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs font-mono shadow-xl">
@@ -111,7 +125,7 @@ function RevenueTooltip({ active, payload, label }: any) {
   )
 }
 
-function BarTooltip({ active, payload, label }: any) {
+function BarTooltip({ active, payload, label }: ChartTooltipProps) {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs font-mono shadow-xl">
@@ -121,12 +135,14 @@ function BarTooltip({ active, payload, label }: any) {
   )
 }
 
-function PieTooltip({ active, payload }: any) {
+function PieTooltip({ active, payload }: ChartTooltipProps) {
   if (!active || !payload?.length) return null
+  const firstItem = payload[0]
+
   return (
     <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs font-mono shadow-xl">
-      <p className="text-foreground font-semibold">{payload[0].name}</p>
-      <p style={{ color: payload[0].payload.fill }}>{fmtFull(payload[0].value)}</p>
+      <p className="text-foreground font-semibold">{firstItem?.name ?? "Unknown"}</p>
+      <p style={{ color: firstItem?.payload?.fill ?? "inherit" }}>{fmtFull(firstItem?.value ?? 0)}</p>
     </div>
   )
 }
@@ -413,7 +429,7 @@ export default function AnalyticsPage() {
                         />
                         <Tooltip content={<BarTooltip />} />
                         <Bar dataKey="volume" radius={[3, 3, 0, 0]}>
-                          {merchantData.map((entry, index) => {
+                          {merchantData.map((entry) => {
                             const maxVol = Math.max(...merchantData.map((d) => d.volume))
                             const isTop = entry.volume === maxVol && entry.volume > 0
                             return (
