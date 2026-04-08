@@ -28,6 +28,7 @@ const IV_LENGTH   = 12  // 96-bit IV (recommended for GCM)
 const TAG_LENGTH  = 16  // 128-bit auth tag
 const SEPARATOR   = ":"  // delimiter in the stored format
 const KEY_HEX_LEN = 64  // 32 bytes as hex
+const KEY_BYTES = 32
 
 // ─── Key Management ───────────────────────────────────────────────────────────
 
@@ -40,23 +41,33 @@ let _keyBuffer: Buffer | null = null
 function getKey(): Buffer {
   if (_keyBuffer) return _keyBuffer
 
-  const hex = process.env.ENCRYPTION_KEY
-  if (!hex) {
+  const raw = process.env.ENCRYPTION_KEY?.trim().replace(/^"(.*)"$/, "$1")
+  if (!raw) {
     throw new EncryptionError(
       "ENCRYPTION_KEY environment variable is not set. " +
       "Generate one with: openssl rand -hex 32"
     )
   }
 
-  if (hex.length !== KEY_HEX_LEN || !/^[0-9a-fA-F]+$/.test(hex)) {
-    throw new EncryptionError(
-      `ENCRYPTION_KEY must be exactly ${KEY_HEX_LEN} hex characters (${KEY_HEX_LEN / 2} bytes). ` +
-      `Got ${hex.length} characters.`
-    )
+  if (raw.length === KEY_HEX_LEN && /^[0-9a-fA-F]+$/.test(raw)) {
+    _keyBuffer = Buffer.from(raw, "hex")
+    return _keyBuffer
   }
 
-  _keyBuffer = Buffer.from(hex, "hex")
-  return _keyBuffer
+  try {
+    const base64Key = Buffer.from(raw, "base64")
+    if (base64Key.length === KEY_BYTES) {
+      _keyBuffer = base64Key
+      return _keyBuffer
+    }
+  } catch {
+    // fall through to the explicit error below
+  }
+
+  throw new EncryptionError(
+    `ENCRYPTION_KEY must be either ${KEY_HEX_LEN} hex characters (${KEY_BYTES} bytes) or a base64-encoded ${KEY_BYTES}-byte key. ` +
+    `Got ${raw.length} characters.`
+  )
 }
 
 // ─── Error Class ──────────────────────────────────────────────────────────────

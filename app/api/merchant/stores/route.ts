@@ -30,6 +30,8 @@ interface StoreRow {
   tenant_id:     string
   tenant_name?:  string  // only populated for SUPER_ADMIN via JOIN
   name:          string
+  platform:      string | null
+  status_label:  string | null
   // api_key_hash: intentionally NOT selected — never leaves the DB
   webhook_url:   string | null
   webhook_secret: string | null
@@ -41,6 +43,16 @@ interface StoreRow {
   checkout_flow: string | null
   created_at:    string
   updated_at:    string
+}
+
+type StoreStatusLabel = "Active" | "Trial" | "Suspended"
+
+function resolveStoreStatus(store: StoreRow, txCount: number): StoreStatusLabel {
+  if (!store.is_active) return "Suspended"
+  if (store.status_label === "Active" || store.status_label === "Trial") {
+    return store.status_label
+  }
+  return txCount === 0 ? "Trial" : "Active"
 }
 
 interface StoreTxRow {
@@ -66,6 +78,8 @@ function mapStoreResponse(
     tenantId:         store.tenant_id,
     tenantName:       store.tenant_name ?? null,
     name:             store.name,
+    platform:         store.platform ?? "Custom API",
+    status:           resolveStoreStatus(store, txStats.count),
     // api_key_hash is intentionally omitted — never exposed via API
     webhookUrl:       store.webhook_url,
     hasWebhookSecret: !!store.webhook_secret,
@@ -118,7 +132,7 @@ export async function GET() {
   const stores = role === "SUPER_ADMIN"
     ? (await sql`
         SELECT
-          s.id, s.tenant_id, s.name, s.webhook_url, s.shield_domain,
+          s.id, s.tenant_id, s.name, s.platform, s.status_label, s.webhook_url, s.shield_domain,
           s.success_return_url, s.cancel_return_url,
           s.webhook_secret, s.is_active, COALESCE(s.capture_mode, 'INSTANT') AS capture_mode,
           s.checkout_flow,
@@ -130,7 +144,7 @@ export async function GET() {
       `) as unknown as StoreRow[]
     : (await sql`
         SELECT
-          id, tenant_id, name, webhook_url, webhook_secret, shield_domain,
+          id, tenant_id, name, platform, status_label, webhook_url, webhook_secret, shield_domain,
           success_return_url, cancel_return_url,
           is_active, COALESCE(capture_mode, 'INSTANT') AS capture_mode,
           checkout_flow,
@@ -212,8 +226,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 })
   }
 
-  const { name, webhookUrl, shieldDomain, successReturnUrl, cancelReturnUrl } = body as {
+  const { name, platform, webhookUrl, shieldDomain, successReturnUrl, cancelReturnUrl } = body as {
     name?: string
+    platform?: string
     webhookUrl?: string
     shieldDomain?: string
     successReturnUrl?: string
@@ -251,6 +266,7 @@ export async function POST(req: NextRequest) {
 
   const safeWebhook = typeof webhookUrl === "string" ? webhookUrl.trim() || null : null
   const safeDomain  = typeof shieldDomain === "string" ? shieldDomain.trim() || null : null
+  const safePlatform = typeof platform === "string" && platform.trim() ? platform.trim() : "Custom API"
   const safeSuccessReturnUrl = typeof successReturnUrl === "string" ? successReturnUrl.trim() || null : null
   const safeCancelReturnUrl = typeof cancelReturnUrl === "string" ? cancelReturnUrl.trim() || null : null
   const rawCheckoutFlow = (body as { checkoutFlow?: string | null }).checkoutFlow
@@ -261,20 +277,21 @@ export async function POST(req: NextRequest) {
 
   const result = await sql`
     INSERT INTO stores (
-      id, tenant_id, name, api_key_hash, webhook_url, webhook_secret, shield_domain,
+      id, tenant_id, name, platform, status_label, api_key_hash, webhook_url, webhook_secret, shield_domain,
       checkout_flow, success_return_url, cancel_return_url
     )
     VALUES (
-      ${storeId}, ${tenantId}, ${storeName}, ${apiKeyHash}, ${safeWebhook},
+      ${storeId}, ${tenantId}, ${storeName}, ${safePlatform}, ${"Trial"}, ${apiKeyHash}, ${safeWebhook},
       ${encryptedWebhookSecret}, ${safeDomain}, ${safeCheckoutFlow},
       ${safeSuccessReturnUrl}, ${safeCancelReturnUrl}
     )
-    RETURNING id, name, webhook_url, webhook_secret, shield_domain, checkout_flow,
+    RETURNING id, name, platform, status_label, webhook_url, webhook_secret, shield_domain, checkout_flow,
               success_return_url, cancel_return_url, is_active, created_at
   `
 
   const store = result[0] as {
-    id: string; name: string; webhook_url: string | null; webhook_secret: string | null
+    id: string; name: string; platform: string | null; status_label: string | null
+    webhook_url: string | null; webhook_secret: string | null
     shield_domain: string | null; checkout_flow: string | null
     success_return_url: string | null; cancel_return_url: string | null
     is_active: boolean; created_at: string
@@ -284,6 +301,8 @@ export async function POST(req: NextRequest) {
     store: {
       id:           store.id,
       name:         store.name,
+      platform:     store.platform ?? safePlatform,
+      status:       (store.status_label ?? "Trial") as StoreStatusLabel,
       webhookUrl:   store.webhook_url,
       hasWebhookSecret: !!store.webhook_secret,
       shieldDomain: store.shield_domain,

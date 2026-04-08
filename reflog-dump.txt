@@ -1,0 +1,19 @@
+29c25ec HEAD@{0}: commit: fix(ui): restore dropdown menu in stores page
+f8a5c85 HEAD@{1}: commit: fix: resolve merge conflicts in popup bridge flows
+5dc18aa HEAD@{2}: checkout: moving from 5dc18aa2dd5d30ea83ae62f5bc67d376e0f949ae to main
+5dc18aa HEAD@{3}: commit: docs: add Next.js integration guide and fix UI overflow clipping bug
+0d18b69 HEAD@{4}: pull --rebase github main (start): checkout 0d18b6969075bc0934133a53860d8ddda261e038
+da922eb HEAD@{5}: commit: docs: add Next.js integration guide, update API docs with status lookup
+ab6fc28 HEAD@{6}: commit: feat: unify shield domain manager and checkout flow controls
+8543908 HEAD@{7}: checkout: moving from codex-fix-shield-domain-bridge-status to main
+0d18b69 HEAD@{8}: commit: chore: sync prisma schema and add client
+a08dee6 HEAD@{9}: reset: moving to HEAD~1
+d0a6a3e HEAD@{10}: commit: ok
+a08dee6 HEAD@{11}: commit: add popup bridge docs and merchant example
+0784e29 HEAD@{12}: checkout: moving from main to codex-fix-shield-domain-bridge-status
+8543908 HEAD@{13}: checkout: moving from codex-fix-shield-domain-bridge-status to main
+0784e29 HEAD@{14}: commit: add shield domain popup bridge flow
+8543908 HEAD@{15}: checkout: moving from main to codex-fix-shield-domain-bridge-status
+8543908 HEAD@{16}: commit: feat: manual capture toggle, security hardening, type fixes & UI improvements
+ea087b9 HEAD@{17}: commit: gan xong
+38842aa HEAD@{18}: clone: from https://github.com/hyauns/v0-payment-gateway-dashboard.git

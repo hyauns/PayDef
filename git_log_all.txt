@@ -1,0 +1,49 @@
+29c25ec fix(ui): restore dropdown menu in stores page
+f8a5c85 fix: resolve merge conflicts in popup bridge flows
+5dc18aa docs: add Next.js integration guide and fix UI overflow clipping bug
+da922eb docs: add Next.js integration guide, update API docs with status lookup
+ab6fc28 feat: unify shield domain manager and checkout flow controls
+0d18b69 chore: sync prisma schema and add client
+d0a6a3e ok
+a08dee6 add popup bridge docs and merchant example
+0784e29 add shield domain popup bridge flow
+8543908 feat: manual capture toggle, security hardening, type fixes & UI improvements
+ea087b9 gan xong
+38842aa Add README.md
+331ecff feat: enhance middleware and fix Turbopack cache issue\n\nAdd '/dashboard/*' protection and redirect logic for SUPER_ADMIN.\nForce Turbopack to rebuild stale cache with cache-busting comments.
+1b44def feat: enhance store creation API with unique IDs, duplicate checks, and cache fix\n\nUpdate store ID generation, API key prefix, add duplicate name check, and cache busting for import paths.
+da7edbd fix: resolve Turbopack stale import map issue\n\nCreate standalone 'top-bar.tsx' to fix module resolution.
+bd0787f fix: resolve circular reference and update SQL schema\n\nFix Turbopack shim issue and update imports; execute SQL migration.
+e714559 feat: build real-time notification system with Sonner\n\nAdd hooks, components, and Toaster for notifications; clean up old imports and UI.
+3536a7f fix: clear Turbopack cache for header component\n\nMove header to new path and update imports to bypass stale cache.
+89d3f9e refactor: replace swr with native fetch for merchant logs\n\nRemove external dependency and use native hooks for data fetching.
+5b6f049 feat: enhance header with interactive components and notifications\n\nRebuild header with shadcn dropdowns, NextAuth session, and SWR for notifications.
+71a84ba refactor: switch to standard middleware for route protection\n\nRemove 'proxy.ts', revert to classic 'middleware.ts', clean up 'next.config.mjs'.
+feb9c94 refactor: update middleware exports for Next.js 16\n\nMove middleware logic to proxy.ts and adjust export format.
+d6abfca fix: clear stale Turbopack cache and add PayPal webhook\n\nFix stale cache and create 'proxy.ts' for Next.js 16.
+a8f9e04 fix: resolve Turbopack cache issues and refactor API routes\n\nClear stale cache, recreate NextAuth route, and fix API exports.
+75ef63e fix: resolve Turbopack cache issues and complete Phase 3 checkout API
+5eb4ad2 fix: resolve build issues and Next.js 16 deprecation\n\nSplit login page, rename middleware, and remove unused prisma.
+fb488e9 fix: rename db.ts to neon.ts to clear Turbopack cache\n\nTurbopack was serving stale cached module, renamed to force recompile.
+c2872a4 fix: resolve Prisma schema and runtime issues\n\nRemove redundant Prisma fields and switch to raw Neon SQL client.
+a9b9d7b fix: resolve auth and Prisma setup issues for Edge runtime
+8a4068f fix: convert seed to '.js' and SQL format\n\nRewrite seed in '.js' and create SQL fallback for executor support.
+050c54f feat: implement NextAuth-based full auth system\n\nAdd NextAuth, bcryptjs, and configure NextAuth with Credentials provider; wire login UI to signIn().
+3315915 feat: migrate database schema with conditional enum creation and Prisma sync
+6788c2e feat: integrate Prisma with Neon adapter and run migration\n\nSet up Prisma schema, 'lib/db.ts', migration script, and update 'package.json'.
+11a6e2a fix: clean up stale build cache and resolve syntax errors\n\nRemove analytics remnants, trim trailing blank lines, and fix type errors.
+82d4b38 fix: clean up erroneous code in app/page.tsx\n\nRemove large blocks of incorrect login page code and replace with correct Home component content.
+b85b844 fix: resolve Turbopack cache issues and correct super-admin file
+5492bbb feat: use Python script for executor restore logic\n\nConvert restore logic to Python and rename to '.py'.
+5b37602 chore: fix filesystem sync issue and restore missing files
+4f816fd fix: bust Turbopack cache and fix stale file reads\n\nChange entry point filename to force recompile and fix stale file reads.
+24526a7 fix: resolve stale cache and build Transactions page\n\nFix stale bundler cache, update super-admin file, and build Transactions page.
+a0772c6 fix: resolve stale import and React key warning\n\nUpdate 'page.tsx' to remove 'live-feed' and fix key warning in 'super-admin/page.tsx'.
+c04260b feat: eliminate stale 'live-feed' module and build Tenants page\n\nInline 'LiveFeed' logic in 'page.tsx', delete old files, and create new 'transaction-feed.tsx'.
+2038f9f feat: add Super Admin page and header nav link\n\nAdd Super Admin page with metrics, tabs, and header nav link; fix bundler cache issue.
+f7b65d2 refactor: fix LiveFeedClient JSX and split into separate files
+539c074 feat: build login page with design system and fix SSR hydration issue\n\nSplit LiveFeed into client-only component to prevent SSR rendering.
+f55d3f3 feat: build full Stores page with modals and table\n\nAdd Stores page with stats bar, full table, Create modal, and Edit slide-over. Fix hydration rendering issue.
+d97854b feat: build full Accounts page with routing and dynamic components\n\nRefactor 'DashboardHeader' for client-side routing, build 'accounts/page.tsx' with table and slide-over panel, fix state initialization for hydration mismatch.
+5e05c11 feat: build Gateway Central Dashboard with dark theme\n\nAssemble components and apply dark theme; fix hydration mismatch.
+d4daa16 Initial commit from v0

@@ -16,6 +16,8 @@ interface StoreRow {
   id: string
   tenant_id: string
   name: string
+  platform: string | null
+  status_label: string | null
   webhook_url: string | null
   webhook_secret: string | null
   shield_domain: string | null
@@ -26,6 +28,12 @@ interface StoreRow {
   checkout_flow: string | null
   created_at: string
   updated_at: string
+}
+
+type StoreStatusLabel = "Active" | "Trial" | "Suspended"
+
+function normalizeStatusLabel(value: unknown): StoreStatusLabel | null {
+  return value === "Active" || value === "Trial" || value === "Suspended" ? value : null
 }
 
 export async function PATCH(req: NextRequest, context: RouteContext) {
@@ -44,6 +52,8 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
   let body: {
     name?: string
+    platform?: string | null
+    status?: StoreStatusLabel
     webhookUrl?: string | null
     isActive?: boolean
     checkoutFlow?: string | null
@@ -61,6 +71,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   const existingRows = isSuperAdmin
     ? (await sql`
         SELECT id, tenant_id, name, webhook_url, webhook_secret, shield_domain,
+               platform, status_label,
                success_return_url, cancel_return_url, is_active,
                COALESCE(capture_mode, 'INSTANT') AS capture_mode,
                checkout_flow, created_at, updated_at
@@ -70,6 +81,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       `)
     : (await sql`
         SELECT id, tenant_id, name, webhook_url, webhook_secret, shield_domain,
+               platform, status_label,
                success_return_url, cancel_return_url, is_active,
                COALESCE(capture_mode, 'INSTANT') AS capture_mode,
                checkout_flow, created_at, updated_at
@@ -86,6 +98,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   const nextName = typeof body.name === "string" && body.name.trim()
     ? body.name.trim()
     : store.name
+  const nextPlatform = typeof body.platform === "string" && body.platform.trim()
+    ? body.platform.trim()
+    : body.platform === null
+    ? "Custom API"
+    : (store.platform ?? "Custom API")
   const nextWebhookUrl = typeof body.webhookUrl === "string"
     ? body.webhookUrl.trim() || null
     : body.webhookUrl === null
@@ -101,7 +118,25 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     : body.cancelReturnUrl === null
     ? null
     : store.cancel_return_url
-  const nextIsActive = typeof body.isActive === "boolean" ? body.isActive : store.is_active
+  const requestedStatus = normalizeStatusLabel(body.status)
+  let nextIsActive = typeof body.isActive === "boolean" ? body.isActive : store.is_active
+  let nextStatusLabel: StoreStatusLabel =
+    requestedStatus ??
+    normalizeStatusLabel(store.status_label) ??
+    (store.is_active ? "Active" : "Suspended")
+
+  if (requestedStatus === "Suspended") {
+    nextIsActive = false
+  } else if (requestedStatus) {
+    nextIsActive = true
+  }
+
+  if (!nextIsActive) {
+    nextStatusLabel = "Suspended"
+  } else if (nextStatusLabel === "Suspended") {
+    nextStatusLabel = "Active"
+  }
+
   const nextCheckoutFlow = body.checkoutFlow === null
     ? null
     : body.checkoutFlow === undefined
@@ -112,6 +147,8 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     ? (await sql`
         UPDATE stores
         SET name = ${nextName},
+            platform = ${nextPlatform},
+            status_label = ${nextStatusLabel},
             webhook_url = ${nextWebhookUrl},
             success_return_url = ${nextSuccessReturnUrl},
             cancel_return_url = ${nextCancelReturnUrl},
@@ -119,7 +156,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
             checkout_flow = ${nextCheckoutFlow},
             updated_at = NOW()
         WHERE id = ${id}
-        RETURNING id, tenant_id, name, webhook_url, webhook_secret, shield_domain,
+        RETURNING id, tenant_id, name, platform, status_label, webhook_url, webhook_secret, shield_domain,
                   success_return_url, cancel_return_url, is_active,
                   COALESCE(capture_mode, 'INSTANT') AS capture_mode,
                   checkout_flow, created_at, updated_at
@@ -127,6 +164,8 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     : (await sql`
         UPDATE stores
         SET name = ${nextName},
+            platform = ${nextPlatform},
+            status_label = ${nextStatusLabel},
             webhook_url = ${nextWebhookUrl},
             success_return_url = ${nextSuccessReturnUrl},
             cancel_return_url = ${nextCancelReturnUrl},
@@ -134,7 +173,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
             checkout_flow = ${nextCheckoutFlow},
             updated_at = NOW()
         WHERE id = ${id} AND tenant_id = ${tenantId}
-        RETURNING id, tenant_id, name, webhook_url, webhook_secret, shield_domain,
+        RETURNING id, tenant_id, name, platform, status_label, webhook_url, webhook_secret, shield_domain,
                   success_return_url, cancel_return_url, is_active,
                   COALESCE(capture_mode, 'INSTANT') AS capture_mode,
                   checkout_flow, created_at, updated_at
@@ -148,6 +187,8 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       id: updated.id,
       tenantId: updated.tenant_id,
       name: updated.name,
+      platform: updated.platform ?? "Custom API",
+      status: nextIsActive ? nextStatusLabel : "Suspended",
       webhookUrl: updated.webhook_url,
       hasWebhookSecret: !!updated.webhook_secret,
       shieldDomain: updated.shield_domain,

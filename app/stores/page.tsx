@@ -80,6 +80,8 @@ interface Store {
 interface StoreApiRow {
   id: string
   name: string
+  platform?: string | null
+  status?: StoreStatus | null
   webhookUrl?: string | null
   hasWebhookSecret?: boolean | null
   totalVolume?: number | null
@@ -98,11 +100,29 @@ function getErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : "Request failed"
 }
 
+async function readJsonSafely<T>(response: Response): Promise<T | null> {
+  const text = await response.text()
+
+  if (!text.trim()) {
+    return null
+  }
+
+  try {
+    return JSON.parse(text) as T
+  } catch {
+    throw new Error("Server returned an invalid JSON response.")
+  }
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function maskKey(key: string): string {
   if (key.length < 16) return "sk_live_••••••••••••••••"
   return key.slice(0, 12) + "•".repeat(18) + key.slice(-4)
+}
+
+function canRevealApiKey(key: string): boolean {
+  return /^(sk|gw)_live_[A-Za-z0-9_-]{16,}$/.test(key)
 }
 
 function getGatewayBaseUrl(): string {
@@ -191,15 +211,17 @@ function ApiKeyCell({
   apiKey: string
   onRegenerate: () => void
 }) {
-  const [revealed, setRevealed] = useState(false)
+  const [revealed, setRevealed] = useState(() => canRevealApiKey(apiKey))
   const [copied, setCopied] = useState(false)
   const [regenConfirm, setRegenConfirm] = useState(false)
+  const hasLiveKey = canRevealApiKey(apiKey)
 
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(apiKey)
+    if (!hasLiveKey) return
+    void navigator.clipboard.writeText(apiKey)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
-  }, [apiKey])
+  }, [apiKey, hasLiveKey])
 
   const handleRegen = useCallback(() => {
     if (regenConfirm) {
@@ -215,20 +237,22 @@ function ApiKeyCell({
   return (
     <div className="flex items-center gap-1.5 min-w-[260px]">
       <code className="font-mono text-[11px] text-cyan-400 flex-1 truncate max-w-[180px]">
-        {revealed ? apiKey : maskKey(apiKey)}
+        {hasLiveKey ? (revealed ? apiKey : maskKey(apiKey)) : "Regenerate to reveal a new key"}
       </code>
       <div className="flex items-center gap-0.5 shrink-0">
         <button
-          onClick={() => setRevealed((v) => !v)}
-          title={revealed ? "Hide key" : "Reveal key"}
-          className="p-1 text-muted-foreground hover:text-foreground transition-colors rounded"
+          onClick={() => hasLiveKey && setRevealed((v) => !v)}
+          title={hasLiveKey ? (revealed ? "Hide key" : "Reveal key") : "Stored keys cannot be revealed. Regenerate to view a new key once."}
+          disabled={!hasLiveKey}
+          className="p-1 text-muted-foreground hover:text-foreground transition-colors rounded disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {revealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
         </button>
         <button
           onClick={handleCopy}
-          title="Copy key"
-          className="p-1 text-muted-foreground hover:text-foreground transition-colors rounded"
+          title={hasLiveKey ? "Copy key" : "Stored keys cannot be copied. Regenerate to get a new key once."}
+          disabled={!hasLiveKey}
+          className="p-1 text-muted-foreground hover:text-foreground transition-colors rounded disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {copied ? (
             <Check className="w-3.5 h-3.5 text-emerald-400" />
@@ -344,12 +368,14 @@ function IntegrationSummary({
   copied,
   onCopy,
   onRegenerateWebhookSecret,
+  revealedWebhookSecret,
   webhookBusy = false,
 }: {
   store: Store
   copied: CopyField | null
   onCopy: (value: string, field: CopyField) => void
   onRegenerateWebhookSecret: () => Promise<void> | void
+  revealedWebhookSecret?: string | null
   webhookBusy?: boolean
 }) {
   const gatewayBaseUrl = getGatewayBaseUrl()
@@ -436,6 +462,16 @@ function IntegrationSummary({
         </button>
       </div>
 
+      {revealedWebhookSecret && (
+        <IntegrationField
+          label="Latest Webhook Secret"
+          value={revealedWebhookSecret}
+          copyKey="secret"
+          copied={copied}
+          onCopy={onCopy}
+        />
+      )}
+
       <div className="space-y-2">
         <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Webhook Events</p>
         <div className="flex flex-wrap gap-2">
@@ -489,6 +525,7 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
+          platform,
           webhookUrl: webhookUrl.trim() || undefined,
         }),
       })
@@ -499,13 +536,13 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
       const newStore: Store = {
         id: data.store.id,
         name: data.store.name,
-        platform,
+        platform: data.store.platform ?? platform,
         apiKey: data.apiKey,
         webhookUrl: data.store.webhookUrl ?? "",
         hasWebhookSecret: data.store.hasWebhookSecret ?? true,
         totalProcessed: 0,
         txCount: 0,
-        status: "Trial",
+        status: data.store.status ?? "Trial",
         enabled: data.store.isActive ?? true,
         createdAt: new Date(data.store.createdAt).toISOString().slice(0, 10),
         lastPing: "Never",
@@ -716,10 +753,12 @@ function EditSlideOver({ store, onClose, onSave, onDelete, onRegenerateWebhookSe
   const [webhookBusy, setWebhookBusy] = useState(false)
   const [copied, setCopied] = useState<CopyField | null>(null)
   const [error, setError] = useState("")
+  const [revealedWebhookSecret, setRevealedWebhookSecret] = useState<string | null>(null)
 
   // Sync when a different store is opened
   if (draft?.id !== store?.id && store !== null) {
     setDraft(store)
+    setRevealedWebhookSecret(null)
   }
 
   if (!store || !draft) return null
@@ -756,8 +795,7 @@ function EditSlideOver({ store, onClose, onSave, onDelete, onRegenerateWebhookSe
     try {
       const secret = await onRegenerateWebhookSecret(draft.id)
       update({ hasWebhookSecret: true })
-      handleCopy(secret, "secret")
-      alert(`New webhook secret for ${draft.name}:\n\n${secret}\n\nSave it now — it cannot be retrieved again.`)
+      setRevealedWebhookSecret(secret)
     } catch (err) {
       setError(getErrorMessage(err))
     } finally {
@@ -970,6 +1008,7 @@ function EditSlideOver({ store, onClose, onSave, onDelete, onRegenerateWebhookSe
             copied={copied}
             onCopy={handleCopy}
             onRegenerateWebhookSecret={handleRegenerateWebhookSecret}
+            revealedWebhookSecret={revealedWebhookSecret}
             webhookBusy={webhookBusy}
           />
 
@@ -1109,13 +1148,13 @@ export default function StoresPage() {
             return {
               id: s.id,
               name: s.name,
-              platform: "—",
+              platform: s.platform ?? "Custom API",
               apiKey: "sk_live_••••••••••••••••",
               webhookUrl: s.webhookUrl ?? "",
               hasWebhookSecret: s.hasWebhookSecret ?? false,
               totalProcessed: s.totalVolume ?? 0,
               txCount: transactionCount,
-              status: !isActive ? "Suspended" : (transactionCount === 0 ? "Trial" : "Active") as StoreStatus,
+              status: s.status ?? (!isActive ? "Suspended" : (transactionCount === 0 ? "Trial" : "Active") as StoreStatus),
               enabled: isActive,
               createdAt: new Date(s.createdAt).toISOString().slice(0, 10),
               lastPing: s.updatedAt ? new Date(s.updatedAt).toLocaleString() : "—",
@@ -1144,6 +1183,8 @@ export default function StoresPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: updated.name,
+        platform: updated.platform,
+        status: updated.status,
         webhookUrl: updated.webhookUrl,
         isActive: updated.enabled,
         checkoutFlow: updated.checkoutFlow,
@@ -1164,6 +1205,7 @@ export default function StoresPage() {
               ...s,
               ...updated,
               name: data.store.name,
+              platform: data.store.platform ?? updated.platform,
               webhookUrl: data.store.webhookUrl ?? "",
               hasWebhookSecret: data.store.hasWebhookSecret ?? updated.hasWebhookSecret,
               enabled: data.store.isActive ?? updated.enabled,
@@ -1172,9 +1214,9 @@ export default function StoresPage() {
               successReturnUrl: data.store.successReturnUrl ?? updated.successReturnUrl,
               cancelReturnUrl: data.store.cancelReturnUrl ?? updated.cancelReturnUrl,
               lastPing: data.store.updatedAt ? new Date(data.store.updatedAt).toLocaleString() : updated.lastPing,
-              status: !(data.store.isActive ?? updated.enabled)
+              status: data.store.status ?? (!(data.store.isActive ?? updated.enabled)
                 ? "Suspended"
-                : ((updated.txCount === 0 ? "Trial" : "Active") as StoreStatus),
+                : ((updated.txCount === 0 ? "Trial" : "Active") as StoreStatus)),
             }
           : s
       )
@@ -1215,9 +1257,9 @@ export default function StoresPage() {
           ? {
               ...s,
               enabled: data.store.isActive ?? !current.enabled,
-              status: data.store.isActive
+              status: data.store.status ?? (data.store.isActive
                 ? ((s.txCount === 0 ? "Trial" : "Active") as StoreStatus)
-                : ("Suspended" as StoreStatus),
+                : ("Suspended" as StoreStatus)),
               lastPing: data.store.updatedAt ? new Date(data.store.updatedAt).toLocaleString() : s.lastPing,
             }
           : s
@@ -1232,15 +1274,15 @@ export default function StoresPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ storeId: id }),
       })
-      const data = await res.json()
-      if (!res.ok) { alert(data.error ?? "Failed to regenerate key"); return }
+      const data = await readJsonSafely<{ error?: string; apiKey?: string; storeName?: string }>(res)
+      if (!res.ok || !data?.apiKey || !data.storeName) { alert(data?.error ?? "Failed to regenerate key"); return }
+      const nextApiKey = data.apiKey
       // Once-time display: show the new key in the table
       setStores((prev) =>
-        prev.map((s) => (s.id === id ? { ...s, apiKey: data.apiKey } : s))
+        prev.map((s) => (s.id === id ? { ...s, apiKey: nextApiKey } : s))
       )
-      alert(`New API key for ${data.storeName}:\n\n${data.apiKey}\n\nSave it now — it cannot be retrieved again.`)
-    } catch {
-      alert("Failed to regenerate key")
+    } catch (error) {
+      alert(getErrorMessage(error))
     }
   }, [])
 
@@ -1251,16 +1293,16 @@ export default function StoresPage() {
       body: JSON.stringify({ storeId: id }),
     })
 
-    const data = await res.json()
-    if (!res.ok) {
-      throw new Error(data.error ?? "Failed to regenerate webhook secret")
+    const data = await readJsonSafely<{ error?: string; webhookSecret?: string }>(res)
+    if (!res.ok || !data?.webhookSecret) {
+      throw new Error(data?.error ?? "Failed to regenerate webhook secret")
     }
 
     setStores((prev) =>
       prev.map((store) => (store.id === id ? { ...store, hasWebhookSecret: true } : store))
     )
 
-    return String(data.webhookSecret)
+    return data.webhookSecret
   }, [])
 
   return (
@@ -1417,6 +1459,7 @@ export default function StoresPage() {
                     {/* API Key */}
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <ApiKeyCell
+                        key={`${store.id}:${store.apiKey}`}
                         apiKey={store.apiKey}
                         onRegenerate={() => handleRegen(store.id)}
                       />
