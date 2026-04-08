@@ -68,6 +68,8 @@ interface StoreRow {
   is_active:     boolean
   capture_mode:  string   // 'INSTANT' | 'MANUAL'
   checkout_flow: string | null
+  success_return_url: string | null
+  cancel_return_url: string | null
 }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
@@ -148,7 +150,9 @@ export async function POST(req: NextRequest) {
   const storeRows = (await sql`
     SELECT id, tenant_id, api_key_hash, is_active,
            COALESCE(capture_mode, 'INSTANT') AS capture_mode,
-           checkout_flow
+           checkout_flow,
+           success_return_url,
+           cancel_return_url
     FROM   stores
     WHERE  id = ${storeId}
     LIMIT  1
@@ -365,6 +369,8 @@ export async function POST(req: NextRequest) {
          gateway_fee, status,
          masked_item_name, paypal_order_id,
          customer_email, buyer_ip, buyer_country, ip_address,
+         checkout_expires_at, authorization_expires_at,
+         merchant_success_url, merchant_cancel_url,
          created_at, updated_at
        ) VALUES (
          $1,  $2,  $3,  $4,
@@ -372,6 +378,9 @@ export async function POST(req: NextRequest) {
          0,   $13,
          $8,  $9,
          $10, $11, $12, $11,
+         NOW() + INTERVAL '30 minutes',
+         CASE WHEN $13 = 'AUTHORIZED' THEN NOW() + INTERVAL '72 hours' ELSE NULL END,
+         $14, $15,
          NOW(), NOW()
        )`,
       [
@@ -388,6 +397,8 @@ export async function POST(req: NextRequest) {
         buyerIp       ?? null,     // $11 — buyer_ip + ip_address
         buyerCountry  ?? null,     // $12 — buyer_country
         intent === "AUTHORIZE" ? "AUTHORIZED" : "PENDING",  // $13 — status
+        store.success_return_url ?? null, // $14
+        store.cancel_return_url ?? null, // $15
       ]
     )
 
@@ -438,6 +449,7 @@ export async function POST(req: NextRequest) {
       popupOrigin,
       intent,
       status: intent === "AUTHORIZE" ? "AUTHORIZED" : "PENDING",
+      merchantReturnConfigured: !!(store.success_return_url || store.cancel_return_url),
     },
     { status: 201 }
   )

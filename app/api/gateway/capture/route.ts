@@ -23,6 +23,11 @@ import { getSql, getPool } from "@/lib/neon"
 import { captureAuthorization } from "@/lib/paypal"
 import { decrypt } from "@/lib/encryption"
 import { sendTransactionAlert } from "@/lib/telegram"
+import { type StoreWebhookPayload } from "@/lib/store-webhooks"
+import {
+  buildWebhookBusinessKey,
+  enqueueStoreWebhookEvent,
+} from "@/lib/webhook-delivery"
 import bcrypt from "bcryptjs"
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -37,6 +42,7 @@ interface StoreRow {
   api_key_hash:  string
   is_active:     boolean
   webhook_url:   string | null
+  webhook_secret: string | null
 }
 
 interface TransactionRow {
@@ -105,7 +111,7 @@ export async function POST(req: NextRequest) {
   // ── Step 3. Verify store + API key ──────────────────────────────────────────
   const sql = getSql()
   const storeRows = (await sql`
-    SELECT id, tenant_id, api_key_hash, is_active, webhook_url
+    SELECT id, tenant_id, api_key_hash, is_active, webhook_url, webhook_secret
     FROM   stores
     WHERE  id = ${storeId}
     LIMIT  1
@@ -228,6 +234,8 @@ export async function POST(req: NextRequest) {
        SET status = 'COMPLETED',
            paypal_capture_id = $1,
            gateway_fee = $2,
+           completed_at = NOW(),
+           checkout_expires_at = NULL,
            updated_at = NOW()
        WHERE id = $3`,
       [captureResult.id, gatewayFee.toFixed(2), transaction.id]
@@ -247,26 +255,30 @@ export async function POST(req: NextRequest) {
 
     // ── Step 10. Notify store webhook (fire-and-forget) ───────────────────────
     if (store.webhook_url) {
-      fetch(store.webhook_url, {
-        method: "POST",
-        headers: {
-          "Content-Type":     "application/json",
-          "X-Webhook-Source":  "payment-gateway",
-          "X-Webhook-Event":   "payment.captured",
-        },
-        body: JSON.stringify({
-          event:             "payment.captured",
-          transaction_id:    transaction.id,
-          paypal_order_id:   transaction.paypal_order_id,
-          paypal_capture_id: captureResult.id,
-          authorization_id,
-          amount:            originalAmount.toFixed(2),
-          gateway_fee:       gatewayFee.toFixed(2),
-          net_amount:        (originalAmount - gatewayFee).toFixed(2),
-          status:            "COMPLETED",
-          timestamp:         new Date().toISOString(),
-        }),
-        signal: AbortSignal.timeout(10000),
+      const canonicalPayload: Omit<StoreWebhookPayload, "event_id"> = {
+        event: "payment.capture.completed",
+        transaction_id: transaction.id,
+        paypal_order_id: transaction.paypal_order_id,
+        paypal_capture_id: captureResult.id,
+        authorization_id,
+        amount: originalAmount.toFixed(2),
+        gateway_fee: gatewayFee.toFixed(2),
+        net_amount: (originalAmount - gatewayFee).toFixed(2),
+        status: "COMPLETED",
+        timestamp: new Date().toISOString(),
+      }
+
+      enqueueStoreWebhookEvent({
+        transactionId: transaction.id,
+        tenantId,
+        storeId,
+        accountId: transaction.merchant_id,
+        targetUrl: store.webhook_url,
+        businessKey: buildWebhookBusinessKey("payment.capture.completed", transaction.id, captureResult.id),
+        event: "payment.capture.completed",
+        payload: canonicalPayload,
+        source: "manual_capture_api",
+        triggerOrigin: "capture_api",
       }).catch((err) => {
         console.error("[capture] Failed to notify store webhook:", err)
       })

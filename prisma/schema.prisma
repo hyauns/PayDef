@@ -1,175 +1,346 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// Prisma Schema — Multi-tenant Payment Gateway
-// ─────────────────────────────────────────────────────────────────────────────
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider  = "postgresql"
-  url       = env("POSTGRES_PRISMA_URL")       // pooled (Neon)
-  directUrl = env("DATABASE_URL_UNPOOLED")      // direct (migrations)
+  url       = env("POSTGRES_PRISMA_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Enums
-// ─────────────────────────────────────────────────────────────────────────────
+model User {
+  id                                                String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email                                             String               @unique @db.Citext
+  password_hash                                     String
+  role                                              user_role            @default(MERCHANT)
+  tenant_id                                         String?              @db.Uuid
+  created_at                                        DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at                                        DateTime             @default(now()) @db.Timestamptz(6)
+  email_change_codes                                email_change_codes[]
+  fraud_blocklist                                   fraud_blocklist[]
+  token_blacklist_token_blacklist_revoked_byTousers token_blacklist[]    @relation("token_blacklist_revoked_byTousers")
+  token_blacklist_token_blacklist_user_idTousers    token_blacklist[]    @relation("token_blacklist_user_idTousers")
+  tenants                                           Tenant?              @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-enum Role {
-  SUPER_ADMIN
-  MERCHANT
+  @@index([tenant_id])
+  @@map("users")
 }
 
-enum AccountStatus {
+model Tenant {
+  id                  String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                String
+  plan                String               @default("STARTER")
+  status              String               @default("ACTIVE")
+  owner_email         String?
+  gateway_fee_percent Decimal              @default(2.00) @db.Decimal(5, 2)
+  created_at          DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime             @default(now()) @db.Timestamptz(6)
+  telegram_bot_token  String?
+  telegram_chat_id    String?
+  rotation_strategy   String               @default("SEQUENTIAL")
+  rotation_interval   Int                  @default(120)
+  last_rotation_index Int                  @default(0)
+  last_rotation_at    DateTime?            @default(now()) @db.Timestamptz(6)
+  billing_records     billing_records[]
+  merchant_accounts   MerchantAccount[]
+  shield_domains      shield_domains[]
+  stores              Store[]
+  system_logs         system_logs[]
+  transactions        Transaction[]
+  users               User[]
+  webhook_deliveries  webhook_deliveries[]
+  webhook_events      webhook_events[]
+
+  @@map("tenants")
+}
+
+model Store {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id          String               @db.Uuid
+  name               String
+  api_key_hash       String
+  webhook_url        String?
+  shield_domain      String?
+  is_active          Boolean              @default(true)
+  created_at         DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime             @default(now()) @db.Timestamptz(6)
+  capture_mode       String               @default("INSTANT")
+  checkout_flow      String?              @default("REDIRECT")
+  webhook_secret     String?
+  success_return_url String?
+  cancel_return_url  String?
+  merchant_accounts  MerchantAccount[]
+  tenants            Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  system_logs        system_logs[]
+  transactions       Transaction[]
+  webhook_deliveries webhook_deliveries[]
+  webhook_events     webhook_events[]
+
+  @@index([tenant_id])
+  @@map("stores")
+}
+
+model MerchantAccount {
+  id                   String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id            String           @db.Uuid
+  store_id             String?          @db.Uuid
+  name                 String           @default("Unnamed Account")
+  email                String?
+  client_id            String
+  client_secret        String
+  shield_domain        String?
+  proxy_url            String?
+  daily_limit          Decimal          @default(5000.00) @db.Decimal(12, 2)
+  current_volume       Decimal          @default(0.00) @db.Decimal(12, 2)
+  priority             Int              @default(1)
+  status               account_status   @default(ACTIVE)
+  warmup_started_at    DateTime?        @db.Timestamptz(6)
+  daily_limit_override Decimal?         @db.Decimal(12, 2)
+  volume_reset_at      DateTime?        @db.Timestamptz(6)
+  created_at           DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime         @default(now()) @db.Timestamptz(6)
+  paypal_webhook_id    String?
+  item_masking         Boolean          @default(false)
+  fake_product_name    String           @default("Digital Service Upgrade")
+  soft_limit           Decimal?         @default(4000.00) @db.Decimal(12, 2)
+  stores               Store?           @relation(fields: [store_id], references: [id], onUpdate: NoAction)
+  tenants              Tenant           @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  system_logs          system_logs[]
+  transactions         Transaction[]
+  webhook_events       webhook_events[]
+
+  @@index([tenant_id])
+  @@index([tenant_id, status], map: "merchant_accounts_tenant_status_idx")
+  @@index([tenant_id, store_id], map: "merchant_accounts_tenant_store_idx")
+  @@map("merchant_accounts")
+}
+
+model Transaction {
+  id                       String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                String               @db.Uuid
+  store_id                 String               @db.Uuid
+  merchant_id              String               @db.Uuid
+  original_amount          Decimal              @db.Decimal(12, 2)
+  original_currency        String               @default("USD")
+  original_item_name       String?
+  masked_item_name         String               @default("Digital Service")
+  gateway_fee              Decimal              @default(0.00) @db.Decimal(12, 2)
+  status                   transaction_status   @default(PENDING)
+  paypal_order_id          String?
+  paypal_capture_id        String?
+  authorization_id         String?
+  intent                   String               @default("CAPTURE")
+  customer_email           String?
+  buyer_ip                 String?
+  buyer_country            String?              @db.Char(2)
+  ip_address               String?
+  created_at               DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime             @default(now()) @db.Timestamptz(6)
+  authorized_at            DateTime?            @db.Timestamptz(6)
+  completed_at             DateTime?            @db.Timestamptz(6)
+  failed_at                DateTime?            @db.Timestamptz(6)
+  refunded_at              DateTime?            @db.Timestamptz(6)
+  disputed_at              DateTime?            @db.Timestamptz(6)
+  canceled_at              DateTime?            @db.Timestamptz(6)
+  checkout_expires_at      DateTime?            @db.Timestamptz(6)
+  authorization_expires_at DateTime?            @db.Timestamptz(6)
+  status_reason            String?
+  merchant_success_url     String?
+  merchant_cancel_url      String?
+  billing_records          billing_records[]
+  merchant_accounts        MerchantAccount      @relation(fields: [merchant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  stores                   Store                @relation(fields: [store_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tenants                  Tenant               @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  webhook_deliveries       webhook_deliveries[]
+  webhook_events           webhook_events[]
+
+  @@index([status, authorization_expires_at(sort: Desc)], map: "transactions_auth_exp_idx")
+  @@index([status, checkout_expires_at(sort: Desc)], map: "transactions_checkout_exp_idx")
+  @@index([paypal_order_id], map: "transactions_paypal_order_idx")
+  @@index([tenant_id, created_at(sort: Desc)], map: "transactions_tenant_created_idx")
+  @@index([tenant_id])
+  @@index([tenant_id, merchant_id], map: "transactions_tenant_merchant_idx")
+  @@index([tenant_id, status], map: "transactions_tenant_status_idx")
+  @@index([tenant_id, store_id], map: "transactions_tenant_store_idx")
+  @@map("transactions")
+}
+
+model billing_records {
+  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id      String      @db.Uuid
+  transaction_id String      @db.Uuid
+  gross_amount   Decimal     @db.Decimal(12, 2)
+  fee_amount     Decimal     @db.Decimal(12, 2)
+  net_amount     Decimal     @db.Decimal(12, 2)
+  currency       String      @default("USD")
+  created_at     DateTime    @default(now()) @db.Timestamptz(6)
+  tenants        Tenant      @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  transactions   Transaction @relation(fields: [transaction_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([tenant_id], map: "billing_records_tenant_idx")
+  @@index([transaction_id], map: "billing_records_transaction_idx")
+}
+
+model email_change_codes {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String   @db.Uuid
+  new_email  String
+  code       String   @db.Char(6)
+  expires_at DateTime @default(dbgenerated("(now() + '00:10:00'::interval)")) @db.Timestamptz(6)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  users      User     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id], map: "email_change_codes_user_idx")
+}
+
+model fraud_blocklist {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ip_address String   @unique(map: "fraud_blocklist_ip_idx") @db.Inet
+  reason     String?
+  blocked_by String?  @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  users      User?    @relation(fields: [blocked_by], references: [id], onUpdate: NoAction)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model shield_domains {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  domain     String    @unique
+  is_active  Boolean   @default(true)
+  tenant_id  String?   @db.Uuid
+  health_ok  Boolean   @default(true)
+  last_check DateTime? @db.Timestamptz(6)
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at DateTime  @default(now()) @db.Timestamptz(6)
+  tenants    Tenant?   @relation(fields: [tenant_id], references: [id], onUpdate: NoAction)
+}
+
+model system_logs {
+  id                String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  action            String
+  status            String           @default("OK")
+  metadata          Json             @default("{}")
+  created_at        DateTime         @default(now()) @db.Timestamptz(6)
+  tenant_id         String?          @db.Uuid
+  account_id        String?          @db.Uuid
+  store_id          String?          @db.Uuid
+  level             String           @default("info")
+  merchant_accounts MerchantAccount? @relation(fields: [account_id], references: [id], onUpdate: NoAction)
+  stores            Store?           @relation(fields: [store_id], references: [id], onUpdate: NoAction)
+  tenants           Tenant?          @relation(fields: [tenant_id], references: [id], onUpdate: NoAction)
+
+  @@index([account_id], map: "system_logs_account_idx")
+  @@index([action])
+  @@index([created_at(sort: Desc)], map: "system_logs_created_idx")
+  @@index([level])
+  @@index([tenant_id], map: "system_logs_tenant_idx")
+}
+
+model system_settings {
+  key        String   @id
+  value      Json     @default("{}")
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model token_blacklist {
+  jti                                     String   @id
+  user_id                                 String?  @db.Uuid
+  revoked_by                              String?  @db.Uuid
+  reason                                  String?
+  expires_at                              DateTime @db.Timestamptz(6)
+  created_at                              DateTime @default(now()) @db.Timestamptz(6)
+  users_token_blacklist_revoked_byTousers User?    @relation("token_blacklist_revoked_byTousers", fields: [revoked_by], references: [id], onUpdate: NoAction)
+  users_token_blacklist_user_idTousers    User?    @relation("token_blacklist_user_idTousers", fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([expires_at], map: "token_blacklist_expires_idx")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model webhook_deliveries {
+  id                    String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id              String         @db.Uuid
+  transaction_id        String         @db.Uuid
+  tenant_id             String         @db.Uuid
+  store_id              String         @db.Uuid
+  target_url            String
+  headers_sent          Json           @default("{}")
+  raw_payload           String
+  http_status           Int?
+  response_body_snippet String?
+  error_message         String?
+  attempt_number        Int
+  trigger_origin        String         @default("automatic")
+  final_status          String         @default("pending")
+  next_retry_at         DateTime?      @db.Timestamptz(6)
+  delivered_at          DateTime?      @db.Timestamptz(6)
+  created_at            DateTime       @default(now()) @db.Timestamptz(6)
+  webhook_events        webhook_events @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  stores                Store          @relation(fields: [store_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenants               Tenant         @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  transactions          Transaction    @relation(fields: [transaction_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([event_id, attempt_number(sort: Desc)], map: "webhook_deliveries_event_idx")
+  @@index([store_id, created_at(sort: Desc)], map: "webhook_deliveries_store_idx")
+  @@index([transaction_id, created_at(sort: Desc)], map: "webhook_deliveries_tx_idx")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model webhook_events {
+  id                      String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  transaction_id          String               @db.Uuid
+  tenant_id               String               @db.Uuid
+  store_id                String               @db.Uuid
+  account_id              String?              @db.Uuid
+  event_name              String
+  business_key            String               @unique
+  target_url              String
+  raw_payload             String
+  payload_version         String               @default("2026-04-08")
+  source                  String               @default("system")
+  trigger_origin          String               @default("automatic")
+  delivery_status         String               @default("pending")
+  attempt_count           Int                  @default(0)
+  last_delivery_id        String?              @db.Uuid
+  latest_http_status      Int?
+  latest_response_snippet String?
+  latest_error            String?
+  last_attempt_at         DateTime?            @db.Timestamptz(6)
+  next_retry_at           DateTime?            @db.Timestamptz(6)
+  delivered_at            DateTime?            @db.Timestamptz(6)
+  replayed_at             DateTime?            @db.Timestamptz(6)
+  canceled_at             DateTime?            @db.Timestamptz(6)
+  created_at              DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at              DateTime             @default(now()) @db.Timestamptz(6)
+  webhook_deliveries      webhook_deliveries[]
+  merchant_accounts       MerchantAccount?     @relation(fields: [account_id], references: [id], onUpdate: NoAction)
+  stores                  Store                @relation(fields: [store_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenants                 Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  transactions            Transaction          @relation(fields: [transaction_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([store_id, delivery_status, next_retry_at], map: "webhook_events_store_status_idx")
+  @@index([tenant_id, created_at(sort: Desc)], map: "webhook_events_tenant_created_idx")
+  @@index([transaction_id, created_at(sort: Desc)], map: "webhook_events_transaction_idx")
+}
+
+enum account_status {
   ACTIVE
   PAUSED
   WARMING_UP
   SUSPENDED
 }
 
-enum TransactionStatus {
+enum transaction_status {
   PENDING
+  AUTHORIZED
   COMPLETED
   FAILED
   REFUNDED
   DISPUTED
+  CANCELED
+  EXPIRED
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// User  (global — no tenantId; spans all tenants)
-// ─────────────────────────────────────────────────────────────────────────────
-
-model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String
-  role         Role     @default(MERCHANT)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  // A MERCHANT user owns one logical tenant/org
-  tenantId     String?  @unique          // null for SUPER_ADMIN
-  tenant       Tenant?  @relation(fields: [tenantId], references: [id])
-
-  @@map("users")
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Tenant  (top-level isolation boundary — one per Merchant)
-// ─────────────────────────────────────────────────────────────────────────────
-
-model Tenant {
-  id        String   @id @default(uuid())
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  users            User[]
-  stores           Store[]
-  merchantAccounts MerchantAccount[]
-  transactions     Transaction[]
-
-  @@map("tenants")
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Store  (a client e-commerce store belonging to one Merchant/Tenant)
-// ─────────────────────────────────────────────────────────────────────────────
-
-model Store {
-  id         String   @id @default(uuid())   // storeId (UUID)
-  tenantId   String                          // multi-tenant isolation key
-  name       String
-  apiKeyHash String                          // bcrypt hash of the raw API key
-  webhookUrl String?
-
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  transactions Transaction[]
-
-  @@index([tenantId])
-  @@map("stores")
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MerchantAccount  (a PayPal business account inside a tenant's pool)
-// ─────────────────────────────────────────────────────────────────────────────
-
-model MerchantAccount {
-  id           String        @id @default(uuid())
-  tenantId     String                              // multi-tenant isolation key
-
-  // PayPal credentials (stored encrypted in production)
-  clientId     String
-  clientSecret String
-
-  // Rotation & routing
-  shieldDomain  String                            // masking domain for this account
-  dailyLimit    Decimal       @db.Decimal(12, 2)  // USD cap per day
-  currentVolume Decimal       @default(0) @db.Decimal(12, 2)
-  priority      Int           @default(1)         // higher = preferred in weighted rotation
-  status        AccountStatus @default(ACTIVE)
-
-  // Lifecycle
-  volumeResetAt DateTime?                         // timestamp of last daily volume reset
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-
-  // Relations
-  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  transactions Transaction[]
-
-  @@index([tenantId])
-  @@index([tenantId, status])
-  @@map("merchant_accounts")
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Transaction  (immutable audit log of every gateway event)
-// ─────────────────────────────────────────────────────────────────────────────
-
-model Transaction {
-  id               String            @id @default(uuid())
-  tenantId         String                                   // multi-tenant isolation key
-
-  // Routing references
-  storeId          String
-  merchantId       String                                   // MerchantAccount.id
-
-  // Amounts
-  originalAmount   Decimal           @db.Decimal(12, 2)    // amount the buyer paid
-  gatewayFee       Decimal           @default(0) @db.Decimal(12, 2)
-
-  // State
-  status           TransactionStatus @default(PENDING)
-
-  // Privacy / compliance
-  maskedItemName   String                                   // obfuscated product name
-
-  // External references
-  paypalOrderId    String?
-  paypalCaptureId  String?
-  buyerIp          String?
-  buyerCountry     String?
-
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-
-  // Relations
-  tenant          Tenant          @relation(fields: [tenantId], references: [id])
-  store           Store           @relation(fields: [storeId], references: [id])
-  merchantAccount MerchantAccount @relation(fields: [merchantId], references: [id])
-
-  @@index([tenantId])
-  @@index([tenantId, storeId])
-  @@index([tenantId, merchantId])
-  @@index([tenantId, status])
-  @@index([tenantId, createdAt])
-  @@map("transactions")
+enum user_role {
+  SUPER_ADMIN
+  MERCHANT
 }

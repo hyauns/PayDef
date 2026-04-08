@@ -42,6 +42,7 @@ const ADMIN_NAV = [
   { label: "Overview",  href: "/super-admin" },
   { label: "Tenants",   href: "/super-admin/tenants" },
   { label: "Domains",   href: "/domains" },
+  { label: "Transactions", href: "/transactions" },
   { label: "Analytics", href: "/analytics" },
   { label: "Logs",      href: "/logs" },
   { label: "Settings",  href: "/settings" },

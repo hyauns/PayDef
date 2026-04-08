@@ -34,7 +34,7 @@ const PROTECTED_ROUTES: { prefix: string; roles: Role[] }[] = [
   // Dashboard routes — MERCHANT only
   { prefix: "/dashboard",     roles: ["MERCHANT"] },
   { prefix: "/accounts",      roles: ["MERCHANT"] },
-  { prefix: "/transactions",  roles: ["MERCHANT"] },
+  { prefix: "/transactions",  roles: ["SUPER_ADMIN", "MERCHANT"] },
   { prefix: "/stores",        roles: ["MERCHANT"] },
   // Shared routes — both SUPER_ADMIN and MERCHANT
   { prefix: "/settings",   roles: ["SUPER_ADMIN", "MERCHANT"] },

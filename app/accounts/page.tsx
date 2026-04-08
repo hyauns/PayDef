@@ -80,19 +80,16 @@ interface MerchantApiRow {
   successRate?: number | null
 }
 
-// ─── Platform shield domains provided by Gateway Central ─────────────────────
-const PLATFORM_DOMAINS = [
-  "chococlose.com",
-  "safepay-hub.io",
-  "payshield-cdn.com",
-  "trustedcheck.net",
-  "relay-secure.org",
-  "checkout-proxy.com",
-  "shield-gateway.net",
-  "payvault-cdn.io",
-  "securelay.com",
-]
+interface ShieldDomainApiRow {
+  id: string
+  domain: string
+  isActive: boolean
+  vercel?: {
+    bridgeOk?: boolean | null
+  } | null
+}
 
+// ─── Platform shield domains provided by Gateway Central ─────────────────────
 const FAKE_PRODUCT_PRESETS = [
   "Digital Service Upgrade",
   "Premium Content License",
@@ -160,6 +157,10 @@ function StatusBadge({ status }: { status: Status }) {
 
 function getErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : "Request failed"
+}
+
+function isVerifiedPlatformDomain(domain: ShieldDomainApiRow): boolean {
+  return domain.isActive && domain.vercel?.bridgeOk === true
 }
 
 function PriorityStars({ value }: { value: number }) {
@@ -269,12 +270,14 @@ function MaskedField({ value, label }: { value: string; label: string }) {
 
 interface SlideOverProps {
   merchant: Merchant | null
+  verifiedPlatformDomains: string[]
   onClose: () => void
   onSave: (updated: Merchant) => void
 }
 
-function SlideOver({ merchant, onClose, onSave }: SlideOverProps) {
+function SlideOver({ merchant, verifiedPlatformDomains, onClose, onSave }: SlideOverProps) {
   const [draft, setDraft] = useState<Merchant | null>(merchant)
+  const fallbackPlatformDomain = verifiedPlatformDomains[0] ?? ""
 
   // sync when a new merchant is opened
   if (draft?.id !== merchant?.id && merchant !== null) {
@@ -287,7 +290,15 @@ function SlideOver({ merchant, onClose, onSave }: SlideOverProps) {
     setDraft((prev) => (prev ? { ...prev, ...patch } : prev))
 
   const handleSave = () => {
-    if (draft) onSave(draft)
+    if (!draft) return
+    const nextDraft =
+      draft.domainType === "platform" && !verifiedPlatformDomains.includes(draft.shieldDomain)
+        ? { ...draft, shieldDomain: fallbackPlatformDomain }
+        : draft
+    if (nextDraft.domainType === "platform" && !nextDraft.shieldDomain) {
+      return
+    }
+    onSave(nextDraft)
     onClose()
   }
 
@@ -370,7 +381,7 @@ function SlideOver({ merchant, onClose, onSave }: SlideOverProps) {
               {(["platform", "custom"] as DomainType[]).map((t) => (
                 <button
                   key={t}
-                  onClick={() => update({ domainType: t, shieldDomain: t === "platform" ? PLATFORM_DOMAINS[0] : "" })}
+                  onClick={() => update({ domainType: t, shieldDomain: t === "platform" ? fallbackPlatformDomain : "" })}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-mono transition-colors ${
                     draft.domainType === t
                       ? "bg-cyan-400/10 text-cyan-400 border-r border-border"
@@ -388,15 +399,25 @@ function SlideOver({ merchant, onClose, onSave }: SlideOverProps) {
                   Select Platform Domain
                 </label>
                 <select
-                  value={draft.shieldDomain}
+                  value={verifiedPlatformDomains.includes(draft.shieldDomain) ? draft.shieldDomain : ""}
                   onChange={(e) => update({ shieldDomain: e.target.value })}
+                  disabled={!verifiedPlatformDomains.length}
                   className="w-full bg-card border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors appearance-none"
                 >
-                  {PLATFORM_DOMAINS.map((d) => (
+                  <option value="" disabled>
+                    {verifiedPlatformDomains.length ? "Select a verified platform domain" : "No verified platform domains available"}
+                  </option>
+                  {verifiedPlatformDomains.map((d) => (
                     <option key={d} value={d}>{d}</option>
                   ))}
                 </select>
                 <p className="text-[10px] font-mono text-muted-foreground">Managed and monitored by Gateway Central</p>
+                {!verifiedPlatformDomains.length && (
+                  <p className="text-[10px] font-mono text-amber-400">Verify a domain in Domains before assigning it to an account.</p>
+                )}
+                {!!draft.shieldDomain && !verifiedPlatformDomains.includes(draft.shieldDomain) && verifiedPlatformDomains.length > 0 && (
+                  <p className="text-[10px] font-mono text-amber-400">The current platform domain is no longer verified. Select another verified domain before saving.</p>
+                )}
               </div>
             ) : (
               <div className="space-y-1.5">
@@ -710,7 +731,8 @@ function SlideOver({ merchant, onClose, onSave }: SlideOverProps) {
           </button>
           <button
             onClick={handleSave}
-            className="flex-1 px-4 py-2 text-xs font-mono text-background bg-cyan-400 hover:bg-cyan-300 rounded-md transition-colors font-semibold"
+            disabled={draft.domainType === "platform" && !fallbackPlatformDomain}
+            className="flex-1 px-4 py-2 text-xs font-mono text-background bg-cyan-400 hover:bg-cyan-300 rounded-md transition-colors font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Save Changes
           </button>
@@ -722,7 +744,16 @@ function SlideOver({ merchant, onClose, onSave }: SlideOverProps) {
 
 // ─── Add Merchant Modal ───────────────────��───────────────────────────────────
 
-function AddMerchantModal({ onClose, onAdd }: { onClose: () => void; onAdd: (m: Merchant) => void }) {
+function AddMerchantModal({
+  verifiedPlatformDomains,
+  onClose,
+  onAdd,
+}: {
+  verifiedPlatformDomains: string[]
+  onClose: () => void
+  onAdd: (m: Merchant) => void
+}) {
+  const fallbackPlatformDomain = verifiedPlatformDomains[0] ?? ""
   const [form, setForm] = useState({
     accountName: "",
     email: "",
@@ -730,8 +761,8 @@ function AddMerchantModal({ onClose, onAdd }: { onClose: () => void; onAdd: (m: 
     clientSecret: "",
     proxyUrl: "",
     status: "Warm-up" as Status,
-    domainType: "platform" as DomainType,
-    shieldDomain: PLATFORM_DOMAINS[0],
+    domainType: (fallbackPlatformDomain ? "platform" : "custom") as DomainType,
+    shieldDomain: fallbackPlatformDomain,
     softLimit: 4000,
     hardLimit: 5000,
     itemMasking: false,
@@ -741,6 +772,16 @@ function AddMerchantModal({ onClose, onAdd }: { onClose: () => void; onAdd: (m: 
   const [error, setError] = useState("")
 
   const update = (patch: Partial<typeof form>) => setForm((p) => ({ ...p, ...patch }))
+
+  useEffect(() => {
+    if (
+      form.domainType === "platform" &&
+      (!form.shieldDomain || !verifiedPlatformDomains.includes(form.shieldDomain)) &&
+      fallbackPlatformDomain
+    ) {
+      setForm((prev) => ({ ...prev, shieldDomain: fallbackPlatformDomain }))
+    }
+  }, [fallbackPlatformDomain, form.domainType, form.shieldDomain, verifiedPlatformDomains])
 
   const handleAdd = async () => {
     if (!form.accountName || !form.email) return
@@ -783,8 +824,8 @@ function AddMerchantModal({ onClose, onAdd }: { onClose: () => void; onAdd: (m: 
         clientId: acct.clientId,
         clientSecret: "(encrypted)",
         proxyUrl: acct.proxyUrl ?? "",
-        shieldDomain: acct.shieldDomain ?? PLATFORM_DOMAINS[0],
-        domainType: PLATFORM_DOMAINS.includes(acct.shieldDomain) ? "platform" : "custom",
+        shieldDomain: acct.shieldDomain ?? form.shieldDomain ?? "",
+        domainType: verifiedPlatformDomains.includes(acct.shieldDomain ?? "") ? "platform" : "custom",
         status: form.status,
         priority: acct.priority ?? 1,
         currentVolume: 0,
@@ -891,7 +932,7 @@ function AddMerchantModal({ onClose, onAdd }: { onClose: () => void; onAdd: (m: 
                 {(["platform", "custom"] as DomainType[]).map((t) => (
                   <button
                     key={t}
-                    onClick={() => update({ domainType: t, shieldDomain: t === "platform" ? PLATFORM_DOMAINS[0] : "" })}
+                    onClick={() => update({ domainType: t, shieldDomain: t === "platform" ? fallbackPlatformDomain : "" })}
                     className={`flex-1 py-1.5 text-[11px] font-mono transition-colors ${
                       form.domainType === t
                         ? "bg-cyan-400/10 text-cyan-400"
@@ -904,11 +945,15 @@ function AddMerchantModal({ onClose, onAdd }: { onClose: () => void; onAdd: (m: 
               </div>
               {form.domainType === "platform" ? (
                 <select
-                  value={form.shieldDomain}
+                  value={verifiedPlatformDomains.includes(form.shieldDomain) ? form.shieldDomain : ""}
                   onChange={(e) => update({ shieldDomain: e.target.value })}
+                  disabled={!verifiedPlatformDomains.length}
                   className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 appearance-none"
                 >
-                  {PLATFORM_DOMAINS.map((d) => <option key={d} value={d}>{d}</option>)}
+                  <option value="" disabled>
+                    {verifiedPlatformDomains.length ? "Select a verified platform domain" : "No verified platform domains available"}
+                  </option>
+                  {verifiedPlatformDomains.map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
               ) : (
                 <input
@@ -917,6 +962,13 @@ function AddMerchantModal({ onClose, onAdd }: { onClose: () => void; onAdd: (m: 
                   placeholder="my-custom-domain.com"
                   className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
                 />
+              )}
+              {form.domainType === "platform" && (
+                <p className={`text-[10px] font-mono ${verifiedPlatformDomains.length ? "text-muted-foreground" : "text-amber-400"}`}>
+                  {verifiedPlatformDomains.length
+                    ? "Only verified platform domains are shown here."
+                    : "No verified platform domains available. Verify a domain in Domains first or use a custom domain."}
+                </p>
               )}
             </div>
 
@@ -992,7 +1044,14 @@ function AddMerchantModal({ onClose, onAdd }: { onClose: () => void; onAdd: (m: 
             </button>
             <button
               onClick={handleAdd}
-              disabled={!form.accountName || !form.email || !form.clientId || !form.clientSecret || saving}
+              disabled={
+                !form.accountName ||
+                !form.email ||
+                !form.clientId ||
+                !form.clientSecret ||
+                saving ||
+                (form.domainType === "platform" && !form.shieldDomain)
+              }
               className="flex-1 px-4 py-2 text-xs font-mono text-background bg-cyan-400 hover:bg-cyan-300 disabled:opacity-40 disabled:cursor-not-allowed rounded-md transition-colors font-semibold flex items-center justify-center gap-1.5"
             >
               {saving && <Loader2 className="w-3 h-3 animate-spin" />}
@@ -1031,7 +1090,7 @@ function mapUiStatus(uiStatus: Status): string {
   }
 }
 
-function mapApiToMerchant(a: MerchantApiRow): Merchant {
+function mapApiToMerchant(a: MerchantApiRow, platformDomains: string[]): Merchant {
   const shieldDomain = a.shieldDomain ?? ""
 
   return {
@@ -1042,7 +1101,7 @@ function mapApiToMerchant(a: MerchantApiRow): Merchant {
     clientSecret: "(encrypted)",
     proxyUrl: a.proxyUrl ?? "",
     shieldDomain,
-    domainType: PLATFORM_DOMAINS.includes(shieldDomain) ? "platform" : "custom",
+    domainType: platformDomains.includes(shieldDomain) ? "platform" : "custom",
     status: mapDbStatus(a.status, a.isLimited ?? undefined),
     priority: a.priority ?? 1,
     currentVolume: a.currentVolume ?? 0,
@@ -1059,6 +1118,8 @@ function mapApiToMerchant(a: MerchantApiRow): Merchant {
 
 export default function AccountsPage() {
   const [merchants, setMerchants] = useState<Merchant[]>([])
+  const [platformDomains, setPlatformDomains] = useState<string[]>([])
+  const [verifiedPlatformDomains, setVerifiedPlatformDomains] = useState<string[]>([])
   const [syncing, setSyncing] = useState(false)
   const [selected, setSelected] = useState<Merchant | null>(null)
   const [showAdd, setShowAdd] = useState(false)
@@ -1070,18 +1131,33 @@ export default function AccountsPage() {
     fetch("/api/merchant/accounts")
       .then(r => r.json())
       .then(data => {
-        setMerchants(((data.accounts ?? []) as MerchantApiRow[]).map(mapApiToMerchant))
+        setMerchants(((data.accounts ?? []) as MerchantApiRow[]).map((row) => mapApiToMerchant(row, platformDomains)))
+      })
+      .catch(() => {})
+  }, [platformDomains])
+
+  const fetchShieldDomains = useCallback(() => {
+    fetch("/api/merchant/shield-domains")
+      .then((r) => r.json())
+      .then((data) => {
+        const domains = ((data.domains ?? []) as ShieldDomainApiRow[]).filter((domain) => domain.isActive)
+        setPlatformDomains(domains.map((domain) => domain.domain))
+        setVerifiedPlatformDomains(domains.filter(isVerifiedPlatformDomain).map((domain) => domain.domain))
       })
       .catch(() => {})
   }, [])
 
+  useEffect(() => { fetchShieldDomains() }, [fetchShieldDomains])
   useEffect(() => { fetchAccounts() }, [fetchAccounts])
 
   // Auto-refresh every 10 seconds
   useEffect(() => {
-    const interval = setInterval(fetchAccounts, 10_000)
+    const interval = setInterval(() => {
+      fetchAccounts()
+      fetchShieldDomains()
+    }, 10_000)
     return () => clearInterval(interval)
-  }, [fetchAccounts])
+  }, [fetchAccounts, fetchShieldDomains])
 
   const filtered = filterStatus === "All"
     ? merchants
@@ -1384,13 +1460,18 @@ export default function AccountsPage() {
       {/* Slide-over edit panel */}
       <SlideOver
         merchant={selected}
+        verifiedPlatformDomains={verifiedPlatformDomains}
         onClose={() => setSelected(null)}
         onSave={handleSave}
       />
 
       {/* Add merchant modal */}
       {showAdd && (
-        <AddMerchantModal onClose={() => setShowAdd(false)} onAdd={handleAdd} />
+        <AddMerchantModal
+          verifiedPlatformDomains={verifiedPlatformDomains}
+          onClose={() => setShowAdd(false)}
+          onAdd={handleAdd}
+        />
       )}
     </div>
   )

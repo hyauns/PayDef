@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useState, useCallback, useId, useEffect } from "react"
 import {
   Plus,
@@ -22,11 +23,18 @@ import {
   Loader2,
 } from "lucide-react"
 import { DashboardHeader } from "@/components/dashboard/header"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type StoreStatus = "Active" | "Suspended" | "Trial"
 type CheckoutFlow = "REDIRECT" | "POPUP_BRIDGE"
+type CopyField = "id" | "key" | "secret" | "checkout" | "webhookUrl"
 
 const CHECKOUT_FLOW_OPTIONS: { value: CheckoutFlow; label: string; desc: string }[] = [
   {
@@ -41,12 +49,21 @@ const CHECKOUT_FLOW_OPTIONS: { value: CheckoutFlow; label: string; desc: string 
   },
 ]
 
+const STORE_WEBHOOK_EVENTS = [
+  "payment.authorization.created",
+  "payment.capture.completed",
+  "payment.capture.denied",
+  "payment.capture.refunded",
+  "payment.dispute.created",
+]
+
 interface Store {
   id: string          // UUID
   name: string
   platform: string
   apiKey: string      // sk_live_...
   webhookUrl: string
+  hasWebhookSecret: boolean
   totalProcessed: number
   txCount: number
   status: StoreStatus
@@ -56,12 +73,15 @@ interface Store {
   successRate: number
   checkoutFlow: CheckoutFlow
   checkoutFlowOverride: boolean
+  successReturnUrl: string
+  cancelReturnUrl: string
 }
 
 interface StoreApiRow {
   id: string
   name: string
   webhookUrl?: string | null
+  hasWebhookSecret?: boolean | null
   totalVolume?: number | null
   transactionCount?: number | null
   isActive?: boolean | null
@@ -70,6 +90,8 @@ interface StoreApiRow {
   completedCount?: number | null
   checkoutFlow?: CheckoutFlow | null
   checkoutFlowOverride?: boolean | null
+  successReturnUrl?: string | null
+  cancelReturnUrl?: string | null
 }
 
 function getErrorMessage(err: unknown): string {
@@ -81,6 +103,14 @@ function getErrorMessage(err: unknown): string {
 function maskKey(key: string): string {
   if (key.length < 16) return "sk_live_••••••••••••••••"
   return key.slice(0, 12) + "•".repeat(18) + key.slice(-4)
+}
+
+function getGatewayBaseUrl(): string {
+  if (typeof window !== "undefined") {
+    return window.location.origin
+  }
+
+  return process.env.NEXT_PUBLIC_APP_URL ?? ""
 }
 
 // ─── Status config ─────────────────────────────────────────────────────────────
@@ -280,6 +310,149 @@ function WebhookCell({
   )
 }
 
+function IntegrationField({
+  label,
+  value,
+  copyKey,
+  copied,
+  onCopy,
+}: {
+  label: string
+  value: string
+  copyKey: CopyField
+  copied: CopyField | null
+  onCopy: (value: string, field: CopyField) => void
+}) {
+  return (
+    <div>
+      <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-1">{label}</p>
+      <div className="flex items-center gap-2">
+        <code className="font-mono text-xs text-foreground flex-1 truncate">{value}</code>
+        <button
+          onClick={() => onCopy(value, copyKey)}
+          className="p-1 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+        >
+          {copied === copyKey ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function IntegrationSummary({
+  store,
+  copied,
+  onCopy,
+  onRegenerateWebhookSecret,
+  webhookBusy = false,
+}: {
+  store: Store
+  copied: CopyField | null
+  onCopy: (value: string, field: CopyField) => void
+  onRegenerateWebhookSecret: () => Promise<void> | void
+  webhookBusy?: boolean
+}) {
+  const gatewayBaseUrl = getGatewayBaseUrl()
+  const checkoutEndpoint = `${gatewayBaseUrl}/api/gateway/checkout`
+
+  return (
+    <div className="space-y-3 border border-border rounded-lg p-4 bg-background">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Integration</p>
+          <p className="text-[11px] font-mono text-muted-foreground mt-1">
+            Copy these values into the merchant store. Webhook signing uses HMAC-SHA256.
+          </p>
+        </div>
+        <span className={`inline-flex items-center gap-1.5 text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+          store.hasWebhookSecret
+            ? "bg-emerald-400/10 text-emerald-400 border-emerald-400/20"
+            : "bg-amber-400/10 text-amber-400 border-amber-400/20"
+        }`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${store.hasWebhookSecret ? "bg-emerald-400" : "bg-amber-400"}`} />
+          {store.hasWebhookSecret ? "Webhook Signed" : "Secret Missing"}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3">
+        <IntegrationField
+          label="Gateway Checkout Endpoint"
+          value={checkoutEndpoint}
+          copyKey="checkout"
+          copied={copied}
+          onCopy={onCopy}
+        />
+        <IntegrationField
+          label="Store Webhook URL"
+          value={store.webhookUrl || "Set your webhook URL first"}
+          copyKey="webhookUrl"
+          copied={copied}
+          onCopy={onCopy}
+        />
+        {store.successReturnUrl && (
+          <IntegrationField
+            label="Success Return URL"
+            value={store.successReturnUrl}
+            copyKey="webhookUrl"
+            copied={copied}
+            onCopy={onCopy}
+          />
+        )}
+        {store.cancelReturnUrl && (
+          <IntegrationField
+            label="Cancel Return URL"
+            value={store.cancelReturnUrl}
+            copyKey="webhookUrl"
+            copied={copied}
+            onCopy={onCopy}
+          />
+        )}
+      </div>
+
+      <div className="flex justify-end">
+        <Link
+          href="/docs/api"
+          className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-mono rounded-md border border-cyan-400/30 text-cyan-400 hover:bg-cyan-400/10 transition-colors"
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
+          Open API Docs
+        </Link>
+      </div>
+
+      <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-secondary/30 px-3 py-2">
+        <div>
+          <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Webhook Secret</p>
+          <p className="text-[11px] font-mono text-muted-foreground mt-1">
+            Regenerate to reveal a new signing secret once, then copy it into the merchant store.
+          </p>
+        </div>
+        <button
+          onClick={() => void onRegenerateWebhookSecret()}
+          disabled={webhookBusy}
+          className="flex items-center gap-2 px-3 py-1.5 text-xs font-mono rounded-md border border-cyan-400/30 text-cyan-400 hover:bg-cyan-400/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {webhookBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+          {store.hasWebhookSecret ? "Regenerate" : "Generate"}
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Webhook Events</p>
+        <div className="flex flex-wrap gap-2">
+          {STORE_WEBHOOK_EVENTS.map((eventName) => (
+            <span
+              key={eventName}
+              className="inline-flex items-center rounded-full border border-border bg-secondary/40 px-2 py-1 text-[10px] font-mono text-foreground"
+            >
+              {eventName}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Create Store Modal ───────────────────────────────────────────────────────
 
 interface CreateModalProps {
@@ -292,14 +465,14 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
   const [name, setName] = useState("")
   const [platform, setPlatform] = useState("Shopify")
   const [webhookUrl, setWebhookUrl] = useState("")
-  const [generated, setGenerated] = useState<{ id: string; key: string } | null>(null)
-  const [copied, setCopied] = useState<"id" | "key" | null>(null)
+  const [generated, setGenerated] = useState<{ id: string; key: string; secret: string } | null>(null)
+  const [copied, setCopied] = useState<CopyField | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
 
   const platforms = ["Shopify", "WooCommerce", "BigCommerce", "Squarespace", "Custom API", "Magento"]
 
-  const handleCopy = useCallback((val: string, field: "id" | "key") => {
+  const handleCopy = useCallback((val: string, field: CopyField) => {
     navigator.clipboard.writeText(val)
     setCopied(field)
     setTimeout(() => setCopied(null), 2000)
@@ -329,6 +502,7 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
         platform,
         apiKey: data.apiKey,
         webhookUrl: data.store.webhookUrl ?? "",
+        hasWebhookSecret: data.store.hasWebhookSecret ?? true,
         totalProcessed: 0,
         txCount: 0,
         status: "Trial",
@@ -338,10 +512,12 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
         successRate: 0,
         checkoutFlow: data.store.checkoutFlow ?? "REDIRECT",
         checkoutFlowOverride: data.store.checkoutFlowOverride ?? false,
+        successReturnUrl: data.store.successReturnUrl ?? "",
+        cancelReturnUrl: data.store.cancelReturnUrl ?? "",
       }
 
       // Show the real credentials
-      setGenerated({ id: data.store.id, key: data.apiKey })
+      setGenerated({ id: data.store.id, key: data.apiKey, secret: data.webhookSecret })
       onCreate(newStore)
     } catch (err) {
       setError(getErrorMessage(err))
@@ -466,6 +642,25 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
                       </button>
                     </div>
                   </div>
+                  <div>
+                    <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-1">Webhook Secret</p>
+                    <div className="flex items-center gap-2">
+                      <code className="font-mono text-xs text-amber-400 flex-1 truncate">{generated.secret}</code>
+                      <button
+                        onClick={() => handleCopy(generated.secret, "secret")}
+                        className="p-1 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                      >
+                        {copied === "secret" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+                  <IntegrationField
+                    label="Gateway Checkout Endpoint"
+                    value={`${getGatewayBaseUrl()}/api/gateway/checkout`}
+                    copyKey="checkout"
+                    copied={copied}
+                    onCopy={handleCopy}
+                  />
                   <p className="text-[10px] font-mono text-amber-400/80">
                     ⚠ Copy the API key now — it cannot be retrieved again after you close this modal.
                   </p>
@@ -474,7 +669,7 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
                 <div className="bg-secondary/40 border border-dashed border-border rounded-md px-4 py-5 text-center">
                   <Key className="w-5 h-5 text-muted-foreground mx-auto mb-2" />
                   <p className="text-xs font-mono text-muted-foreground">
-                    Store ID and API Key are generated automatically when you click &quot;Create Store&quot;
+                    Store ID, API Key, and Webhook Secret are generated automatically when you click &quot;Create Store&quot;
                   </p>
                 </div>
               )}
@@ -511,12 +706,15 @@ interface SlideOverProps {
   onClose: () => void
   onSave: (updated: Store) => Promise<void>
   onDelete: (id: string) => Promise<void>
+  onRegenerateWebhookSecret: (storeId: string) => Promise<string>
 }
 
-function EditSlideOver({ store, onClose, onSave, onDelete }: SlideOverProps) {
+function EditSlideOver({ store, onClose, onSave, onDelete, onRegenerateWebhookSecret }: SlideOverProps) {
   const [draft, setDraft] = useState<Store | null>(store)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [webhookBusy, setWebhookBusy] = useState(false)
+  const [copied, setCopied] = useState<CopyField | null>(null)
   const [error, setError] = useState("")
 
   // Sync when a different store is opened
@@ -540,6 +738,30 @@ function EditSlideOver({ store, onClose, onSave, onDelete }: SlideOverProps) {
       setError(getErrorMessage(err))
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleCopy = (value: string, field: CopyField) => {
+    navigator.clipboard.writeText(value)
+    setCopied(field)
+    setTimeout(() => setCopied(null), 2000)
+  }
+
+  const handleRegenerateWebhookSecret = async () => {
+    if (!draft) return
+
+    setWebhookBusy(true)
+    setError("")
+
+    try {
+      const secret = await onRegenerateWebhookSecret(draft.id)
+      update({ hasWebhookSecret: true })
+      handleCopy(secret, "secret")
+      alert(`New webhook secret for ${draft.name}:\n\n${secret}\n\nSave it now — it cannot be retrieved again.`)
+    } catch (err) {
+      setError(getErrorMessage(err))
+    } finally {
+      setWebhookBusy(false)
     }
   }
 
@@ -635,6 +857,34 @@ function EditSlideOver({ store, onClose, onSave, onDelete }: SlideOverProps) {
             </div>
           </div>
 
+          <div className="grid grid-cols-1 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Success Return URL</label>
+              <input
+                value={draft.successReturnUrl}
+                onChange={(e) => update({ successReturnUrl: e.target.value })}
+                placeholder="https://merchant-store.com/checkout/success"
+                className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+              />
+              <p className="text-[10px] font-mono text-muted-foreground">
+                Buyers return here after a confirmed shield-domain success flow.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Cancel Return URL</label>
+              <input
+                value={draft.cancelReturnUrl}
+                onChange={(e) => update({ cancelReturnUrl: e.target.value })}
+                placeholder="https://merchant-store.com/checkout/cancel"
+                className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+              />
+              <p className="text-[10px] font-mono text-muted-foreground">
+                Optional fallback for buyer-canceled or expired checkout returns.
+              </p>
+            </div>
+          </div>
+
           {/* API Key (read-only in panel, managed via table) */}
           <div className="space-y-1.5">
             <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">API Key</label>
@@ -708,7 +958,20 @@ function EditSlideOver({ store, onClose, onSave, onDelete }: SlideOverProps) {
             <p className="text-[10px] font-mono text-muted-foreground">
               Existing API clients remain compatible because the gateway still returns the classic <code>approvalUrl</code>.
             </p>
+            {draft.checkoutFlow === "POPUP_BRIDGE" && !draft.successReturnUrl && !draft.cancelReturnUrl && (
+              <p className="text-[10px] font-mono text-amber-400">
+                Add at least one return URL to send buyers back to the merchant storefront after shield-domain completion.
+              </p>
+            )}
           </div>
+
+          <IntegrationSummary
+            store={draft}
+            copied={copied}
+            onCopy={handleCopy}
+            onRegenerateWebhookSecret={handleRegenerateWebhookSecret}
+            webhookBusy={webhookBusy}
+          />
 
           {/* Metadata */}
           <div className="grid grid-cols-2 gap-3">
@@ -784,46 +1047,43 @@ function RowMenu({
   onToggle: () => void | Promise<void>
   onDelete: () => void | Promise<void>
 }) {
-  const [open, setOpen] = useState(false)
-
   return (
-    <div className="relative">
-      <button
-        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v) }}
-        className="p-1.5 text-muted-foreground hover:text-foreground border border-border rounded-md transition-colors"
-      >
-        <MoreHorizontal className="w-3.5 h-3.5" />
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 mt-1 w-44 bg-card border border-border rounded-md shadow-xl z-20 overflow-hidden">
-            {[
-              { label: "Edit Details", icon: <ChevronRight className="w-3.5 h-3.5" />, action: onEdit },
-              {
-                label: store.enabled ? "Disable Access" : "Enable Access",
-                icon: store.enabled ? <AlertTriangle className="w-3.5 h-3.5" /> : <ShieldCheck className="w-3.5 h-3.5" />,
-                action: onToggle,
-              },
-              { label: "Delete Store", icon: <Trash2 className="w-3.5 h-3.5" />, action: onDelete, danger: true },
-            ].map((item) => (
-              <button
-                key={item.label}
-                onClick={(e) => { e.stopPropagation(); item.action(); setOpen(false) }}
-                className={`flex items-center gap-2.5 w-full px-3 py-2 text-xs font-mono transition-colors ${
-                  item.danger
-                    ? "text-red-400 hover:bg-red-500/10"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-                }`}
-              >
-                {item.icon}
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          onClick={(e) => e.stopPropagation()}
+          className="p-1.5 text-muted-foreground hover:text-foreground border border-border rounded-md transition-colors data-[state=open]:bg-secondary"
+        >
+          <MoreHorizontal className="w-3.5 h-3.5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44 font-mono z-50">
+        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit() }}>
+          <ChevronRight className="w-3.5 h-3.5 mr-2" />
+          Edit Details
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); void onToggle() }}>
+          {store.enabled ? (
+            <>
+              <AlertTriangle className="w-3.5 h-3.5 mr-2" />
+              Disable Access
+            </>
+          ) : (
+            <>
+              <ShieldCheck className="w-3.5 h-3.5 mr-2" />
+              Enable Access
+            </>
+          )}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="text-red-400 focus:text-red-500 focus:bg-red-500/10"
+          onClick={(e) => { e.stopPropagation(); void onDelete() }}
+        >
+          <Trash2 className="w-3.5 h-3.5 mr-2" />
+          Delete Store
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -852,6 +1112,7 @@ export default function StoresPage() {
               platform: "—",
               apiKey: "sk_live_••••••••••••••••",
               webhookUrl: s.webhookUrl ?? "",
+              hasWebhookSecret: s.hasWebhookSecret ?? false,
               totalProcessed: s.totalVolume ?? 0,
               txCount: transactionCount,
               status: !isActive ? "Suspended" : (transactionCount === 0 ? "Trial" : "Active") as StoreStatus,
@@ -861,6 +1122,8 @@ export default function StoresPage() {
               successRate: transactionCount > 0 ? Math.round((completedCount / transactionCount) * 1000) / 10 : 0,
               checkoutFlow: s.checkoutFlow ?? "REDIRECT",
               checkoutFlowOverride: s.checkoutFlowOverride ?? false,
+              successReturnUrl: s.successReturnUrl ?? "",
+              cancelReturnUrl: s.cancelReturnUrl ?? "",
             }
           })
         )
@@ -884,6 +1147,8 @@ export default function StoresPage() {
         webhookUrl: updated.webhookUrl,
         isActive: updated.enabled,
         checkoutFlow: updated.checkoutFlow,
+        successReturnUrl: updated.successReturnUrl,
+        cancelReturnUrl: updated.cancelReturnUrl,
       }),
     })
 
@@ -900,9 +1165,12 @@ export default function StoresPage() {
               ...updated,
               name: data.store.name,
               webhookUrl: data.store.webhookUrl ?? "",
+              hasWebhookSecret: data.store.hasWebhookSecret ?? updated.hasWebhookSecret,
               enabled: data.store.isActive ?? updated.enabled,
               checkoutFlow: data.store.checkoutFlow ?? updated.checkoutFlow,
               checkoutFlowOverride: data.store.checkoutFlowOverride ?? updated.checkoutFlowOverride,
+              successReturnUrl: data.store.successReturnUrl ?? updated.successReturnUrl,
+              cancelReturnUrl: data.store.cancelReturnUrl ?? updated.cancelReturnUrl,
               lastPing: data.store.updatedAt ? new Date(data.store.updatedAt).toLocaleString() : updated.lastPing,
               status: !(data.store.isActive ?? updated.enabled)
                 ? "Suspended"
@@ -974,6 +1242,25 @@ export default function StoresPage() {
     } catch {
       alert("Failed to regenerate key")
     }
+  }, [])
+
+  const handleRegenerateWebhookSecret = useCallback(async (id: string) => {
+    const res = await fetch("/api/merchant/stores/regenerate-webhook-secret", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ storeId: id }),
+    })
+
+    const data = await res.json()
+    if (!res.ok) {
+      throw new Error(data.error ?? "Failed to regenerate webhook secret")
+    }
+
+    setStores((prev) =>
+      prev.map((store) => (store.id === id ? { ...store, hasWebhookSecret: true } : store))
+    )
+
+    return String(data.webhookSecret)
   }, [])
 
   return (
@@ -1224,6 +1511,7 @@ export default function StoresPage() {
         onClose={() => setSelectedStore(null)}
         onSave={handleSave}
         onDelete={handleDelete}
+        onRegenerateWebhookSecret={handleRegenerateWebhookSecret}
       />
     </div>
   )

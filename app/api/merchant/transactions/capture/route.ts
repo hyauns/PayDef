@@ -20,6 +20,11 @@ import { getSql, getPool } from "@/lib/neon"
 import { captureAuthorization } from "@/lib/paypal"
 import { decrypt } from "@/lib/encryption"
 import { sendTransactionAlert } from "@/lib/telegram"
+import { type StoreWebhookPayload } from "@/lib/store-webhooks"
+import {
+  buildWebhookBusinessKey,
+  enqueueStoreWebhookEvent,
+} from "@/lib/webhook-delivery"
 
 const GATEWAY_FEE_PERCENT = 0.02
 const MAX_CAPTURE_AGE_HOURS = 72 // 3 days — PayPal's typical auth window
@@ -44,6 +49,10 @@ interface MerchantRow {
 
 interface NameRow {
   name: string
+}
+
+interface StoreWebhookRow {
+  webhook_url: string | null
 }
 
 export async function POST(req: NextRequest) {
@@ -177,6 +186,8 @@ export async function POST(req: NextRequest) {
        SET status = 'COMPLETED',
            paypal_capture_id = $1,
            gateway_fee = $2,
+           completed_at = NOW(),
+           checkout_expires_at = NULL,
            updated_at = NOW()
        WHERE id = $3`,
       [captureResult.id, gatewayFee.toFixed(2), transaction.id]
@@ -194,6 +205,41 @@ export async function POST(req: NextRequest) {
     await client.query("COMMIT")
 
     // ── Audit log (fire-and-forget) ──────────────────────────────────────────
+    const storeWebhookRows = (await sql`
+      SELECT webhook_url
+      FROM stores
+      WHERE id = ${transaction.store_id}
+      LIMIT 1
+    `) as unknown as StoreWebhookRow[]
+
+    if (storeWebhookRows[0]?.webhook_url) {
+      const canonicalPayload: Omit<StoreWebhookPayload, "event_id"> = {
+        event: "payment.capture.completed",
+        transaction_id: transaction.id,
+        paypal_order_id: transaction.paypal_order_id,
+        paypal_capture_id: captureResult.id,
+        authorization_id: transaction.authorization_id ?? undefined,
+        amount: originalAmount.toFixed(2),
+        gateway_fee: gatewayFee.toFixed(2),
+        net_amount: (originalAmount - gatewayFee).toFixed(2),
+        status: "COMPLETED",
+        timestamp: new Date().toISOString(),
+      }
+
+      enqueueStoreWebhookEvent({
+        transactionId: transaction.id,
+        tenantId,
+        storeId: transaction.store_id,
+        accountId: transaction.merchant_id,
+        targetUrl: storeWebhookRows[0].webhook_url,
+        businessKey: buildWebhookBusinessKey("payment.capture.completed", transaction.id, captureResult.id),
+        event: "payment.capture.completed",
+        payload: canonicalPayload,
+        source: "merchant_dashboard_capture",
+        triggerOrigin: "merchant_dashboard",
+      }).catch(() => { /* silent */ })
+    }
+
     sql`
       INSERT INTO system_logs (action, status, level, metadata, tenant_id)
       VALUES (

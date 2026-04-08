@@ -24,6 +24,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSql, getPool } from "@/lib/neon"
 import { getUserAgent } from "@/lib/paypal"
+import {
+  resolveStoreWebhookEvent,
+  type StoreWebhookPayload,
+} from "@/lib/store-webhooks"
+import {
+  buildWebhookBusinessKey,
+  enqueueStoreWebhookEvent,
+} from "@/lib/webhook-delivery"
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -90,6 +98,7 @@ interface MerchantWebhookRow {
 
 interface StoreRow {
   webhook_url: string | null
+  webhook_secret: string | null
 }
 
 interface QueryResult<Row> {
@@ -340,6 +349,8 @@ async function handleAuthorizationCreated(
     `UPDATE transactions
      SET authorization_id = $1,
          status = 'AUTHORIZED',
+         authorized_at = NOW(),
+         authorization_expires_at = NOW() + INTERVAL '72 hours',
          updated_at = NOW()
      WHERE id = $2`,
     [authorizationId, transaction.id]
@@ -374,6 +385,8 @@ async function handleCaptureCompleted(
      SET status = 'COMPLETED',
          paypal_capture_id = $1,
          gateway_fee = $2,
+         completed_at = NOW(),
+         checkout_expires_at = NULL,
          updated_at = NOW()
      WHERE id = $3`,
     [captureId, gatewayFee.toFixed(2), transaction.id]
@@ -401,6 +414,8 @@ async function handleCaptureDenied(
   await client.query(
     `UPDATE transactions
      SET status = 'FAILED',
+         failed_at = NOW(),
+         checkout_expires_at = NULL,
          updated_at = NOW()
      WHERE id = $1`,
     [transaction.id]
@@ -432,6 +447,7 @@ async function handleCaptureRefunded(
   await client.query(
     `UPDATE transactions
      SET status = 'REFUNDED',
+         refunded_at = NOW(),
          updated_at = NOW()
      WHERE id = $1`,
     [transaction.id]
@@ -463,6 +479,7 @@ async function handleDisputeCreated(
   await client.query(
     `UPDATE transactions
      SET status = 'DISPUTED',
+         disputed_at = NOW(),
          updated_at = NOW()
      WHERE id = $1`,
     [transaction.id]
@@ -607,21 +624,51 @@ export async function POST(req: NextRequest) {
     // ── Send store webhook notification (fire-and-forget) ──────────────────
     if (result.status === "processed") {
       const storeResult = await sql`
-        SELECT webhook_url FROM stores WHERE id = ${transaction.store_id}
+        SELECT webhook_url, webhook_secret FROM stores WHERE id = ${transaction.store_id}
       ` as unknown as StoreRow[]
       const store = storeResult[0]
+      const storeEvent = resolveStoreWebhookEvent(event.event_type)
 
-      if (store?.webhook_url) {
-        sendStoreWebhook(store.webhook_url, {
-          event:             `payment.${event.event_type.split(".").pop()?.toLowerCase()}`,
-          transaction_id:    transaction.id,
-          paypal_order_id:   transaction.paypal_order_id,
-          amount:            parseFloat(transaction.original_amount).toFixed(2),
-          status:            result.new_status ?? "COMPLETED",
-          timestamp:         new Date().toISOString(),
-          ...( result.capture_id       ? { paypal_capture_id: result.capture_id } : {}),
-          ...( result.authorization_id ? { authorization_id: result.authorization_id } : {}),
-          ...( result.gateway_fee      ? { gateway_fee: result.gateway_fee, net_amount: (parseFloat(transaction.original_amount) - parseFloat(result.gateway_fee as string)).toFixed(2) } : {}),
+      if (store?.webhook_url && storeEvent) {
+        const canonicalPayload: Omit<StoreWebhookPayload, "event_id"> = {
+          event: storeEvent,
+          transaction_id: transaction.id,
+          paypal_order_id: transaction.paypal_order_id,
+          amount: parseFloat(transaction.original_amount).toFixed(2),
+          status: String(result.new_status ?? "COMPLETED"),
+          timestamp: new Date().toISOString(),
+          paypal_event_type: event.event_type,
+          ...(result.capture_id ? { paypal_capture_id: String(result.capture_id) } : {}),
+          ...(result.authorization_id ? { authorization_id: String(result.authorization_id) } : {}),
+          ...(result.gateway_fee
+            ? {
+                gateway_fee: String(result.gateway_fee),
+                net_amount: (
+                  parseFloat(transaction.original_amount) -
+                  parseFloat(String(result.gateway_fee))
+                ).toFixed(2),
+              }
+            : {}),
+        }
+
+        const reference =
+          result.capture_id
+            ? String(result.capture_id)
+            : result.authorization_id
+            ? String(result.authorization_id)
+            : event.resource.id
+
+        enqueueStoreWebhookEvent({
+          transactionId: transaction.id,
+          tenantId: transaction.tenant_id,
+          storeId: transaction.store_id,
+          accountId: transaction.merchant_id,
+          targetUrl: store.webhook_url,
+          businessKey: buildWebhookBusinessKey(storeEvent, transaction.id, reference),
+          event: storeEvent,
+          payload: canonicalPayload,
+          source: event.event_type,
+          triggerOrigin: "paypal_webhook",
         }).catch((err) => {
           console.error("[PayPal Webhook] Failed to send store notification:", err)
         })
@@ -639,47 +686,6 @@ export async function POST(req: NextRequest) {
 }
 
 // ─── Store Webhook Notification ───────────────────────────────────────────────
-
-async function sendStoreWebhook(
-  webhookUrl: string,
-  payload: Record<string, unknown>
-): Promise<void> {
-  const maxRetries = 3
-  let attempt = 0
-
-  while (attempt < maxRetries) {
-    attempt++
-    try {
-      const response = await fetch(webhookUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Webhook-Source": "payment-gateway",
-          "X-Webhook-Event": String(payload.event ?? "payment.update"),
-        },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(10000),
-      })
-
-      if (response.ok) {
-        console.log(`[Store Webhook] Successfully notified ${webhookUrl}`)
-        return
-      }
-
-      console.warn(
-        `[Store Webhook] Attempt ${attempt}/${maxRetries} failed with status ${response.status}`
-      )
-    } catch (err) {
-      console.warn(`[Store Webhook] Attempt ${attempt}/${maxRetries} failed:`, err)
-    }
-
-    if (attempt < maxRetries) {
-      await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)))
-    }
-  }
-
-  throw new Error(`Failed to notify store webhook after ${maxRetries} attempts`)
-}
 
 // ─── GET Handler (endpoint health check) ──────────────────────────────────────
 

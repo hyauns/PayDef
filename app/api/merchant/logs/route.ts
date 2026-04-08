@@ -32,7 +32,16 @@ import { getPool } from "@/lib/neon"
 
 // ─── Allowed status values ────────────────────────────────────────────────────
 
-const VALID_STATUSES = ["PENDING", "COMPLETED", "FAILED", "REFUNDED", "DISPUTED"] as const
+const VALID_STATUSES = [
+  "PENDING",
+  "AUTHORIZED",
+  "COMPLETED",
+  "FAILED",
+  "REFUNDED",
+  "DISPUTED",
+  "CANCELED",
+  "EXPIRED",
+] as const
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
 

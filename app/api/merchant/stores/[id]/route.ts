@@ -17,7 +17,10 @@ interface StoreRow {
   tenant_id: string
   name: string
   webhook_url: string | null
+  webhook_secret: string | null
   shield_domain: string | null
+  success_return_url: string | null
+  cancel_return_url: string | null
   is_active: boolean
   capture_mode: string
   checkout_flow: string | null
@@ -44,6 +47,8 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     webhookUrl?: string | null
     isActive?: boolean
     checkoutFlow?: string | null
+    successReturnUrl?: string | null
+    cancelReturnUrl?: string | null
   }
 
   try {
@@ -55,7 +60,8 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   const sql = getSql()
   const existingRows = isSuperAdmin
     ? (await sql`
-        SELECT id, tenant_id, name, webhook_url, shield_domain, is_active,
+        SELECT id, tenant_id, name, webhook_url, webhook_secret, shield_domain,
+               success_return_url, cancel_return_url, is_active,
                COALESCE(capture_mode, 'INSTANT') AS capture_mode,
                checkout_flow, created_at, updated_at
         FROM stores
@@ -63,7 +69,8 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         LIMIT 1
       `)
     : (await sql`
-        SELECT id, tenant_id, name, webhook_url, shield_domain, is_active,
+        SELECT id, tenant_id, name, webhook_url, webhook_secret, shield_domain,
+               success_return_url, cancel_return_url, is_active,
                COALESCE(capture_mode, 'INSTANT') AS capture_mode,
                checkout_flow, created_at, updated_at
         FROM stores
@@ -84,6 +91,16 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     : body.webhookUrl === null
     ? null
     : store.webhook_url
+  const nextSuccessReturnUrl = typeof body.successReturnUrl === "string"
+    ? body.successReturnUrl.trim() || null
+    : body.successReturnUrl === null
+    ? null
+    : store.success_return_url
+  const nextCancelReturnUrl = typeof body.cancelReturnUrl === "string"
+    ? body.cancelReturnUrl.trim() || null
+    : body.cancelReturnUrl === null
+    ? null
+    : store.cancel_return_url
   const nextIsActive = typeof body.isActive === "boolean" ? body.isActive : store.is_active
   const nextCheckoutFlow = body.checkoutFlow === null
     ? null
@@ -96,11 +113,14 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         UPDATE stores
         SET name = ${nextName},
             webhook_url = ${nextWebhookUrl},
+            success_return_url = ${nextSuccessReturnUrl},
+            cancel_return_url = ${nextCancelReturnUrl},
             is_active = ${nextIsActive},
             checkout_flow = ${nextCheckoutFlow},
             updated_at = NOW()
         WHERE id = ${id}
-        RETURNING id, tenant_id, name, webhook_url, shield_domain, is_active,
+        RETURNING id, tenant_id, name, webhook_url, webhook_secret, shield_domain,
+                  success_return_url, cancel_return_url, is_active,
                   COALESCE(capture_mode, 'INSTANT') AS capture_mode,
                   checkout_flow, created_at, updated_at
       `)
@@ -108,11 +128,14 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         UPDATE stores
         SET name = ${nextName},
             webhook_url = ${nextWebhookUrl},
+            success_return_url = ${nextSuccessReturnUrl},
+            cancel_return_url = ${nextCancelReturnUrl},
             is_active = ${nextIsActive},
             checkout_flow = ${nextCheckoutFlow},
             updated_at = NOW()
         WHERE id = ${id} AND tenant_id = ${tenantId}
-        RETURNING id, tenant_id, name, webhook_url, shield_domain, is_active,
+        RETURNING id, tenant_id, name, webhook_url, webhook_secret, shield_domain,
+                  success_return_url, cancel_return_url, is_active,
                   COALESCE(capture_mode, 'INSTANT') AS capture_mode,
                   checkout_flow, created_at, updated_at
       `)
@@ -126,7 +149,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       tenantId: updated.tenant_id,
       name: updated.name,
       webhookUrl: updated.webhook_url,
+      hasWebhookSecret: !!updated.webhook_secret,
       shieldDomain: updated.shield_domain,
+      successReturnUrl: updated.success_return_url,
+      cancelReturnUrl: updated.cancel_return_url,
       isActive: updated.is_active,
       captureMode: updated.capture_mode,
       checkoutFlow: resolveCheckoutFlow(updated.checkout_flow, preferences),
