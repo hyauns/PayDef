@@ -36,6 +36,37 @@ function normalizeStatusLabel(value: unknown): StoreStatusLabel | null {
   return value === "Active" || value === "Trial" || value === "Suspended" ? value : null
 }
 
+/** Live-probe the bridge health endpoint for a given shield domain.
+ *  Returns true when the bridge responds with the expected marker within 5 s. */
+async function probeBridgeLive(domain: string): Promise<boolean> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 5_000)
+  try {
+    const res = await fetch(`https://${domain}/api/health/shield-popup`, {
+      method: "GET",
+      cache: "no-store",
+      signal: controller.signal,
+      headers: { "User-Agent": "Gateway-BridgeCheck/1.0" },
+    })
+    const body = await res.text()
+    if (res.ok && (body.includes("shield-popup-ok") || res.headers.get("x-shield-popup-health") === "ok")) {
+      return true
+    }
+    // Fallback: popup page with ?health=1 query param
+    const res2 = await fetch(`https://${domain}/checkout/popup?health=1`, {
+      method: "GET",
+      cache: "no-store",
+      headers: { "User-Agent": "Gateway-BridgeCheck/1.0" },
+    })
+    const body2 = await res2.text()
+    return res2.ok && body2.includes("shield-popup-ok")
+  } catch {
+    return false
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 async function validateShieldDomainForStore(store: StoreRow, shieldDomain: string | null) {
   if (!shieldDomain) return null
 
@@ -59,8 +90,30 @@ async function validateShieldDomainForStore(store: StoreRow, shieldDomain: strin
   if (domain.tenant_id && domain.tenant_id !== store.tenant_id) {
     throw new Error("Shield domain does not belong to this store tenant.")
   }
-  if (!domain.is_active || !domain.health_ok) {
+  if (!domain.is_active) {
+    throw new Error("Shield domain is not active.")
+  }
+
+  // If the DB snapshot already says healthy, trust it — no probe needed.
+  // If the snapshot says unhealthy (possibly stale after a bridge fix),
+  // do a live probe so the merchant doesn't need to manually Sync first.
+  const bridgeHealthy = domain.health_ok || (await probeBridgeLive(shieldDomain))
+
+  if (!bridgeHealthy) {
     throw new Error("Shield domain must be active and healthy before assignment.")
+  }
+
+  // Snapshot was stale — update it so future saves skip the live probe.
+  if (!domain.health_ok && bridgeHealthy) {
+    try {
+      await sql`
+        UPDATE shield_domains
+        SET health_ok = true, last_check = NOW(), updated_at = NOW()
+        WHERE domain = ${shieldDomain}
+      `
+    } catch {
+      // Non-fatal — assignment still proceeds
+    }
   }
 
   return domain.domain
