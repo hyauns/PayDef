@@ -476,11 +476,11 @@ export async function selectMerchant(opts: RotationOptions): Promise<SelectedMer
       COALESCE(ho.cnt, 0)::TEXT AS recent_order_count
     FROM merchant_accounts ma
     LEFT JOIN (
-      SELECT merchant_account_id, COUNT(*) AS cnt
+      SELECT merchant_id, COUNT(*) AS cnt
       FROM   transactions
       WHERE  created_at > NOW() - INTERVAL '1 hour'
-      GROUP BY merchant_account_id
-    ) ho ON ho.merchant_account_id = ma.id
+      GROUP BY merchant_id
+    ) ho ON ho.merchant_id = ma.id
     WHERE ma.tenant_id = ${tenantId}
       AND ma.status IN ('ACTIVE', 'WARMING_UP')
     ORDER BY ma.priority DESC
