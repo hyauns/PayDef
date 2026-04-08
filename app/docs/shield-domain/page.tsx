@@ -22,6 +22,12 @@ const WHAT_THE_MERCHANT_DOES = [
   "Set success and cancel return URLs if the store wants buyers sent back after the shield flow completes.",
 ]
 
+const STOREFRONT_FACADE_NOTES = [
+  "Shield domains can point to the exact same Vercel project as the gateway admin domain. The app decides what to render by hostname, not by creating a second project.",
+  "The gateway admin domain keeps serving dashboard routes such as /login, /dashboard, and /stores.",
+  "Shield hosts such as rainbowprinthouse.com are rewritten to storefront facade pages while keeping /checkout/popup, /order/success, and /order/cancel available on the same host.",
+]
+
 export default function ShieldDomainDocsPage() {
   return (
     <div className="min-h-screen bg-background font-mono">
@@ -94,6 +100,15 @@ export default function ShieldDomainDocsPage() {
               <li key={item}>{index + 1}. {item}</li>
             ))}
           </ol>
+        </section>
+
+        <section className="bg-card border border-border rounded-lg p-5 space-y-3">
+          <h2 className="text-sm font-semibold text-foreground">Storefront Facade Routing</h2>
+          <ul className="space-y-2 text-sm text-muted-foreground leading-6">
+            {STOREFRONT_FACADE_NOTES.map((item) => (
+              <li key={item}>• {item}</li>
+            ))}
+          </ul>
         </section>
 
         <section className="bg-card border border-border rounded-lg p-5 space-y-3">
