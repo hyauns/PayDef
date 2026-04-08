@@ -739,13 +739,22 @@ export function ShieldDomainsManagerPage() {
                 : "Manage your shield domains and verify popup bridge readiness before assigning them to stores."}
             </p>
           </div>
-          <button
-            onClick={() => setShowAdd(true)}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-mono text-background bg-cyan-400 border border-cyan-400 rounded-md hover:bg-cyan-300 transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Add Domain
-          </button>
+          <div className="flex items-center gap-2">
+            <a
+              href="/docs/shield-domain"
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-mono text-foreground bg-secondary border border-border rounded-md hover:bg-secondary/80 transition-colors"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              Shield Guide
+            </a>
+            <button
+              onClick={() => setShowAdd(true)}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-mono text-background bg-cyan-400 border border-cyan-400 rounded-md hover:bg-cyan-300 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add Domain
+            </button>
+          </div>
         </div>
 
         <div className={`${CARD} px-4 py-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between`}>

@@ -174,8 +174,7 @@ function selectRecommendedRecord(config: DomainConfigResponse, domain: string) {
   return null
 }
 
-async function checkPopupBridgeHealth(domain: string) {
-  const targetUrl = `https://${domain}/checkout/popup?health=1`
+async function probeHealthUrl(targetUrl: string) {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 5_000)
 
@@ -191,19 +190,13 @@ async function checkPopupBridgeHealth(domain: string) {
     })
 
     const body = await response.text()
-    const healthy = response.ok && body.includes("shield-popup-ok")
-    const detail =
-      healthy
-        ? "Popup bridge route responded successfully."
-        : response.status === 404
-          ? "Popup bridge route returned HTTP 404. The active Vercel deployment for this domain does not currently expose /checkout/popup."
-          : "Popup bridge route did not return the expected health marker."
-
     return {
-      healthy,
+      healthy:
+        response.ok &&
+        (body.includes("shield-popup-ok") || response.headers.get("x-shield-popup-health") === "ok"),
       statusCode: response.status,
       checkedAt: new Date().toISOString(),
-      detail,
+      detail: body,
     }
   } catch (error) {
     return {
@@ -219,6 +212,45 @@ async function checkPopupBridgeHealth(domain: string) {
     }
   } finally {
     clearTimeout(timeout)
+  }
+}
+
+async function checkPopupBridgeHealth(domain: string) {
+  const directHealthUrl = `https://${domain}/api/health/shield-popup`
+  const directProbe = await probeHealthUrl(directHealthUrl)
+  if (directProbe.healthy) {
+    return {
+      healthy: true,
+      statusCode: directProbe.statusCode,
+      checkedAt: directProbe.checkedAt,
+      detail: "Popup bridge health endpoint responded successfully.",
+    }
+  }
+
+  const routeHealthUrl = `https://${domain}/checkout/popup?health=1`
+  const routeProbe = await probeHealthUrl(routeHealthUrl)
+  if (routeProbe.healthy) {
+    return {
+      healthy: true,
+      statusCode: routeProbe.statusCode,
+      checkedAt: routeProbe.checkedAt,
+      detail: "Popup bridge route responded successfully.",
+    }
+  }
+
+  const primaryFailure = directProbe.statusCode === 404 ? routeProbe : directProbe
+  const detail =
+    primaryFailure.detail === "Popup bridge health check failed."
+      ? primaryFailure.detail
+      : primaryFailure.statusCode === 404
+        ? "Popup bridge health endpoint returned HTTP 404. Re-sync after deploying the latest build."
+        : "Popup bridge route did not return the expected health marker."
+
+  return {
+    healthy: false,
+    statusCode: primaryFailure.statusCode,
+    checkedAt: primaryFailure.checkedAt,
+    detail,
   }
 }
 

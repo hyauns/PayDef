@@ -63,6 +63,7 @@ interface Store {
   platform: string
   apiKey: string      // sk_live_...
   webhookUrl: string
+  shieldDomain: string
   hasWebhookSecret: boolean
   totalProcessed: number
   txCount: number
@@ -83,6 +84,7 @@ interface StoreApiRow {
   platform?: string | null
   status?: StoreStatus | null
   webhookUrl?: string | null
+  shieldDomain?: string | null
   hasWebhookSecret?: boolean | null
   totalVolume?: number | null
   transactionCount?: number | null
@@ -98,6 +100,18 @@ interface StoreApiRow {
 
 function getErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : "Request failed"
+}
+
+type ShieldDomainRow = {
+  domain: string
+  isActive: boolean
+  vercel?: {
+    bridgeOk?: boolean
+  } | null
+}
+
+type ShieldDomainsApiResponse = {
+  domains?: ShieldDomainRow[]
 }
 
 async function readJsonSafely<T>(response: Response): Promise<T | null> {
@@ -415,6 +429,15 @@ function IntegrationSummary({
           copied={copied}
           onCopy={onCopy}
         />
+        {store.shieldDomain && (
+          <IntegrationField
+            label="Assigned Shield Domain"
+            value={store.shieldDomain}
+            copyKey="webhookUrl"
+            copied={copied}
+            onCopy={onCopy}
+          />
+        )}
         {store.successReturnUrl && (
           <IntegrationField
             label="Success Return URL"
@@ -435,7 +458,14 @@ function IntegrationSummary({
         )}
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex flex-wrap justify-end gap-2">
+        <Link
+          href="/docs/shield-domain"
+          className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-mono rounded-md border border-border text-foreground hover:bg-secondary transition-colors"
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
+          Shield Domain Guide
+        </Link>
         <Link
           href="/docs/api"
           className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-mono rounded-md border border-cyan-400/30 text-cyan-400 hover:bg-cyan-400/10 transition-colors"
@@ -539,6 +569,7 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
         platform: data.store.platform ?? platform,
         apiKey: data.apiKey,
         webhookUrl: data.store.webhookUrl ?? "",
+        shieldDomain: data.store.shieldDomain ?? "",
         hasWebhookSecret: data.store.hasWebhookSecret ?? true,
         totalProcessed: 0,
         txCount: 0,
@@ -740,13 +771,14 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
 
 interface SlideOverProps {
   store: Store | null
+  readyShieldDomains: string[]
   onClose: () => void
   onSave: (updated: Store) => Promise<void>
   onDelete: (id: string) => Promise<void>
   onRegenerateWebhookSecret: (storeId: string) => Promise<string>
 }
 
-function EditSlideOver({ store, onClose, onSave, onDelete, onRegenerateWebhookSecret }: SlideOverProps) {
+function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, onRegenerateWebhookSecret }: SlideOverProps) {
   const [draft, setDraft] = useState<Store | null>(store)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -762,6 +794,11 @@ function EditSlideOver({ store, onClose, onSave, onDelete, onRegenerateWebhookSe
   }
 
   if (!store || !draft) return null
+
+  const selectableShieldDomains =
+    draft.shieldDomain && !readyShieldDomains.includes(draft.shieldDomain)
+      ? [draft.shieldDomain, ...readyShieldDomains]
+      : readyShieldDomains
 
   const update = (patch: Partial<Store>) =>
     setDraft((prev) => (prev ? { ...prev, ...patch } : prev))
@@ -893,6 +930,26 @@ function EditSlideOver({ store, onClose, onSave, onDelete, onRegenerateWebhookSe
                 </a>
               )}
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Shield Domain</label>
+            <select
+              value={draft.shieldDomain}
+              onChange={(e) => update({ shieldDomain: e.target.value })}
+              className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+            >
+              <option value="">No shield domain assigned</option>
+              {selectableShieldDomains.map((domain) => (
+                <option key={domain} value={domain}>
+                  {domain}
+                  {domain === draft.shieldDomain && !readyShieldDomains.includes(domain) ? " (current assignment needs attention)" : ""}
+                </option>
+              ))}
+            </select>
+            <p className="text-[10px] font-mono text-muted-foreground">
+              Only active domains with a healthy popup bridge are offered here.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 gap-3">
@@ -1133,6 +1190,7 @@ export default function StoresPage() {
   const [selectedStore, setSelectedStore] = useState<Store | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [filter, setFilter] = useState<StoreStatus | "All">("All")
+  const [readyShieldDomains, setReadyShieldDomains] = useState<string[]>([])
 
   // Fetch real store data from API
   useEffect(() => {
@@ -1151,6 +1209,7 @@ export default function StoresPage() {
               platform: s.platform ?? "Custom API",
               apiKey: "sk_live_••••••••••••••••",
               webhookUrl: s.webhookUrl ?? "",
+              shieldDomain: s.shieldDomain ?? "",
               hasWebhookSecret: s.hasWebhookSecret ?? false,
               totalProcessed: s.totalVolume ?? 0,
               txCount: transactionCount,
@@ -1168,6 +1227,19 @@ export default function StoresPage() {
         )
       })
       .catch(() => {})
+
+    fetch("/api/merchant/shield-domains", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((data: ShieldDomainsApiResponse) => {
+        const nextDomains = (data.domains ?? [])
+          .filter((domain) => domain.isActive && domain.vercel?.bridgeOk)
+          .map((domain) => domain.domain)
+          .sort((left, right) => left.localeCompare(right))
+        setReadyShieldDomains(nextDomains)
+      })
+      .catch(() => {
+        setReadyShieldDomains([])
+      })
   }, [])
 
   const totalVolume = stores.reduce((sum, s) => sum + s.totalProcessed, 0)
@@ -1186,6 +1258,7 @@ export default function StoresPage() {
         platform: updated.platform,
         status: updated.status,
         webhookUrl: updated.webhookUrl,
+        shieldDomain: updated.shieldDomain || null,
         isActive: updated.enabled,
         checkoutFlow: updated.checkoutFlow,
         successReturnUrl: updated.successReturnUrl,
@@ -1207,6 +1280,7 @@ export default function StoresPage() {
               name: data.store.name,
               platform: data.store.platform ?? updated.platform,
               webhookUrl: data.store.webhookUrl ?? "",
+              shieldDomain: data.store.shieldDomain ?? updated.shieldDomain,
               hasWebhookSecret: data.store.hasWebhookSecret ?? updated.hasWebhookSecret,
               enabled: data.store.isActive ?? updated.enabled,
               checkoutFlow: data.store.checkoutFlow ?? updated.checkoutFlow,
@@ -1551,6 +1625,7 @@ export default function StoresPage() {
       )}
       <EditSlideOver
         store={selectedStore}
+        readyShieldDomains={readyShieldDomains}
         onClose={() => setSelectedStore(null)}
         onSave={handleSave}
         onDelete={handleDelete}

@@ -2,6 +2,10 @@ import { Suspense } from "react"
 import { Loader2 } from "lucide-react"
 import { PopupClient } from "@/app/checkout/popup/popup-client"
 
+type CheckoutPopupPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
+}
+
 function PopupFallback() {
   return (
     <main className="min-h-screen bg-background text-foreground font-mono flex items-center justify-center px-6">
@@ -20,7 +24,18 @@ function PopupFallback() {
   )
 }
 
-export default function CheckoutPopupPage() {
+export default async function CheckoutPopupPage({ searchParams }: CheckoutPopupPageProps) {
+  const resolvedSearchParams = searchParams ? await searchParams : {}
+  const health = resolvedSearchParams.health === "1"
+
+  if (health) {
+    return (
+      <main className="min-h-screen bg-background text-foreground font-mono flex items-center justify-center px-6">
+        <pre className="text-xs text-cyan-400">shield-popup-ok</pre>
+      </main>
+    )
+  }
+
   return (
     <Suspense fallback={<PopupFallback />}>
       <PopupClient />
