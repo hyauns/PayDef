@@ -12,6 +12,12 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-config"
 import { getSql } from "@/lib/neon"
+import {
+  getCheckoutPreferences,
+  normalizeCheckoutFlow,
+  resolveCheckoutFlow,
+  type CheckoutFlow,
+} from "@/lib/checkout-flow"
 import { randomBytes, randomUUID } from "crypto"
 import bcrypt from "bcryptjs"
 
@@ -27,6 +33,7 @@ interface StoreRow {
   shield_domain: string | null
   is_active:     boolean
   capture_mode:  string
+  checkout_flow: string | null
   created_at:    string
   updated_at:    string
 }
@@ -44,8 +51,11 @@ interface StoreTxRow {
 
 function mapStoreResponse(
   store: StoreRow,
-  txStats: { count: number; volume: number; completed: number; failed: number; pending: number }
+  txStats: { count: number; volume: number; completed: number; failed: number; pending: number },
+  defaultFlow: CheckoutFlow
 ) {
+  const checkoutFlow = resolveCheckoutFlow(store.checkout_flow, { defaultFlow })
+
   return {
     id:               store.id,
     tenantId:         store.tenant_id,
@@ -56,6 +66,8 @@ function mapStoreResponse(
     shieldDomain:     store.shield_domain,
     isActive:         store.is_active,
     captureMode:      store.capture_mode ?? "INSTANT",
+    checkoutFlow,
+    checkoutFlowOverride: !!store.checkout_flow,
     transactionCount: txStats.count,
     totalVolume:      txStats.volume,
     completedCount:   txStats.completed,
@@ -91,6 +103,7 @@ export async function GET() {
   }
 
   const sql = getSql()
+  const { defaultFlow } = await getCheckoutPreferences(sql)
 
   // ── Fetch stores (tenant-scoped) ────────────────────────────────────────────
   // CRITICAL: api_key_hash is NOT in the SELECT list — it never leaves the DB.
@@ -99,6 +112,7 @@ export async function GET() {
         SELECT
           s.id, s.tenant_id, s.name, s.webhook_url, s.shield_domain,
           s.is_active, COALESCE(s.capture_mode, 'INSTANT') AS capture_mode,
+          s.checkout_flow,
           s.created_at, s.updated_at,
           t.name AS tenant_name
         FROM stores s
@@ -109,6 +123,7 @@ export async function GET() {
         SELECT
           id, tenant_id, name, webhook_url, shield_domain,
           is_active, COALESCE(capture_mode, 'INSTANT') AS capture_mode,
+          checkout_flow,
           created_at, updated_at
         FROM stores
         WHERE tenant_id = ${tenantId}
@@ -160,7 +175,7 @@ export async function GET() {
 
   return NextResponse.json({
     stores: stores.map((store) =>
-      mapStoreResponse(store, txStats[store.id] ?? defaultStats)
+      mapStoreResponse(store, txStats[store.id] ?? defaultStats, defaultFlow)
     ),
   })
 }
@@ -191,6 +206,7 @@ export async function POST(req: NextRequest) {
     name?: string
     webhookUrl?: string
     shieldDomain?: string
+    checkoutFlow?: string
   }
 
   if (!name || typeof name !== "string" || name.trim().length < 2) {
@@ -221,16 +237,21 @@ export async function POST(req: NextRequest) {
 
   const safeWebhook = typeof webhookUrl === "string" ? webhookUrl.trim() || null : null
   const safeDomain  = typeof shieldDomain === "string" ? shieldDomain.trim() || null : null
+  const rawCheckoutFlow = (body as { checkoutFlow?: string | null }).checkoutFlow
+  const safeCheckoutFlow = rawCheckoutFlow === undefined || rawCheckoutFlow === null
+    ? null
+    : normalizeCheckoutFlow(rawCheckoutFlow)
+  const { defaultFlow } = await getCheckoutPreferences(sql)
 
   const result = await sql`
-    INSERT INTO stores (id, tenant_id, name, api_key_hash, webhook_url, shield_domain)
-    VALUES (${storeId}, ${tenantId}, ${storeName}, ${apiKeyHash}, ${safeWebhook}, ${safeDomain})
-    RETURNING id, name, webhook_url, shield_domain, is_active, created_at
+    INSERT INTO stores (id, tenant_id, name, api_key_hash, webhook_url, shield_domain, checkout_flow)
+    VALUES (${storeId}, ${tenantId}, ${storeName}, ${apiKeyHash}, ${safeWebhook}, ${safeDomain}, ${safeCheckoutFlow})
+    RETURNING id, name, webhook_url, shield_domain, checkout_flow, is_active, created_at
   `
 
   const store = result[0] as {
     id: string; name: string; webhook_url: string | null
-    shield_domain: string | null; is_active: boolean; created_at: string
+    shield_domain: string | null; checkout_flow: string | null; is_active: boolean; created_at: string
   }
 
   return NextResponse.json({
@@ -239,6 +260,8 @@ export async function POST(req: NextRequest) {
       name:         store.name,
       webhookUrl:   store.webhook_url,
       shieldDomain: store.shield_domain,
+      checkoutFlow: resolveCheckoutFlow(store.checkout_flow, { defaultFlow }),
+      checkoutFlowOverride: !!store.checkout_flow,
       isActive:     store.is_active,
       createdAt:    store.created_at,
     },

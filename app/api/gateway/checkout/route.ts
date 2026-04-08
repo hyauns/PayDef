@@ -33,6 +33,11 @@ import bcrypt from "bcryptjs"
 import { getPool, getSql } from "@/lib/neon"
 import { createPayPalOrder, getApprovalUrl } from "@/lib/paypal"
 import { maskItemName, buildShieldUrls } from "@/lib/masking"
+import {
+  buildPopupBridgeUrl,
+  getCheckoutPreferences,
+  resolveCheckoutFlow,
+} from "@/lib/checkout-flow"
 import { decrypt } from "@/lib/encryption"
 import {
   type MerchantAccountRow,
@@ -62,6 +67,7 @@ interface StoreRow {
   api_key_hash:  string
   is_active:     boolean
   capture_mode:  string   // 'INSTANT' | 'MANUAL'
+  checkout_flow: string | null
 }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
@@ -140,7 +146,9 @@ export async function POST(req: NextRequest) {
   // ── Step 3. Resolve store + verify API key (read-only, no mutation) ────────
   const sql = getSql()
   const storeRows = (await sql`
-    SELECT id, tenant_id, api_key_hash, is_active, COALESCE(capture_mode, 'INSTANT') AS capture_mode
+    SELECT id, tenant_id, api_key_hash, is_active,
+           COALESCE(capture_mode, 'INSTANT') AS capture_mode,
+           checkout_flow
     FROM   stores
     WHERE  id = ${storeId}
     LIMIT  1
@@ -157,6 +165,8 @@ export async function POST(req: NextRequest) {
   }
 
   const { tenant_id: tenantId } = store
+  const checkoutPreferences = await getCheckoutPreferences(sql)
+  const flow = resolveCheckoutFlow(store.checkout_flow, checkoutPreferences)
 
   // ── Override intent based on store's capture_mode ──────────────────────────
   // If the store is configured for manual capture, force AUTHORIZE regardless
@@ -180,6 +190,8 @@ export async function POST(req: NextRequest) {
 
   let transactionId: string
   let approvalUrl:   string
+  let popupUrl:      string | null = null
+  let popupOrigin:   string | null = null
 
   try {
     await client.query("BEGIN")
@@ -340,6 +352,10 @@ export async function POST(req: NextRequest) {
     }
 
     approvalUrl = getApprovalUrl(paypalOrder)
+    if (flow === "POPUP_BRIDGE") {
+      popupUrl = buildPopupBridgeUrl(account.shield_domain, approvalUrl, transactionId)
+      popupOrigin = new URL(popupUrl).origin
+    }
 
     // ── Step 10. INSERT PENDING transaction ──────────────────────────────────
     await client.query(
@@ -417,6 +433,9 @@ export async function POST(req: NextRequest) {
     {
       transactionId,
       approvalUrl,
+      flow,
+      popupUrl,
+      popupOrigin,
       intent,
       status: intent === "AUTHORIZE" ? "AUTHORIZED" : "PENDING",
     },

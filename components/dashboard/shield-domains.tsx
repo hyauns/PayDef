@@ -26,6 +26,9 @@ interface DomainApiRow {
   isActive: boolean
   tenantName?: string | null
   healthOk?: boolean | null
+  vercel?: {
+    bridgeOk?: boolean
+  }
 }
 
 // ─── Status config ────────────────────────────────────────────────────────────
@@ -79,9 +82,9 @@ export function ShieldDomains() {
   const [loading, setLoading] = useState(true)
   const [testing, setTesting] = useState<string | null>(null)
 
-  // Fetch real domains from admin API
+  // Fetch tenant-visible domains from the merchant API
   useEffect(() => {
-    fetch("/api/admin/shield-domains")
+    fetch("/api/merchant/shield-domains")
       .then(r => r.json())
       .then(data => {
         setDomains(
@@ -93,7 +96,7 @@ export function ShieldDomains() {
             healthOk: d.healthOk ?? true,
             latency: null,     // Will be filled by Test Connectivity
             ssl: true,         // Default until tested
-            status: d.healthOk === false ? "Down" : (d.isActive ? "Healthy" : "Down"),
+            status: d.vercel?.bridgeOk ? "Healthy" : (d.healthOk === false ? "Down" : (d.isActive ? "Degraded" : "Down")),
             lastChecked: "—",
           }))
         )

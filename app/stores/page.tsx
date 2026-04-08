@@ -26,6 +26,20 @@ import { DashboardHeader } from "@/components/dashboard/header"
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type StoreStatus = "Active" | "Suspended" | "Trial"
+type CheckoutFlow = "REDIRECT" | "POPUP_BRIDGE"
+
+const CHECKOUT_FLOW_OPTIONS: { value: CheckoutFlow; label: string; desc: string }[] = [
+  {
+    value: "REDIRECT",
+    label: "Classic Redirect",
+    desc: "Buyer leaves the storefront and completes approval on PayPal in the same tab.",
+  },
+  {
+    value: "POPUP_BRIDGE",
+    label: "Popup + Shield Bridge",
+    desc: "Buyer approves in a popup while the shield domain handles the return and cancel flow.",
+  },
+]
 
 interface Store {
   id: string          // UUID
@@ -40,6 +54,8 @@ interface Store {
   createdAt: string
   lastPing: string
   successRate: number
+  checkoutFlow: CheckoutFlow
+  checkoutFlowOverride: boolean
 }
 
 interface StoreApiRow {
@@ -52,6 +68,8 @@ interface StoreApiRow {
   createdAt: string
   updatedAt?: string | null
   completedCount?: number | null
+  checkoutFlow?: CheckoutFlow | null
+  checkoutFlowOverride?: boolean | null
 }
 
 function getErrorMessage(err: unknown): string {
@@ -318,6 +336,8 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
         createdAt: new Date(data.store.createdAt).toISOString().slice(0, 10),
         lastPing: "Never",
         successRate: 0,
+        checkoutFlow: data.store.checkoutFlow ?? "REDIRECT",
+        checkoutFlowOverride: data.store.checkoutFlowOverride ?? false,
       }
 
       // Show the real credentials
@@ -489,12 +509,15 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
 interface SlideOverProps {
   store: Store | null
   onClose: () => void
-  onSave: (updated: Store) => void
-  onDelete: (id: string) => void
+  onSave: (updated: Store) => Promise<void>
+  onDelete: (id: string) => Promise<void>
 }
 
 function EditSlideOver({ store, onClose, onSave, onDelete }: SlideOverProps) {
   const [draft, setDraft] = useState<Store | null>(store)
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [error, setError] = useState("")
 
   // Sync when a different store is opened
   if (draft?.id !== store?.id && store !== null) {
@@ -506,9 +529,18 @@ function EditSlideOver({ store, onClose, onSave, onDelete }: SlideOverProps) {
   const update = (patch: Partial<Store>) =>
     setDraft((prev) => (prev ? { ...prev, ...patch } : prev))
 
-  const handleSave = () => {
-    if (draft) onSave(draft)
-    onClose()
+  const handleSave = async () => {
+    if (!draft) return
+    setSaving(true)
+    setError("")
+    try {
+      await onSave(draft)
+      onClose()
+    } catch (err) {
+      setError(getErrorMessage(err))
+    } finally {
+      setSaving(false)
+    }
   }
 
   const statuses: StoreStatus[] = ["Active", "Trial", "Suspended"]
@@ -536,6 +568,12 @@ function EditSlideOver({ store, onClose, onSave, onDelete }: SlideOverProps) {
 
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          {error && (
+            <div className="flex items-start gap-2 text-xs font-mono text-red-400 bg-red-500/5 border border-red-500/20 rounded-md px-3 py-2.5">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              {error}
+            </div>
+          )}
 
           {/* Quick stats */}
           <div className="grid grid-cols-3 gap-3">
@@ -643,6 +681,35 @@ function EditSlideOver({ store, onClose, onSave, onDelete }: SlideOverProps) {
             <ToggleSwitch enabled={draft.enabled} onChange={(v) => update({ enabled: v })} />
           </div>
 
+          <div className="space-y-2">
+            <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Checkout Experience</label>
+            <div className="grid grid-cols-1 gap-2">
+              {CHECKOUT_FLOW_OPTIONS.map((option) => {
+                const active = draft.checkoutFlow === option.value
+                return (
+                  <button
+                    key={option.value}
+                    onClick={() => update({ checkoutFlow: option.value, checkoutFlowOverride: true })}
+                    className={`text-left p-3 rounded-lg border transition-all ${
+                      active
+                        ? "border-cyan-400/40 bg-cyan-400/5 text-foreground"
+                        : "border-border bg-background text-muted-foreground hover:border-border/80 hover:text-foreground"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`w-2 h-2 rounded-full border-2 flex-shrink-0 ${active ? "border-cyan-400 bg-cyan-400" : "border-muted-foreground"}`} />
+                      <span className="text-xs font-mono font-semibold">{option.label}</span>
+                    </div>
+                    <p className="text-[10px] font-mono leading-relaxed pl-4">{option.desc}</p>
+                  </button>
+                )
+              })}
+            </div>
+            <p className="text-[10px] font-mono text-muted-foreground">
+              Existing API clients remain compatible because the gateway still returns the classic <code>approvalUrl</code>.
+            </p>
+          </div>
+
           {/* Metadata */}
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-background border border-border rounded-md px-3 py-2.5">
@@ -662,11 +729,23 @@ function EditSlideOver({ store, onClose, onSave, onDelete }: SlideOverProps) {
               Permanently removes this store and invalidates all API credentials. This cannot be undone.
             </p>
             <button
-              onClick={() => { onDelete(draft.id); onClose() }}
+              onClick={async () => {
+                setDeleting(true)
+                setError("")
+                try {
+                  await onDelete(draft.id)
+                  onClose()
+                } catch (err) {
+                  setError(getErrorMessage(err))
+                } finally {
+                  setDeleting(false)
+                }
+              }}
+              disabled={deleting}
               className="flex items-center gap-2 text-xs font-mono text-red-400 border border-red-500/30 hover:bg-red-500/10 rounded-md px-3 py-1.5 transition-colors"
             >
-              <Trash2 className="w-3.5 h-3.5" />
-              Delete Store
+              {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+              {deleting ? "Deleting..." : "Delete Store"}
             </button>
           </div>
         </div>
@@ -681,9 +760,10 @@ function EditSlideOver({ store, onClose, onSave, onDelete }: SlideOverProps) {
           </button>
           <button
             onClick={handleSave}
+            disabled={saving}
             className="flex-1 px-4 py-2 text-xs font-mono text-background bg-cyan-400 hover:bg-cyan-300 rounded-md transition-colors font-semibold"
           >
-            Save Changes
+            {saving ? "Saving..." : "Save Changes"}
           </button>
         </div>
       </aside>
@@ -701,8 +781,8 @@ function RowMenu({
 }: {
   store: Store
   onEdit: () => void
-  onToggle: () => void
-  onDelete: () => void
+  onToggle: () => void | Promise<void>
+  onDelete: () => void | Promise<void>
 }) {
   const [open, setOpen] = useState(false)
 
@@ -779,6 +859,8 @@ export default function StoresPage() {
               createdAt: new Date(s.createdAt).toISOString().slice(0, 10),
               lastPing: s.updatedAt ? new Date(s.updatedAt).toLocaleString() : "—",
               successRate: transactionCount > 0 ? Math.round((completedCount / transactionCount) * 1000) / 10 : 0,
+              checkoutFlow: s.checkoutFlow ?? "REDIRECT",
+              checkoutFlowOverride: s.checkoutFlowOverride ?? false,
             }
           })
         )
@@ -793,26 +875,87 @@ export default function StoresPage() {
 
   const filtered = filter === "All" ? stores : stores.filter((s) => s.status === filter)
 
-  const handleSave = useCallback((updated: Store) => {
-    setStores((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))
+  const handleSave = useCallback(async (updated: Store) => {
+    const res = await fetch(`/api/merchant/stores/${updated.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: updated.name,
+        webhookUrl: updated.webhookUrl,
+        isActive: updated.enabled,
+        checkoutFlow: updated.checkoutFlow,
+      }),
+    })
+
+    const data = await res.json()
+    if (!res.ok) {
+      throw new Error(data.error ?? "Failed to save store")
+    }
+
+    setStores((prev) =>
+      prev.map((s) =>
+        s.id === updated.id
+          ? {
+              ...s,
+              ...updated,
+              name: data.store.name,
+              webhookUrl: data.store.webhookUrl ?? "",
+              enabled: data.store.isActive ?? updated.enabled,
+              checkoutFlow: data.store.checkoutFlow ?? updated.checkoutFlow,
+              checkoutFlowOverride: data.store.checkoutFlowOverride ?? updated.checkoutFlowOverride,
+              lastPing: data.store.updatedAt ? new Date(data.store.updatedAt).toLocaleString() : updated.lastPing,
+              status: !(data.store.isActive ?? updated.enabled)
+                ? "Suspended"
+                : ((updated.txCount === 0 ? "Trial" : "Active") as StoreStatus),
+            }
+          : s
+      )
+    )
   }, [])
 
   const handleCreate = useCallback((store: Store) => {
     setStores((prev) => [store, ...prev])
   }, [])
 
-  const handleDelete = useCallback((id: string) => {
+  const handleDelete = useCallback(async (id: string) => {
+    const res = await fetch(`/api/merchant/stores/${id}`, { method: "DELETE" })
+    const data = await res.json()
+    if (!res.ok) {
+      throw new Error(data.error ?? "Failed to delete store")
+    }
     setStores((prev) => prev.filter((s) => s.id !== id))
   }, [])
 
-  const handleToggle = useCallback((id: string) => {
-    // Optimistic UI
+  const handleToggle = useCallback(async (id: string) => {
+    const current = stores.find((s) => s.id === id)
+    if (!current) return
+
+    const res = await fetch(`/api/merchant/stores/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isActive: !current.enabled }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      alert(data.error ?? "Failed to update store access")
+      return
+    }
+
     setStores((prev) =>
       prev.map((s) =>
-        s.id === id ? { ...s, enabled: !s.enabled, status: !s.enabled ? "Active" as StoreStatus : "Suspended" as StoreStatus } : s
+        s.id === id
+          ? {
+              ...s,
+              enabled: data.store.isActive ?? !current.enabled,
+              status: data.store.isActive
+                ? ((s.txCount === 0 ? "Trial" : "Active") as StoreStatus)
+                : ("Suspended" as StoreStatus),
+              lastPing: data.store.updatedAt ? new Date(data.store.updatedAt).toLocaleString() : s.lastPing,
+            }
+          : s
       )
     )
-  }, [])
+  }, [stores])
 
   const handleRegen = useCallback(async (id: string) => {
     try {

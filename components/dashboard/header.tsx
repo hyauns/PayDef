@@ -31,6 +31,7 @@ const MERCHANT_NAV = [
   { label: "Overview",     href: "/dashboard" },
   { label: "Accounts",     href: "/accounts" },
   { label: "Stores",       href: "/stores" },
+  { label: "Domains",      href: "/domains" },
   { label: "Transactions", href: "/transactions" },
   { label: "Analytics",    href: "/analytics" },
   { label: "Logs",         href: "/logs" },
@@ -40,6 +41,7 @@ const MERCHANT_NAV = [
 const ADMIN_NAV = [
   { label: "Overview",  href: "/super-admin" },
   { label: "Tenants",   href: "/super-admin/tenants" },
+  { label: "Domains",   href: "/domains" },
   { label: "Analytics", href: "/analytics" },
   { label: "Logs",      href: "/logs" },
   { label: "Settings",  href: "/settings" },

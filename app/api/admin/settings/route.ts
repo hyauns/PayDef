@@ -62,7 +62,14 @@ export async function POST(req: NextRequest) {
   const sql = getSql()
 
   // Upsert each settings key
-  const allowedKeys = ["rotation_rules", "telegram", "security", "gateway_controls", "gateway_api_key"]
+  const allowedKeys = [
+    "rotation_rules",
+    "telegram",
+    "security",
+    "gateway_controls",
+    "gateway_api_key",
+    "checkout_preferences",
+  ]
   const results: Record<string, boolean> = {}
 
   for (const key of allowedKeys) {

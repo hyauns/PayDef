@@ -8,9 +8,9 @@ import {
   updateShieldDomain,
 } from "@/lib/shield-domain-service"
 
-async function requireSuperAdmin() {
+async function requireMerchant() {
   const session = await getServerSession(authOptions)
-  if (!session?.user || session.user.role !== "SUPER_ADMIN") {
+  if (!session?.user || session.user.role !== "MERCHANT" || !session.user.tenantId) {
     return null
   }
 
@@ -28,6 +28,9 @@ function getErrorStatus(message: string) {
     message === "domain is required." ||
     message === "Invalid domain format." ||
     message === "Tenant not found." ||
+    message === "Merchants cannot reassign domains." ||
+    message === "Merchants can only add domains to their own tenant." ||
+    message === "Merchant account is not attached to a tenant." ||
     message === "Domain already exists in the pool." ||
     message === "storeId is required." ||
     message === "Store not found." ||
@@ -40,7 +43,7 @@ function getErrorStatus(message: string) {
 }
 
 export async function GET() {
-  const actor = await requireSuperAdmin()
+  const actor = await requireMerchant()
   if (!actor) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
@@ -50,7 +53,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const actor = await requireSuperAdmin()
+  const actor = await requireMerchant()
   if (!actor) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
@@ -72,7 +75,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const actor = await requireSuperAdmin()
+  const actor = await requireMerchant()
   if (!actor) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
@@ -105,7 +108,7 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const actor = await requireSuperAdmin()
+  const actor = await requireMerchant()
   if (!actor) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }

@@ -40,6 +40,7 @@ const PROTECTED_ROUTES: { prefix: string; roles: Role[] }[] = [
   { prefix: "/settings",   roles: ["SUPER_ADMIN", "MERCHANT"] },
   { prefix: "/analytics",  roles: ["SUPER_ADMIN", "MERCHANT"] },
   { prefix: "/logs",       roles: ["SUPER_ADMIN", "MERCHANT"] },
+  { prefix: "/domains",    roles: ["SUPER_ADMIN", "MERCHANT"] },
 ]
 
 // ─── Token Blacklist Cache ────────────────────────────────────────────────────

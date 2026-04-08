@@ -149,6 +149,19 @@ export function sanitizePayPalField(raw: string, maxLength = 127): string {
 /** Default fallback domain when no shield_domain is configured. */
 const FALLBACK_SHIELD_DOMAIN = "checkout.service-portal.com"
 
+export function resolveShieldBaseUrl(shieldDomain: string | null | undefined): string {
+  let domain = (shieldDomain ?? "").trim()
+  domain = domain.replace(/^https?:\/\//i, "")
+  domain = domain.replace(/[/?#].*$/, "")
+  domain = domain.replace(/[^a-zA-Z0-9.\-]/g, "")
+
+  if (!domain || domain.length < 4 || !domain.includes(".")) {
+    domain = FALLBACK_SHIELD_DOMAIN
+  }
+
+  return `https://${domain}`
+}
+
 /**
  * Builds return / cancel URLs using the merchant's shield domain.
  *
@@ -168,18 +181,7 @@ export function buildShieldUrls(
   shieldDomain: string | null | undefined,
   transactionId: string
 ): { returnUrl: string; cancelUrl: string } {
-  // Sanitize domain: strip protocol, paths, query strings, whitespace
-  let domain = (shieldDomain ?? "").trim()
-  domain = domain.replace(/^https?:\/\//i, "")   // strip protocol
-  domain = domain.replace(/[/?#].*$/, "")          // strip path/query/hash
-  domain = domain.replace(/[^a-zA-Z0-9.\-]/g, "") // whitelist domain chars
-
-  // Fallback to generic domain if empty or obviously invalid
-  if (!domain || domain.length < 4 || !domain.includes(".")) {
-    domain = FALLBACK_SHIELD_DOMAIN
-  }
-
-  const base = `https://${domain}`
+  const base = resolveShieldBaseUrl(shieldDomain)
 
   // Only expose an opaque transaction reference — no product or store data
   const safeRef = encodeURIComponent(transactionId)

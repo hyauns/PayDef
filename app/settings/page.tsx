@@ -30,6 +30,18 @@ const LABEL = "text-[10px] font-mono text-muted-foreground uppercase tracking-wi
 const INPUT = "w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
 const SECTION_HEADER = "px-5 py-3 flex items-center gap-2.5"
 const SECTION_BODY = "px-5 py-5 space-y-5"
+const CHECKOUT_FLOW_OPTIONS = [
+  {
+    value: "REDIRECT",
+    label: "Classic Redirect",
+    desc: "Buyer leaves the store page and completes approval on PayPal in the same tab.",
+  },
+  {
+    value: "POPUP_BRIDGE",
+    label: "Popup + Shield Bridge",
+    desc: "Buyer approves inside a popup while the shield domain handles return and cancel.",
+  },
+] as const
 
 // ─── SWR Fetcher ──────────────────────────────────────────────────────────────
 
@@ -63,6 +75,8 @@ interface MerchantStore {
   apiKeyHash: string
   isActive: boolean
   captureMode: string   // 'INSTANT' | 'MANUAL'
+  checkoutFlow: string
+  checkoutFlowOverride: boolean
 }
 
 interface MerchantStoreApiRow {
@@ -76,6 +90,10 @@ interface MerchantStoreApiRow {
   is_active?: boolean | null
   captureMode?: string | null
   capture_mode?: string | null
+  checkoutFlow?: string | null
+  checkout_flow?: string | null
+  checkoutFlowOverride?: boolean | null
+  checkout_flow_override?: boolean | null
 }
 
 interface MerchantStoresResponse {
@@ -143,6 +161,7 @@ export default function SettingsPage() {
     chatId: "",
     priceRevalidation: true,
     ipWhitelist: "203.0.113.10\n198.51.100.42",
+    checkoutDefaultFlow: "REDIRECT",
     adminEmail: session?.user?.email ?? "admin@gateway.io",
     currentPassword: "",
     newPassword: "",
@@ -162,6 +181,7 @@ export default function SettingsPage() {
     const rotation = s.rotation_rules ?? {}
     const telegram = s.telegram ?? {}
     const security = s.security ?? {}
+    const checkout = s.checkout_preferences ?? {}
     setSettings(prev => ({
       ...prev,
       defaultDailyLimit: String(rotation.defaultDailyLimit ?? "5000"),
@@ -171,6 +191,7 @@ export default function SettingsPage() {
       chatId: telegram.chatId ?? "",
       priceRevalidation: security.priceRevalidation !== false,
       ipWhitelist: security.ipWhitelist ?? "",
+      checkoutDefaultFlow: checkout.defaultFlow === "POPUP_BRIDGE" ? "POPUP_BRIDGE" : "REDIRECT",
     }))
   }, [settingsData])
 
@@ -197,6 +218,9 @@ export default function SettingsPage() {
           security: {
             priceRevalidation: settings.priceRevalidation,
             ipWhitelist: settings.ipWhitelist,
+          },
+          checkout_preferences: {
+            defaultFlow: settings.checkoutDefaultFlow,
           },
         }),
       })
@@ -339,10 +363,13 @@ export default function SettingsPage() {
     apiKeyHash: s.apiKeyHash ?? s.api_key_hash ?? "••••••••",
     isActive: s.isActive ?? s.is_active ?? true,
     captureMode: s.captureMode ?? s.capture_mode ?? "INSTANT",
+    checkoutFlow: s.checkoutFlow ?? s.checkout_flow ?? "REDIRECT",
+    checkoutFlowOverride: s.checkoutFlowOverride ?? s.checkout_flow_override ?? false,
   }))
 
   // Capture mode toggle handler
   const [captureSaving, setCaptureSaving] = useState<string | null>(null)
+  const [checkoutFlowSaving, setCheckoutFlowSaving] = useState<string | null>(null)
   const handleCaptureToggle = async (store: MerchantStore) => {
     const newMode = store.captureMode === "MANUAL" ? "INSTANT" : "MANUAL"
     setCaptureSaving(store.id)
@@ -372,6 +399,48 @@ export default function SettingsPage() {
       setSaveError("Network error")
     } finally {
       setCaptureSaving(null)
+    }
+  }
+
+  const handleCheckoutFlowChange = async (store: MerchantStore, checkoutFlow: string | null) => {
+    setCheckoutFlowSaving(store.id)
+    setSaveError("")
+    try {
+      const res = await fetch("/api/merchant/stores/checkout-flow", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ storeId: store.id, checkoutFlow }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) {
+        setSaveError(data.error ?? "Failed to update checkout flow")
+        return
+      }
+
+      await mutateStores((current) => {
+        if (!current) return current
+        return {
+          ...current,
+          stores: current.stores.map((s) =>
+            s.id === store.id
+              ? {
+                  ...s,
+                  checkoutFlow: data.checkoutFlow,
+                  checkout_flow: data.checkoutFlow,
+                  checkoutFlowOverride: data.checkoutFlowOverride,
+                  checkout_flow_override: data.checkoutFlowOverride,
+                }
+              : s
+          ),
+        }
+      }, false)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch {
+      setSaveError("Network error")
+    } finally {
+      setCheckoutFlowSaving(null)
     }
   }
 
@@ -548,6 +617,52 @@ export default function SettingsPage() {
                       onToggle={() => handleCaptureToggle(store)}
                       disabled={captureSaving === store.id}
                     />
+                  </div>
+
+                  <div className="space-y-3 pt-2 border-t border-border">
+                    <div className="flex items-center gap-2">
+                      <label className={LABEL}>Checkout Experience</label>
+                      {checkoutFlowSaving === store.id && (
+                        <Loader2 className="w-3 h-3 text-cyan-400 animate-spin" />
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <button
+                        onClick={() => handleCheckoutFlowChange(store, null)}
+                        disabled={checkoutFlowSaving === store.id}
+                        className={`text-left p-3 rounded-lg border transition-all disabled:opacity-60 ${
+                          !store.checkoutFlowOverride
+                            ? "border-cyan-400/40 bg-cyan-400/5 text-foreground"
+                            : "border-border bg-background text-muted-foreground hover:border-border/80 hover:text-foreground"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`w-2 h-2 rounded-full border-2 flex-shrink-0 ${!store.checkoutFlowOverride ? "border-cyan-400 bg-cyan-400" : "border-muted-foreground"}`} />
+                          <span className="text-xs font-mono font-semibold">Use Platform Default</span>
+                        </div>
+                        <p className="text-[10px] font-mono leading-relaxed pl-4">
+                          Currently using {store.checkoutFlow === "POPUP_BRIDGE" ? "Popup + Shield Bridge" : "Classic Redirect"}.
+                        </p>
+                      </button>
+                      {CHECKOUT_FLOW_OPTIONS.map((option) => (
+                        <button
+                          key={option.value}
+                          onClick={() => handleCheckoutFlowChange(store, option.value)}
+                          disabled={checkoutFlowSaving === store.id}
+                          className={`text-left p-3 rounded-lg border transition-all disabled:opacity-60 ${
+                            store.checkoutFlowOverride && store.checkoutFlow === option.value
+                              ? "border-cyan-400/40 bg-cyan-400/5 text-foreground"
+                              : "border-border bg-background text-muted-foreground hover:border-border/80 hover:text-foreground"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`w-2 h-2 rounded-full border-2 flex-shrink-0 ${store.checkoutFlowOverride && store.checkoutFlow === option.value ? "border-cyan-400 bg-cyan-400" : "border-muted-foreground"}`} />
+                            <span className="text-xs font-mono font-semibold">{option.label}</span>
+                          </div>
+                          <p className="text-[10px] font-mono leading-relaxed pl-4">{option.desc}</p>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -937,6 +1052,31 @@ export default function SettingsPage() {
                       </button>
                     ))}
                   </div>
+                </div>
+                <div className="space-y-1.5 pt-1">
+                  <label className={LABEL}>Default Checkout Experience</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {CHECKOUT_FLOW_OPTIONS.map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => update({ checkoutDefaultFlow: opt.value })}
+                        className={`text-left p-3 rounded-lg border transition-all ${
+                          settings.checkoutDefaultFlow === opt.value
+                            ? "border-cyan-400/40 bg-cyan-400/5 text-foreground"
+                            : "border-border bg-background text-muted-foreground hover:border-border/80 hover:text-foreground"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`w-2 h-2 rounded-full border-2 flex-shrink-0 ${settings.checkoutDefaultFlow === opt.value ? "border-cyan-400 bg-cyan-400" : "border-muted-foreground"}`} />
+                          <span className="text-xs font-mono font-semibold">{opt.label}</span>
+                        </div>
+                        <p className="text-[10px] font-mono leading-relaxed pl-4">{opt.desc}</p>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground font-mono">
+                    New stores inherit this mode until a merchant overrides it at the store level.
+                  </p>
                 </div>
               </div>
             </div>
