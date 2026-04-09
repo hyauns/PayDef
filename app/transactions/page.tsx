@@ -19,8 +19,6 @@ import {
   RefreshCw,
   Loader2,
   Zap,
-  DollarSign,
-  ShieldCheck,
 } from "lucide-react"
 import { DashboardHeader } from "@/components/dashboard/header"
 
@@ -261,8 +259,7 @@ function SkeletonRow() {
 
 function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }) {
   const [showEmail, setShowEmail] = useState(false)
-  const [replayBusy, setReplayBusy]   = useState(false)
-  const [captureBusy, setCaptureBusy] = useState(false)
+  const [replayBusy, setReplayBusy] = useState(false)
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
   const detailKey = `/api/merchant/transactions/${tx.id}`
   const { data, error, isLoading, mutate } = useSWR<TransactionDetailResponse>(detailKey, fetcher, {
@@ -302,28 +299,7 @@ function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }
     }
   }
 
-  const handleCapture = async () => {
-    const authId = data?.authorization_id
-    if (!authId) return
-    setCaptureBusy(true)
-    setToast(null)
-    try {
-      const response = await fetch(`/api/merchant/transactions/${tx.id}/capture`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ authorization_id: authId }),
-      })
-      const payload = await response.json() as { status?: string; error?: string; paypal_capture_id?: string }
-      if (!response.ok) throw new Error(payload.error ?? "Capture failed")
-      setToast({ ok: true, msg: `✅ Capture successful. PayPal capture ID: ${payload.paypal_capture_id ?? "—"}` })
-      await mutate()
-      globalMutate((key) => typeof key === "string" && key.startsWith("/api/merchant/transactions"))
-    } catch (captureError) {
-      setToast({ ok: false, msg: captureError instanceof Error ? captureError.message : "Capture failed" })
-    } finally {
-      setCaptureBusy(false)
-    }
-  }
+
 
   return (
     <>
@@ -368,27 +344,7 @@ function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }
             <p className="text-xs font-mono text-emerald-400 mt-0.5">Net to merchant: {fmt(amount - fee)}</p>
           </div>
 
-          {/* Capture Funds — only for AUTHORIZED transactions */}
-          {status === "Authorized" && data?.authorization_id && (
-            <div className="border border-indigo-400/20 bg-indigo-400/5 rounded-lg p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
-                <p className="text-xs font-mono font-semibold text-indigo-300">Funds Authorized — Ready to Capture</p>
-              </div>
-              <p className="text-[10px] font-mono text-indigo-300/70">
-                Auth ID: <span className="text-indigo-300">{data.authorization_id}</span>
-              </p>
-              <button
-                onClick={handleCapture}
-                disabled={captureBusy}
-                className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-mono font-semibold bg-indigo-500 hover:bg-indigo-400 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {captureBusy
-                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Capturing…</>
-                  : <><DollarSign className="w-4 h-4" /> Capture {fmt(amount)}</>}
-              </button>
-            </div>
-          )}
+
 
           <div className="grid grid-cols-2 gap-3">
             {[
@@ -577,8 +533,7 @@ export default function TransactionsPage() {
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null)
   const [showFilters, setShowFilters] = useState(false)
   const [page, setPage] = useState(1)
-  const [capturingId, setCapturingId] = useState<string | null>(null)
-  const [captureToast, setCaptureToast] = useState<{ type: "success" | "error"; msg: string } | null>(null)
+
   const perPage = 20
 
   const buildUrl = useCallback(() => {
@@ -637,36 +592,7 @@ export default function TransactionsPage() {
     URL.revokeObjectURL(url)
   }
 
-  const handleCapture = async (transactionId: string) => {
-    if (capturingId) return
 
-    setCapturingId(transactionId)
-    setCaptureToast(null)
-
-    try {
-      const response = await fetch("/api/merchant/transactions/capture", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transactionId }),
-      })
-      const payload = await response.json()
-      if (!response.ok) {
-        setCaptureToast({ type: "error", msg: payload.error ?? "Capture failed" })
-      } else {
-        setCaptureToast({ type: "success", msg: `Captured $${payload.amount} successfully` })
-        globalMutate(buildUrl())
-      }
-    } finally {
-      setCapturingId(null)
-    }
-  }
-
-  const isCapturable = (tx: Transaction) => {
-    if (tx.status !== "Authorized") return false
-    const created = new Date(`${tx.date}T${tx.time}:00Z`)
-    const ageHours = (Date.now() - created.getTime()) / (1000 * 60 * 60)
-    return ageHours < 72
-  }
 
   return (
     <div className="min-h-screen bg-background font-mono">
@@ -678,7 +604,7 @@ export default function TransactionsPage() {
             <p className="text-[10px] uppercase tracking-[0.28em] text-muted-foreground">Operations</p>
             <h1 className="text-xl font-semibold text-foreground mt-1">Transactions</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Review routed payments, manual captures, webhook delivery history, and recovery actions.
+              Review routed payments, webhook delivery history, and recovery actions.
             </p>
           </div>
           <button
@@ -690,15 +616,7 @@ export default function TransactionsPage() {
           </button>
         </div>
 
-        {captureToast && (
-          <div className={`rounded-md border px-3 py-2 text-[11px] font-mono ${
-            captureToast.type === "success"
-              ? "border-emerald-400/20 bg-emerald-400/5 text-emerald-400"
-              : "border-red-500/20 bg-red-500/5 text-red-400"
-          }`}>
-            {captureToast.msg}
-          </div>
-        )}
+
 
         <div className="grid gap-4 md:grid-cols-4">
           {[
@@ -907,23 +825,7 @@ export default function TransactionsPage() {
                                 <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
                                 {cfg.label}
                               </span>
-                              {isCapturable(tx) && (
-                                <button
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    void handleCapture(tx.id)
-                                  }}
-                                  disabled={capturingId === tx.id}
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono font-semibold text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 rounded-md hover:bg-emerald-400/20 transition-colors disabled:opacity-50"
-                                >
-                                  {capturingId === tx.id ? (
-                                    <Loader2 className="w-3 h-3 animate-spin" />
-                                  ) : (
-                                    <Zap className="w-3 h-3" />
-                                  )}
-                                  Capture
-                                </button>
-                              )}
+
                             </div>
                           </td>
                         </tr>
