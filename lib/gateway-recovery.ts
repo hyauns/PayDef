@@ -1,1 +1,377 @@
-import { getPool, getSql } from "@/lib/neon"import { type StoreWebhookPayload } from "@/lib/store-webhooks"import {  buildWebhookBusinessKey,  enqueueStoreWebhookEvent,} from "@/lib/webhook-delivery"type LifecycleRow = {  id: string  tenant_id: string  store_id: string  merchant_id: string  original_amount: string  status: string  paypal_order_id: string | null  authorization_id: string | null  webhook_url: string | null  merchant_success_url: string | null  merchant_cancel_url: string | null  checkout_expires_at: string | null  authorization_expires_at: string | null}type BrowserStatusRow = {  id: string  status: string  paypal_order_id: string | null  merchant_success_url: string | null  merchant_cancel_url: string | null  updated_at: string  checkout_expires_at: string | null  authorization_expires_at: string | null}export type BrowserTransactionStatus = {  transactionId: string  status: string  paypalOrderId: string | null  merchantSuccessUrl: string | null  merchantCancelUrl: string | null  updatedAt: string  checkoutExpiresAt: string | null  authorizationExpiresAt: string | null}function buildLifecyclePayload(input: {  event:    | "payment.checkout.canceled"    | "payment.session.expired"    | "payment.authorization.expired"  transaction: LifecycleRow  status: "CANCELED" | "EXPIRED"  statusReason: string}) {  const canonicalPayload: Omit<StoreWebhookPayload, "event_id"> = {    event: input.event,    transaction_id: input.transaction.id,    paypal_order_id: input.transaction.paypal_order_id,    amount: Number(input.transaction.original_amount).toFixed(2),    status: input.status,    status_reason: input.statusReason,    timestamp: new Date().toISOString(),    authorization_id: input.transaction.authorization_id ?? undefined,  }  return canonicalPayload}async function writeLifecycleLog(action: string, metadata: Record<string, unknown>) {  const sql = getSql()  try {    await sql`      INSERT INTO system_logs (action, status, level, metadata, tenant_id, store_id, account_id)      VALUES (        ${action},        'OK',        'warning',        ${JSON.stringify(metadata)}::jsonb,        ${typeof metadata.tenantId === "string" ? metadata.tenantId : null},        ${typeof metadata.storeId === "string" ? metadata.storeId : null},        ${typeof metadata.accountId === "string" ? metadata.accountId : null}      )    `  } catch {    // best effort  }}export async function getBrowserTransactionStatus(transactionId: string): Promise<BrowserTransactionStatus | null> {  const sql = getSql()  const rows = (await sql`    SELECT      id,      status,      paypal_order_id,      merchant_success_url,      merchant_cancel_url,      updated_at,      checkout_expires_at,      authorization_expires_at    FROM transactions    WHERE id = ${transactionId}    LIMIT 1  `) as unknown as BrowserStatusRow[]  const row = rows[0] ?? null  if (!row) return null  return {    transactionId: row.id,    status: row.status,    paypalOrderId: row.paypal_order_id,    merchantSuccessUrl: row.merchant_success_url,    merchantCancelUrl: row.merchant_cancel_url,    updatedAt: row.updated_at,    checkoutExpiresAt: row.checkout_expires_at,    authorizationExpiresAt: row.authorization_expires_at,  }}export async function markCheckoutCanceled(transactionId: string) {  const pool = getPool()  const client = await pool.connect()  let transaction: LifecycleRow | null = null  let changed = false  try {    await client.query("BEGIN")    const result = await client.query<LifecycleRow>(      `SELECT         t.id,         t.tenant_id,         t.store_id,         t.merchant_id,         t.original_amount,         t.status,         t.paypal_order_id,         t.authorization_id,         s.webhook_url,         t.merchant_success_url,         t.merchant_cancel_url,         t.checkout_expires_at,         t.authorization_expires_at       FROM transactions t       LEFT JOIN stores s ON s.id = t.store_id       WHERE t.id = $1       LIMIT 1       FOR UPDATE OF t`,      [transactionId]    )    transaction = result.rows[0] ?? null    if (!transaction) {      await client.query("ROLLBACK")      return null    }    if (transaction.status === "PENDING") {      await client.query(        `UPDATE transactions         SET status = 'CANCELED'::transaction_status,             canceled_at = NOW(),             checkout_expires_at = NULL,             status_reason = 'buyer_canceled',             updated_at = NOW()         WHERE id = $1`,        [transactionId]      )      changed = true    }    await client.query("COMMIT")  } catch (error) {    await client.query("ROLLBACK").catch(() => null)    throw error  } finally {    client.release()  }  if (!transaction) return null  if (changed) {    await writeLifecycleLog("CHECKOUT_CANCELED", {      transactionId: transaction.id,      tenantId: transaction.tenant_id,      storeId: transaction.store_id,      accountId: transaction.merchant_id,    })    if (transaction.webhook_url) {      void enqueueStoreWebhookEvent({        transactionId: transaction.id,        tenantId: transaction.tenant_id,        storeId: transaction.store_id,        accountId: transaction.merchant_id,        targetUrl: transaction.webhook_url,        businessKey: buildWebhookBusinessKey("payment.checkout.canceled", transaction.id, "buyer_canceled"),        event: "payment.checkout.canceled",        payload: buildLifecyclePayload({          event: "payment.checkout.canceled",          transaction,          status: "CANCELED",          statusReason: "buyer_canceled",        }),        source: "browser_cancel",        triggerOrigin: "buyer_cancel",      }).catch(() => null)    }  }  const latest = await getBrowserTransactionStatus(transactionId)  return {    changed,    status: latest,  }}export async function processExpiredTransactions(limit = 50) {  const pool = getPool()  const client = await pool.connect()  const expiredSessions: LifecycleRow[] = []  const expiredAuthorizations: LifecycleRow[] = []  try {    await client.query("BEGIN")    const sessionRows = await client.query<LifecycleRow>(      `SELECT         t.id,         t.tenant_id,         t.store_id,         t.merchant_id,         t.original_amount,         t.status,         t.paypal_order_id,         t.authorization_id,         s.webhook_url,         t.merchant_success_url,         t.merchant_cancel_url,         t.checkout_expires_at,         t.authorization_expires_at       FROM transactions t       LEFT JOIN stores s ON s.id = t.store_id       WHERE t.status = 'PENDING'         AND t.checkout_expires_at IS NOT NULL         AND t.checkout_expires_at <= NOW()       ORDER BY t.checkout_expires_at ASC       LIMIT $1       FOR UPDATE OF t SKIP LOCKED`,      [limit]    )    for (const row of sessionRows.rows) {      await client.query(        `UPDATE transactions         SET status = 'EXPIRED'::transaction_status,             status_reason = 'session_expired',             updated_at = NOW()         WHERE id = $1`,        [row.id]      )      expiredSessions.push(row)    }    const authorizationRows = await client.query<LifecycleRow>(      `SELECT         t.id,         t.tenant_id,         t.store_id,         t.merchant_id,         t.original_amount,         t.status,         t.paypal_order_id,         t.authorization_id,         s.webhook_url,         t.merchant_success_url,         t.merchant_cancel_url,         t.checkout_expires_at,         t.authorization_expires_at       FROM transactions t       LEFT JOIN stores s ON s.id = t.store_id       WHERE t.status = 'AUTHORIZED'         AND t.authorization_expires_at IS NOT NULL         AND t.authorization_expires_at <= NOW()       ORDER BY t.authorization_expires_at ASC       LIMIT $1       FOR UPDATE OF t SKIP LOCKED`,      [limit]    )    for (const row of authorizationRows.rows) {      await client.query(        `UPDATE transactions         SET status = 'EXPIRED'::transaction_status,             status_reason = 'authorization_expired',             updated_at = NOW()         WHERE id = $1`,        [row.id]      )      expiredAuthorizations.push(row)    }    await client.query("COMMIT")  } catch (error) {    await client.query("ROLLBACK").catch(() => null)    throw error  } finally {    client.release()  }  for (const row of expiredSessions) {    await writeLifecycleLog("CHECKOUT_EXPIRED", {      transactionId: row.id,      tenantId: row.tenant_id,      storeId: row.store_id,      accountId: row.merchant_id,      reason: "session_expired",    })    if (row.webhook_url) {      void enqueueStoreWebhookEvent({        transactionId: row.id,        tenantId: row.tenant_id,        storeId: row.store_id,        accountId: row.merchant_id,        targetUrl: row.webhook_url,        businessKey: buildWebhookBusinessKey("payment.session.expired", row.id, "session_expired"),        event: "payment.session.expired",        payload: buildLifecyclePayload({          event: "payment.session.expired",          transaction: row,          status: "EXPIRED",          statusReason: "session_expired",        }),        source: "recovery_cron",        triggerOrigin: "session_expiry",      }).catch(() => null)    }  }  for (const row of expiredAuthorizations) {    await writeLifecycleLog("AUTHORIZATION_EXPIRED", {      transactionId: row.id,      tenantId: row.tenant_id,      storeId: row.store_id,      accountId: row.merchant_id,      reason: "authorization_expired",    })    if (row.webhook_url) {      void enqueueStoreWebhookEvent({        transactionId: row.id,        tenantId: row.tenant_id,        storeId: row.store_id,        accountId: row.merchant_id,        targetUrl: row.webhook_url,        businessKey: buildWebhookBusinessKey("payment.authorization.expired", row.id, "authorization_expired"),        event: "payment.authorization.expired",        payload: buildLifecyclePayload({          event: "payment.authorization.expired",          transaction: row,          status: "EXPIRED",          statusReason: "authorization_expired",        }),        source: "recovery_cron",        triggerOrigin: "authorization_expiry",      }).catch(() => null)    }  }  return {    expiredSessions: expiredSessions.length,    expiredAuthorizations: expiredAuthorizations.length,  }}
+import { getPool, getSql } from "@/lib/neon"
+import { type StoreWebhookPayload } from "@/lib/store-webhooks"
+import {
+  buildWebhookBusinessKey,
+  enqueueStoreWebhookEvent,
+} from "@/lib/webhook-delivery"
+
+type LifecycleRow = {
+  id: string
+  tenant_id: string
+  store_id: string
+  merchant_id: string
+  original_amount: string
+  status: string
+  paypal_order_id: string | null
+  authorization_id: string | null
+  webhook_url: string | null
+  merchant_success_url: string | null
+  merchant_cancel_url: string | null
+  checkout_expires_at: string | null
+  authorization_expires_at: string | null
+}
+
+type BrowserStatusRow = {
+  id: string
+  status: string
+  paypal_order_id: string | null
+  merchant_success_url: string | null
+  merchant_cancel_url: string | null
+  updated_at: string
+  checkout_expires_at: string | null
+  authorization_expires_at: string | null
+}
+
+export type BrowserTransactionStatus = {
+  transactionId: string
+  status: string
+  paypalOrderId: string | null
+  merchantSuccessUrl: string | null
+  merchantCancelUrl: string | null
+  updatedAt: string
+  checkoutExpiresAt: string | null
+  authorizationExpiresAt: string | null
+}
+
+function buildLifecyclePayload(input: {
+  event:
+    | "payment.checkout.canceled"
+    | "payment.session.expired"
+    | "payment.authorization.expired"
+  transaction: LifecycleRow
+  status: "CANCELED" | "EXPIRED"
+  statusReason: string
+}) {
+  const canonicalPayload: Omit<StoreWebhookPayload, "event_id"> = {
+    event: input.event,
+    transaction_id: input.transaction.id,
+    paypal_order_id: input.transaction.paypal_order_id,
+    amount: Number(input.transaction.original_amount).toFixed(2),
+    status: input.status,
+    status_reason: input.statusReason,
+    timestamp: new Date().toISOString(),
+    authorization_id: input.transaction.authorization_id ?? undefined,
+  }
+
+  return canonicalPayload
+}
+
+async function writeLifecycleLog(action: string, metadata: Record<string, unknown>) {
+  const sql = getSql()
+
+  try {
+    await sql`
+      INSERT INTO system_logs (action, status, level, metadata, tenant_id, store_id, account_id)
+      VALUES (
+        ${action},
+        'OK',
+        'warning',
+        ${JSON.stringify(metadata)}::jsonb,
+        ${typeof metadata.tenantId === "string" ? metadata.tenantId : null},
+        ${typeof metadata.storeId === "string" ? metadata.storeId : null},
+        ${typeof metadata.accountId === "string" ? metadata.accountId : null}
+      )
+    `
+  } catch {
+    // best effort
+  }
+}
+
+export async function getBrowserTransactionStatus(transactionId: string): Promise<BrowserTransactionStatus | null> {
+  const sql = getSql()
+  const rows = (await sql`
+    SELECT
+      id,
+      status,
+      paypal_order_id,
+      merchant_success_url,
+      merchant_cancel_url,
+      updated_at,
+      checkout_expires_at,
+      authorization_expires_at
+    FROM transactions
+    WHERE id = ${transactionId}
+    LIMIT 1
+  `) as unknown as BrowserStatusRow[]
+
+  const row = rows[0] ?? null
+  if (!row) return null
+
+  return {
+    transactionId: row.id,
+    status: row.status,
+    paypalOrderId: row.paypal_order_id,
+    merchantSuccessUrl: row.merchant_success_url,
+    merchantCancelUrl: row.merchant_cancel_url,
+    updatedAt: row.updated_at,
+    checkoutExpiresAt: row.checkout_expires_at,
+    authorizationExpiresAt: row.authorization_expires_at,
+  }
+}
+
+export async function markCheckoutCanceled(transactionId: string) {
+  const pool = getPool()
+  const client = await pool.connect()
+  let transaction: LifecycleRow | null = null
+  let changed = false
+
+  try {
+    await client.query("BEGIN")
+
+    const result = await client.query<LifecycleRow>(
+      `SELECT
+         t.id,
+         t.tenant_id,
+         t.store_id,
+         t.merchant_id,
+         t.original_amount,
+         t.status,
+         t.paypal_order_id,
+         t.authorization_id,
+         s.webhook_url,
+         t.merchant_success_url,
+         t.merchant_cancel_url,
+         t.checkout_expires_at,
+         t.authorization_expires_at
+       FROM transactions t
+       LEFT JOIN stores s ON s.id = t.store_id
+       WHERE t.id = $1
+       LIMIT 1
+       FOR UPDATE OF t`,
+      [transactionId]
+    )
+
+    transaction = result.rows[0] ?? null
+    if (!transaction) {
+      await client.query("ROLLBACK")
+      return null
+    }
+
+    if (transaction.status === "PENDING") {
+      await client.query(
+        `UPDATE transactions
+         SET status = 'CANCELED'::transaction_status,
+             canceled_at = NOW(),
+             checkout_expires_at = NULL,
+             status_reason = 'buyer_canceled',
+             updated_at = NOW()
+         WHERE id = $1`,
+        [transactionId]
+      )
+      changed = true
+    }
+
+    await client.query("COMMIT")
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => null)
+    throw error
+  } finally {
+    client.release()
+  }
+
+  if (!transaction) return null
+
+  if (changed) {
+    await writeLifecycleLog("CHECKOUT_CANCELED", {
+      transactionId: transaction.id,
+      tenantId: transaction.tenant_id,
+      storeId: transaction.store_id,
+      accountId: transaction.merchant_id,
+    })
+
+    if (transaction.webhook_url) {
+      void enqueueStoreWebhookEvent({
+        transactionId: transaction.id,
+        tenantId: transaction.tenant_id,
+        storeId: transaction.store_id,
+        accountId: transaction.merchant_id,
+        targetUrl: transaction.webhook_url,
+        businessKey: buildWebhookBusinessKey("payment.checkout.canceled", transaction.id, "buyer_canceled"),
+        event: "payment.checkout.canceled",
+        payload: buildLifecyclePayload({
+          event: "payment.checkout.canceled",
+          transaction,
+          status: "CANCELED",
+          statusReason: "buyer_canceled",
+        }),
+        source: "browser_cancel",
+        triggerOrigin: "buyer_cancel",
+      }).catch(() => null)
+    }
+  }
+
+  const latest = await getBrowserTransactionStatus(transactionId)
+  return {
+    changed,
+    status: latest,
+  }
+}
+
+export async function processExpiredTransactions(limit = 50) {
+  const pool = getPool()
+  const client = await pool.connect()
+  const expiredSessions: LifecycleRow[] = []
+  const expiredAuthorizations: LifecycleRow[] = []
+
+  try {
+    await client.query("BEGIN")
+
+    const sessionRows = await client.query<LifecycleRow>(
+      `SELECT
+         t.id,
+         t.tenant_id,
+         t.store_id,
+         t.merchant_id,
+         t.original_amount,
+         t.status,
+         t.paypal_order_id,
+         t.authorization_id,
+         s.webhook_url,
+         t.merchant_success_url,
+         t.merchant_cancel_url,
+         t.checkout_expires_at,
+         t.authorization_expires_at
+       FROM transactions t
+       LEFT JOIN stores s ON s.id = t.store_id
+       WHERE t.status = 'PENDING'
+         AND t.checkout_expires_at IS NOT NULL
+         AND t.checkout_expires_at <= NOW()
+       ORDER BY t.checkout_expires_at ASC
+       LIMIT $1
+       FOR UPDATE OF t SKIP LOCKED`,
+      [limit]
+    )
+
+    for (const row of sessionRows.rows) {
+      await client.query(
+        `UPDATE transactions
+         SET status = 'EXPIRED'::transaction_status,
+             status_reason = 'session_expired',
+             updated_at = NOW()
+         WHERE id = $1`,
+        [row.id]
+      )
+      expiredSessions.push(row)
+    }
+
+    const authorizationRows = await client.query<LifecycleRow>(
+      `SELECT
+         t.id,
+         t.tenant_id,
+         t.store_id,
+         t.merchant_id,
+         t.original_amount,
+         t.status,
+         t.paypal_order_id,
+         t.authorization_id,
+         s.webhook_url,
+         t.merchant_success_url,
+         t.merchant_cancel_url,
+         t.checkout_expires_at,
+         t.authorization_expires_at
+       FROM transactions t
+       LEFT JOIN stores s ON s.id = t.store_id
+       WHERE t.status = 'AUTHORIZED'
+         AND t.authorization_expires_at IS NOT NULL
+         AND t.authorization_expires_at <= NOW()
+       ORDER BY t.authorization_expires_at ASC
+       LIMIT $1
+       FOR UPDATE OF t SKIP LOCKED`,
+      [limit]
+    )
+
+    for (const row of authorizationRows.rows) {
+      await client.query(
+        `UPDATE transactions
+         SET status = 'EXPIRED'::transaction_status,
+             status_reason = 'authorization_expired',
+             updated_at = NOW()
+         WHERE id = $1`,
+        [row.id]
+      )
+      expiredAuthorizations.push(row)
+    }
+
+    await client.query("COMMIT")
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => null)
+    throw error
+  } finally {
+    client.release()
+  }
+
+  for (const row of expiredSessions) {
+    await writeLifecycleLog("CHECKOUT_EXPIRED", {
+      transactionId: row.id,
+      tenantId: row.tenant_id,
+      storeId: row.store_id,
+      accountId: row.merchant_id,
+      reason: "session_expired",
+    })
+
+    if (row.webhook_url) {
+      void enqueueStoreWebhookEvent({
+        transactionId: row.id,
+        tenantId: row.tenant_id,
+        storeId: row.store_id,
+        accountId: row.merchant_id,
+        targetUrl: row.webhook_url,
+        businessKey: buildWebhookBusinessKey("payment.session.expired", row.id, "session_expired"),
+        event: "payment.session.expired",
+        payload: buildLifecyclePayload({
+          event: "payment.session.expired",
+          transaction: row,
+          status: "EXPIRED",
+          statusReason: "session_expired",
+        }),
+        source: "recovery_cron",
+        triggerOrigin: "session_expiry",
+      }).catch(() => null)
+    }
+  }
+
+  for (const row of expiredAuthorizations) {
+    await writeLifecycleLog("AUTHORIZATION_EXPIRED", {
+      transactionId: row.id,
+      tenantId: row.tenant_id,
+      storeId: row.store_id,
+      accountId: row.merchant_id,
+      reason: "authorization_expired",
+    })
+
+    if (row.webhook_url) {
+      void enqueueStoreWebhookEvent({
+        transactionId: row.id,
+        tenantId: row.tenant_id,
+        storeId: row.store_id,
+        accountId: row.merchant_id,
+        targetUrl: row.webhook_url,
+        businessKey: buildWebhookBusinessKey("payment.authorization.expired", row.id, "authorization_expired"),
+        event: "payment.authorization.expired",
+        payload: buildLifecyclePayload({
+          event: "payment.authorization.expired",
+          transaction: row,
+          status: "EXPIRED",
+          statusReason: "authorization_expired",
+        }),
+        source: "recovery_cron",
+        triggerOrigin: "authorization_expiry",
+      }).catch(() => null)
+    }
+  }
+
+  return {
+    expiredSessions: expiredSessions.length,
+    expiredAuthorizations: expiredAuthorizations.length,
+  }
+}
