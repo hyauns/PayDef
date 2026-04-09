@@ -10,6 +10,7 @@ type StoreStatus = "Active" | "Suspended" | "Trial"
 interface Store {
   id: string
   name: string
+  platform: string
   tenantName?: string
   webhookUrl?: string | null
   totalVolume: number
@@ -21,6 +22,7 @@ interface Store {
 interface StoreApiRow {
   id: string
   name: string
+  platform?: string | null
   tenantName?: string
   webhookUrl?: string | null
   totalVolume?: number | null
@@ -105,6 +107,7 @@ export function ConnectedStores() {
           ((data.stores ?? []) as StoreApiRow[]).map((s) => ({
             id: s.id,
             name: s.name,
+            platform: s.platform ?? "Custom API",
             tenantName: s.tenantName,
             webhookUrl: s.webhookUrl,
             totalVolume: s.totalVolume ?? 0,
@@ -179,7 +182,7 @@ export function ConnectedStores() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="font-mono text-xs text-muted-foreground">—</span>
+                        <span className="font-mono text-xs text-foreground">{store.platform}</span>
                       </td>
                       <td className="px-4 py-3">
                         <span className="font-mono text-sm text-foreground">

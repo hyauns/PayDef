@@ -29,7 +29,17 @@ import {
   Info,
   Ban,
   Loader2,
+  Zap,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { DashboardHeader } from "@/components/dashboard/header"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -769,9 +779,41 @@ function AddMerchantModal({
     fakeProductName: "Digital Service Upgrade",
   })
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState("")
+  const [error, setError]   = useState("")
+  const [testing, setTesting]   = useState(false)
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null)
 
-  const update = (patch: Partial<typeof form>) => setForm((p) => ({ ...p, ...patch }))
+  const update = (patch: Partial<typeof form>) => {
+    setForm((p) => ({ ...p, ...patch }))
+    // Reset test result if credentials change
+    if ("clientId" in patch || "clientSecret" in patch) setTestResult(null)
+  }
+
+  const handleTestPaypal = async () => {
+    if (!form.clientId || !form.clientSecret) {
+      setTestResult({ ok: false, message: "Enter Client ID and Secret to test" })
+      return
+    }
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const res  = await fetch("/api/merchant/test-paypal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId: form.clientId, clientSecret: form.clientSecret }),
+      })
+      const data = await res.json() as { ok: boolean; message?: string; error?: string; latencyMs?: number; env?: string }
+      if (data.ok) {
+        setTestResult({ ok: true, message: data.message ?? `Connected to PayPal ${data.env ?? "sandbox"} in ${data.latencyMs}ms` })
+      } else {
+        setTestResult({ ok: false, message: data.error ?? "Connection failed" })
+      }
+    } catch {
+      setTestResult({ ok: false, message: "Network error — check your connection" })
+    } finally {
+      setTesting(false)
+    }
+  }
 
   useEffect(() => {
     if (
@@ -859,12 +901,10 @@ function AddMerchantModal({
             </button>
           </div>
           <div className="p-5 space-y-4 overflow-y-auto flex-1">
-            {/* Basic info */}
+            {/* Basic info — standard fields */}
             {[
               { label: "Account Name", key: "accountName", placeholder: "PP-Main-01" },
-              { label: "PayPal Email", key: "email", placeholder: "payments@store.com" },
-              { label: "Client ID", key: "clientId", placeholder: "AeBFXkzLmNoPQrStUvWxYz..." },
-              { label: "Client Secret", key: "clientSecret", placeholder: "EGfghIjkLMNopQRstUVwx..." },
+              { label: "PayPal Email",  key: "email",       placeholder: "payments@store.com" },
             ].map((f) => (
               <div key={f.key} className="space-y-1.5">
                 <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{f.label}</label>
@@ -876,6 +916,58 @@ function AddMerchantModal({
                 />
               </div>
             ))}
+
+            {/* PayPal API Credentials + Test Connection */}
+            <div className="space-y-3 border border-border rounded-lg p-4 bg-background">
+              <div className="flex items-center gap-2">
+                <Lock className="w-3.5 h-3.5 text-cyan-400" />
+                <p className="text-xs font-mono font-semibold text-foreground">PayPal API Credentials</p>
+              </div>
+              {[
+                { label: "Client ID",     key: "clientId",     placeholder: "AeBFXkzLmNoPQrStUvWxYz..." },
+                { label: "Client Secret", key: "clientSecret", placeholder: "EGfghIjkLMNopQRstUVwx..." },
+              ].map((f) => (
+                <div key={f.key} className="space-y-1.5">
+                  <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{f.label}</label>
+                  <input
+                    value={String(form[f.key as keyof typeof form])}
+                    onChange={(e) => update({ [f.key]: e.target.value })}
+                    placeholder={f.placeholder}
+                    type={f.key === "clientSecret" ? "password" : "text"}
+                    className="w-full bg-card border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+                  />
+                </div>
+              ))}
+
+              {/* Test Connection button */}
+              <button
+                type="button"
+                onClick={handleTestPaypal}
+                disabled={testing || !form.clientId || !form.clientSecret}
+                className={`w-full flex items-center justify-center gap-2 text-xs font-mono py-2 rounded-md border transition-colors
+                  ${ testResult?.ok
+                    ? "bg-emerald-400/10 border-emerald-400/30 text-emerald-400"
+                    : testResult && !testResult.ok
+                      ? "bg-red-400/10 border-red-400/30 text-red-400"
+                      : "bg-secondary border-border text-muted-foreground hover:text-foreground hover:border-cyan-400/30"
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                {testing ? (
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Testing connection...</>
+                ) : testResult?.ok ? (
+                  <><CheckCircle2 className="w-3.5 h-3.5" /> {testResult.message}</>
+                ) : testResult && !testResult.ok ? (
+                  <><XCircle className="w-3.5 h-3.5" /> {testResult.message}</>
+                ) : (
+                  <><Zap className="w-3.5 h-3.5" /> Test PayPal Connection</>
+                )}
+              </button>
+
+              <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground bg-secondary/50 rounded-md px-3 py-2">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                Credentials are encrypted at rest with AES-256 and never logged
+              </div>
+            </div>
 
             {/* Proxy URL */}
             <div className="space-y-1.5">
@@ -1416,49 +1508,48 @@ export default function AccountsPage() {
                     </td>
 
                     {/* Actions */}
-                    <td className="px-4 py-3 relative" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => setOpenMenu(openMenu === m.id ? null : m.id)}
-                        className="p-1.5 rounded-md hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
-                      >
-                        <MoreHorizontal className="w-4 h-4" />
-                      </button>
-                      {openMenu === m.id && (
-                        <div className="absolute right-2 top-10 z-20 bg-popover border border-border rounded-lg shadow-xl text-xs font-mono min-w-[160px] py-1">
-                          <button
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="p-1.5 rounded-md hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground focus:outline-none">
+                            <MoreHorizontal className="w-4 h-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44 bg-popover border-border text-xs font-mono">
+                          <DropdownMenuItem
                             onClick={() => { setSelected(m); setOpenMenu(null) }}
-                            className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-secondary text-foreground transition-colors"
+                            className="flex items-center gap-2 cursor-pointer"
                           >
                             <SlidersHorizontal className="w-3.5 h-3.5 text-muted-foreground" />
                             Edit Details
-                          </button>
+                          </DropdownMenuItem>
                           {m.status !== "Paused" ? (
-                            <button
+                            <DropdownMenuItem
                               onClick={() => toggleStatus(m.id, "pause")}
-                              className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-secondary text-amber-400 transition-colors"
+                              className="flex items-center gap-2 text-amber-400 focus:text-amber-400 cursor-pointer"
                             >
                               <Pause className="w-3.5 h-3.5" />
                               Pause Account
-                            </button>
+                            </DropdownMenuItem>
                           ) : (
-                            <button
+                            <DropdownMenuItem
                               onClick={() => toggleStatus(m.id, "resume")}
-                              className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-secondary text-emerald-400 transition-colors"
+                              className="flex items-center gap-2 text-emerald-400 focus:text-emerald-400 cursor-pointer"
                             >
                               <Play className="w-3.5 h-3.5" />
                               Resume Account
-                            </button>
+                            </DropdownMenuItem>
                           )}
-                          <div className="border-t border-border my-1" />
-                          <button
-                            onClick={() => { handleDelete(m.id); setOpenMenu(null) }}
-                            className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-secondary text-red-400 transition-colors"
+                          <DropdownMenuSeparator className="bg-border" />
+                          <DropdownMenuItem
+                            onClick={() => handleDelete(m.id)}
+                            className="flex items-center gap-2 text-red-400 focus:text-red-400 focus:bg-red-400/10 cursor-pointer"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                             Remove
-                          </button>
-                        </div>
-                      )}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </td>
                   </tr>
                 ))}
