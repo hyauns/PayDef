@@ -375,11 +375,11 @@ export async function POST(req: NextRequest) {
        ) VALUES (
          $1,  $2,  $3,  $4,
          $5,  $6,  $7,
-         0,   $13,
+         0,   $13::transaction_status,
          $8,  $9,
          $10, $11, $12, $11,
          NOW() + INTERVAL '30 minutes',
-         CASE WHEN $13 = 'AUTHORIZED' THEN NOW() + INTERVAL '72 hours' ELSE NULL END,
+         CASE WHEN $13::transaction_status = 'AUTHORIZED' THEN NOW() + INTERVAL '72 hours' ELSE NULL END,
          $14, $15,
          NOW(), NOW()
        )`,
