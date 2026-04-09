@@ -146,8 +146,44 @@ export function OrderResultClient({ status }: { status: ResultStatus }) {
     }
 
     const pollSuccess = async () => {
-      const maxAttempts = 25
+      const maxAttempts = 20
 
+      // ── Step 1: Trigger PayPal execute (authorize or capture) ──────────────
+      // This is the CRITICAL step that actually calls PayPal's /capture or
+      // /authorize API. Without this, money NEVER moves — PayPal order stays
+      // in APPROVED state indefinitely.
+      setMessage("Executing payment with PayPal\u2026")
+
+      try {
+        const execRes = await fetch("/api/gateway/execute", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ transactionId: ref }),
+          cache:   "no-store",
+        })
+
+        if (execRes.ok) {
+          const execData = (await execRes.json()) as {
+            status: TransactionState
+            transaction_id: string
+            already_executed?: boolean
+          }
+
+          // If execute returned a terminal status, fetch full payload and finish
+          if (SUCCESS_STATES.includes(execData.status) || FAILURE_STATES.includes(execData.status)) {
+            const statusRes = await fetch(`/api/gateway/browser-status/${ref}`, { cache: "no-store" })
+            const statusPayload = (await statusRes.json()) as BrowserResultPayload
+            finish(statusPayload, SUCCESS_STATES.includes(execData.status) ? "success" : "cancel")
+            return
+          }
+        } else {
+          console.warn("[result-client] /execute returned error:", execRes.status)
+        }
+      } catch (execErr) {
+        console.warn("[result-client] /execute network error:", execErr)
+      }
+
+      // ── Step 2: Poll status until terminal (webhook may update it) ─────────
       for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
         if (!active) return
 
@@ -172,14 +208,14 @@ export function OrderResultClient({ status }: { status: ResultStatus }) {
           return
         }
 
-        setMessage(`Waiting for webhook confirmation… attempt ${attempt}/${maxAttempts}`)
+        setMessage(`Confirming with PayPal\u2026 (${attempt}/${maxAttempts})`)
         await new Promise((resolve) => {
           window.setTimeout(resolve, 2000)
         })
       }
 
       setPhase("ready")
-      setMessage("Still waiting for webhook confirmation. The transaction remains pending on the gateway.")
+      setMessage("Payment is being confirmed. You can safely close this window \u2014 the transaction will update automatically.")
       postResult("success", ref)
     }
 

@@ -402,3 +402,111 @@ export async function captureAuthorization(
 
   return res.json() as Promise<CaptureResponse>
 }
+
+// ─── Execute Approved Order: Capture ─────────────────────────────────────────
+//
+// Called after buyer returns from PayPal with an APPROVED order.
+// For CAPTURE intent: calls POST /v2/checkout/orders/{id}/capture
+// This is the final step that actually moves money.
+
+export interface OrderExecuteParams {
+  clientId:     string
+  clientSecret: string
+  orderId:      string   // paypal_order_id from DB
+  proxyUrl?:    string
+}
+
+export interface OrderCaptureResult {
+  id:     string    // paypal capture ID
+  status: string    // "COMPLETED" | "DECLINED" | ...
+  amount?: { currency_code: string; value: string }
+  purchase_units?: Array<{
+    payments?: {
+      captures?: Array<{ id: string; status: string; amount: { currency_code: string; value: string } }>
+    }
+  }>
+}
+
+export interface OrderAuthorizeResult {
+  id:     string    // paypal authorization ID
+  status: string    // "CREATED" | "VOIDED" | ...
+  amount?: { currency_code: string; value: string }
+  purchase_units?: Array<{
+    payments?: {
+      authorizations?: Array<{ id: string; status: string; amount: { currency_code: string; value: string } }>
+    }
+  }>
+}
+
+/**
+ * Captures funds for an already-APPROVED PayPal order (CAPTURE intent flow).
+ * This is called by /api/gateway/execute after the buyer returns from PayPal.
+ */
+export async function captureApprovedOrder(p: OrderExecuteParams): Promise<OrderCaptureResult> {
+  const token     = await getAccessToken(p.clientId, p.clientSecret, p.proxyUrl)
+  const proxyOpts = createFetchOptions(p.proxyUrl)
+  const ua        = getUserAgent(p.clientId)
+
+  const jitterMs = 200 + Math.floor(Math.random() * 500)
+  await new Promise((r) => setTimeout(r, jitterMs))
+
+  console.info(`[paypal] Capturing order ${p.orderId} (clientId=${p.clientId.slice(0, 8)}...)`)
+
+  const res = await fetch(`${PAYPAL_BASE}/v2/checkout/orders/${p.orderId}/capture`, {
+    method: "POST",
+    headers: {
+      "Content-Type":  "application/json",
+      "Authorization": `Bearer ${token}`,
+      "User-Agent":    ua,
+    },
+    body: JSON.stringify({}),
+    ...proxyOpts,
+  })
+
+  if (!res.ok) {
+    const text = await res.text()
+    console.error(`[paypal] captureApprovedOrder FAILED [${res.status}]: ${text}`)
+    throw new Error(`PayPal capture order error [${res.status}]: ${text}`)
+  }
+
+  const data = await res.json() as OrderCaptureResult
+  console.info(`[paypal] captureApprovedOrder OK: orderId=${p.orderId} status=${data.status}`)
+  return data
+}
+
+/**
+ * Authorizes funds for an already-APPROVED PayPal order (AUTHORIZE intent flow).
+ * This is called by /api/gateway/execute after the buyer returns from PayPal.
+ * The authorization_id is saved for later capture by the merchant.
+ */
+export async function authorizeApprovedOrder(p: OrderExecuteParams): Promise<OrderAuthorizeResult> {
+  const token     = await getAccessToken(p.clientId, p.clientSecret, p.proxyUrl)
+  const proxyOpts = createFetchOptions(p.proxyUrl)
+  const ua        = getUserAgent(p.clientId)
+
+  const jitterMs = 200 + Math.floor(Math.random() * 500)
+  await new Promise((r) => setTimeout(r, jitterMs))
+
+  console.info(`[paypal] Authorizing order ${p.orderId} (clientId=${p.clientId.slice(0, 8)}...)`)
+
+  const res = await fetch(`${PAYPAL_BASE}/v2/checkout/orders/${p.orderId}/authorize`, {
+    method: "POST",
+    headers: {
+      "Content-Type":  "application/json",
+      "Authorization": `Bearer ${token}`,
+      "User-Agent":    ua,
+    },
+    body: JSON.stringify({}),
+    ...proxyOpts,
+  })
+
+  if (!res.ok) {
+    const text = await res.text()
+    console.error(`[paypal] authorizeApprovedOrder FAILED [${res.status}]: ${text}`)
+    throw new Error(`PayPal authorize order error [${res.status}]: ${text}`)
+  }
+
+  const data = await res.json() as OrderAuthorizeResult
+  console.info(`[paypal] authorizeApprovedOrder OK: orderId=${p.orderId} status=${data.status}`)
+  return data
+}

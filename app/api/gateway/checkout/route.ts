@@ -365,11 +365,15 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Step 10. INSERT PENDING transaction ──────────────────────────────────
+    // Status is always PENDING at this point — the order is created on PayPal
+    // but the buyer has NOT yet approved it. The transaction moves to AUTHORIZED
+    // or COMPLETED only after the buyer approves AND /api/gateway/execute is
+    // called successfully.
     await client.query(
       `INSERT INTO transactions (
          id, tenant_id, store_id, merchant_id,
          original_amount, original_currency, original_item_name,
-         gateway_fee, status,
+         gateway_fee, status, intent,
          masked_item_name, paypal_order_id,
          customer_email, buyer_ip, buyer_country, ip_address,
          checkout_expires_at, authorization_expires_at,
@@ -378,11 +382,11 @@ export async function POST(req: NextRequest) {
        ) VALUES (
          $1,  $2,  $3,  $4,
          $5,  $6,  $7,
-         0,   $13::transaction_status,
+         0,   'PENDING'::transaction_status, $13,
          $8,  $9,
          $10, $11, $12, $11,
          NOW() + INTERVAL '30 minutes',
-         CASE WHEN $13::transaction_status = 'AUTHORIZED' THEN NOW() + INTERVAL '72 hours' ELSE NULL END,
+         NULL,
          $14, $15,
          NOW(), NOW()
        )`,
@@ -399,26 +403,18 @@ export async function POST(req: NextRequest) {
         customerEmail ?? null,     // $10 — customer_email
         buyerIp       ?? null,     // $11 — buyer_ip + ip_address
         buyerCountry  ?? null,     // $12 — buyer_country
-        intent === "AUTHORIZE" ? "AUTHORIZED" : "PENDING",  // $13 — status
+        intent,                    // $13 — intent (CAPTURE | AUTHORIZE) for execute step
         store.success_return_url ?? null, // $14
         store.cancel_return_url ?? null, // $15
       ]
     )
 
-    // ── Step 11. Increment current_volume (CAPTURE only) ─────────────────────
-    // For AUTHORIZE intent, volume is NOT incremented here.
-    // It will be updated when the store calls POST /api/gateway/capture
-    // and the capture succeeds — this prevents phantom volume inflation
-    // from authorizations that are never captured.
-    if (intent === "CAPTURE") {
-      await client.query(
-        `UPDATE merchant_accounts
-         SET    current_volume = current_volume + $1,
-                updated_at     = NOW()
-         WHERE  id = $2`,
-        [amount, account.id]
-      )
-    }
+    // ── Step 11. Volume is NOT incremented here ───────────────────────────────
+    // Volume is deferred to POST /api/gateway/execute where actual PayPal
+    // execution succeeds. This prevents phantom volume from:
+    //   • Buyers who abandon the PayPal popup without paying
+    //   • Failed authorization/capture calls
+    //   • Network errors during execution
 
     // ── Step 12. COMMIT ──────────────────────────────────────────────────────
     // Only reached if ALL prior steps succeeded.  This single COMMIT
@@ -451,7 +447,7 @@ export async function POST(req: NextRequest) {
       popupUrl,
       popupOrigin,
       intent,
-      status: intent === "AUTHORIZE" ? "AUTHORIZED" : "PENDING",
+      status: "PENDING",
       merchantReturnConfigured: !!(store.success_return_url || store.cancel_return_url),
     },
     { status: 201 }
