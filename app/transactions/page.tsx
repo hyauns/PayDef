@@ -19,6 +19,8 @@ import {
   RefreshCw,
   Loader2,
   Zap,
+  DollarSign,
+  ShieldCheck,
 } from "lucide-react"
 import { DashboardHeader } from "@/components/dashboard/header"
 
@@ -259,8 +261,9 @@ function SkeletonRow() {
 
 function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }) {
   const [showEmail, setShowEmail] = useState(false)
-  const [replayBusy, setReplayBusy] = useState(false)
-  const [toast, setToast] = useState<string | null>(null)
+  const [replayBusy, setReplayBusy]   = useState(false)
+  const [captureBusy, setCaptureBusy] = useState(false)
+  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
   const detailKey = `/api/merchant/transactions/${tx.id}`
   const { data, error, isLoading, mutate } = useSWR<TransactionDetailResponse>(detailKey, fetcher, {
     refreshInterval: 10_000,
@@ -289,13 +292,36 @@ function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }
         throw new Error(payload.error ?? "Replay failed")
       }
 
-      setToast(`Webhook replay created delivery ${payload.delivery_id ?? "pending"} with status ${payload.delivery_status}.`)
+      setToast({ ok: true, msg: `Webhook replay created delivery ${payload.delivery_id ?? "pending"} with status ${payload.delivery_status}.` })
       await mutate()
       globalMutate((key) => typeof key === "string" && key.startsWith("/api/merchant/logs"))
     } catch (replayError) {
-      setToast(replayError instanceof Error ? replayError.message : "Replay failed")
+      setToast({ ok: false, msg: replayError instanceof Error ? replayError.message : "Replay failed" })
     } finally {
       setReplayBusy(false)
+    }
+  }
+
+  const handleCapture = async () => {
+    const authId = data?.authorization_id
+    if (!authId) return
+    setCaptureBusy(true)
+    setToast(null)
+    try {
+      const response = await fetch(`/api/merchant/transactions/${tx.id}/capture`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ authorization_id: authId }),
+      })
+      const payload = await response.json() as { status?: string; error?: string; paypal_capture_id?: string }
+      if (!response.ok) throw new Error(payload.error ?? "Capture failed")
+      setToast({ ok: true, msg: `✅ Capture successful. PayPal capture ID: ${payload.paypal_capture_id ?? "—"}` })
+      await mutate()
+      globalMutate((key) => typeof key === "string" && key.startsWith("/api/merchant/transactions"))
+    } catch (captureError) {
+      setToast({ ok: false, msg: captureError instanceof Error ? captureError.message : "Capture failed" })
+    } finally {
+      setCaptureBusy(false)
     }
   }
 
@@ -320,9 +346,13 @@ function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }
         </div>
 
         <div className="flex-1 p-5 space-y-5">
-          {toast && (
-            <div className="rounded-md border border-cyan-400/20 bg-cyan-400/5 px-3 py-2 text-[11px] font-mono text-cyan-400">
-              {toast}
+        {toast && (
+            <div className={`rounded-md border px-3 py-2 text-[11px] font-mono ${
+              toast.ok
+                ? "bg-emerald-400/5 border-emerald-400/20 text-emerald-400"
+                : "bg-red-400/5 border-red-400/20 text-red-400"
+            }`}>
+              {toast.msg}
             </div>
           )}
 
@@ -337,6 +367,28 @@ function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }
             <p className="text-xs font-mono text-muted-foreground mt-1">Platform fee: {fmt(fee)} (2.5%)</p>
             <p className="text-xs font-mono text-emerald-400 mt-0.5">Net to merchant: {fmt(amount - fee)}</p>
           </div>
+
+          {/* Capture Funds — only for AUTHORIZED transactions */}
+          {status === "Authorized" && data?.authorization_id && (
+            <div className="border border-indigo-400/20 bg-indigo-400/5 rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+                <p className="text-xs font-mono font-semibold text-indigo-300">Funds Authorized — Ready to Capture</p>
+              </div>
+              <p className="text-[10px] font-mono text-indigo-300/70">
+                Auth ID: <span className="text-indigo-300">{data.authorization_id}</span>
+              </p>
+              <button
+                onClick={handleCapture}
+                disabled={captureBusy}
+                className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-mono font-semibold bg-indigo-500 hover:bg-indigo-400 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {captureBusy
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Capturing…</>
+                  : <><DollarSign className="w-4 h-4" /> Capture {fmt(amount)}</>}
+              </button>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             {[
