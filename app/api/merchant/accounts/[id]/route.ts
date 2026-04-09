@@ -183,7 +183,37 @@ export async function DELETE(
 
   const sql = getSql()
 
-  // Verify ownership + delete
+  // 1. Verify ownership
+  const existing = await sql`
+    SELECT id, name FROM merchant_accounts
+    WHERE id = ${accountId} AND tenant_id = ${tenantId}
+    LIMIT 1
+  `
+  if (existing.length === 0) {
+    return NextResponse.json({ error: "Account not found or access denied" }, { status: 404 })
+  }
+
+  // 2. FK constraint check: block deletion if this account has linked transactions
+  const txCheck = await sql`
+    SELECT COUNT(*)::int AS cnt
+    FROM transactions
+    WHERE merchant_id = ${accountId}
+    LIMIT 1
+  `
+  const txCount = (txCheck[0] as { cnt: number })?.cnt ?? 0
+  if (txCount > 0) {
+    return NextResponse.json(
+      {
+        error: `Cannot delete: this account has ${txCount} linked transaction(s). ` +
+          `Set the account to Suspended to stop routing new orders, or contact support to archive it.`,
+        code: "HAS_TRANSACTIONS",
+        transactionCount: txCount,
+      },
+      { status: 409 }
+    )
+  }
+
+  // 3. Safe to delete (no FK dependencies)
   const result = await sql`
     DELETE FROM merchant_accounts
     WHERE id = ${accountId} AND tenant_id = ${tenantId}
@@ -191,7 +221,7 @@ export async function DELETE(
   `
 
   if (result.length === 0) {
-    return NextResponse.json({ error: "Account not found or access denied" }, { status: 404 })
+    return NextResponse.json({ error: "Delete failed unexpectedly" }, { status: 500 })
   }
 
   return NextResponse.json({

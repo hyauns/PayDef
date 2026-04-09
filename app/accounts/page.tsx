@@ -1207,11 +1207,28 @@ export default function AccountsPage() {
   }, [])
 
   const handleDelete = useCallback(async (id: string) => {
-    if (!confirm("Remove this account from the rotation pool?")) return
-    setMerchants((prev) => prev.filter((m) => m.id !== id))
+    if (!confirm("Remove this account from the rotation pool?\n\nNote: accounts with linked transactions cannot be deleted. Set them to Suspended instead.")) return
+    setOpenMenu(null)
+
     try {
-      await fetch(`/api/merchant/accounts/${id}`, { method: "DELETE" })
-    } catch {}
+      const res = await fetch(`/api/merchant/accounts/${id}`, { method: "DELETE" })
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        if (res.status === 409) {
+          // FK constraint — has transactions, cannot delete
+          alert(data.error ?? "Cannot delete: this account has linked transactions. Set it to Suspended instead.")
+        } else {
+          alert(data.error ?? "Failed to delete account. Please try again.")
+        }
+        return // DO NOT remove from UI
+      }
+
+      // Only remove from UI after confirmed server-side deletion
+      setMerchants((prev) => prev.filter((m) => m.id !== id))
+    } catch {
+      alert("Network error while deleting account. Please try again.")
+    }
   }, [])
 
   const handleSync = useCallback(async () => {

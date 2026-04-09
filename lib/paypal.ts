@@ -30,10 +30,15 @@ import { randomizePayload } from "@/lib/behavioral-randomization"
 import { HttpsProxyAgent } from "https-proxy-agent"
 import { createHash } from "crypto"
 
+const PAYPAL_ENV = process.env.PAYPAL_ENV === "live" ? "live" : "sandbox"
+
 const PAYPAL_BASE =
-  process.env.PAYPAL_ENV === "live"
+  PAYPAL_ENV === "live"
     ? "https://api-m.paypal.com"
     : "https://api-m.sandbox.paypal.com"
+
+// Log the active PayPal environment once at module load time (visible in Vercel function logs)
+console.info(`[paypal] Environment: ${PAYPAL_ENV} → ${PAYPAL_BASE}`)
 
 // ─── Token Cache ──────────────────────────────────────────────────────────
 //
@@ -186,6 +191,10 @@ async function getAccessToken(
   const proxyOpts = createFetchOptions(proxyUrl)
   const ua = getUserAgent(clientId)
 
+  // Log the token request so it's visible in Vercel function logs
+  const clientIdHint = `${clientId.slice(0, 8)}...${clientId.slice(-4)}`
+  console.info(`[paypal] Fetching OAuth token for clientId=${clientIdHint} via ${PAYPAL_BASE}`)
+
   const res = await fetch(`${PAYPAL_BASE}/v1/oauth2/token`, {
     method:  "POST",
     headers: {
@@ -199,10 +208,12 @@ async function getAccessToken(
 
   if (!res.ok) {
     const text = await res.text()
+    console.error(`[paypal] OAuth token FAILED for clientId=${clientIdHint}: [${res.status}] ${text}`)
     throw new Error(`PayPal token error [${res.status}]: ${text}`)
   }
 
   const data = await res.json() as { access_token: string; expires_in?: number }
+  console.info(`[paypal] OAuth token OK for clientId=${clientIdHint} (expires_in=${data.expires_in}s)`)
 
   // PayPal returns expires_in in seconds (typically 32400 = 9h).
   // Fall back to our conservative 8h TTL if the field is missing.

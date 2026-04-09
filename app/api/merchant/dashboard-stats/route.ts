@@ -36,19 +36,22 @@ export async function GET() {
 
   try {
     // ── 1. Today's total volume ──────────────────────────────────────────────
+    // Include COMPLETED + AUTHORIZED + PENDING so sandbox orders and manual-
+    // capture authorizations all appear in the dashboard volume metric.
+    // CANCELED, EXPIRED, FAILED, REFUNDED, DISPUTED are intentionally excluded.
     const todayQuery = isSuperAdmin
       ? sql`
           SELECT COALESCE(SUM(original_amount), 0)::TEXT AS total
           FROM transactions
           WHERE created_at >= CURRENT_DATE
-            AND status = 'COMPLETED'
+            AND status IN ('COMPLETED', 'AUTHORIZED', 'PENDING')
         `
       : sql`
           SELECT COALESCE(SUM(original_amount), 0)::TEXT AS total
           FROM transactions
           WHERE tenant_id = ${tenantId}
             AND created_at >= CURRENT_DATE
-            AND status = 'COMPLETED'
+            AND status IN ('COMPLETED', 'AUTHORIZED', 'PENDING')
         `
 
     // ── 2. Yesterday's total volume ──────────────────────────────────────────
@@ -58,7 +61,7 @@ export async function GET() {
           FROM transactions
           WHERE created_at >= CURRENT_DATE - INTERVAL '1 day'
             AND created_at < CURRENT_DATE
-            AND status = 'COMPLETED'
+            AND status IN ('COMPLETED', 'AUTHORIZED', 'PENDING')
         `
       : sql`
           SELECT COALESCE(SUM(original_amount), 0)::TEXT AS total
@@ -66,7 +69,7 @@ export async function GET() {
           WHERE tenant_id = ${tenantId}
             AND created_at >= CURRENT_DATE - INTERVAL '1 day'
             AND created_at < CURRENT_DATE
-            AND status = 'COMPLETED'
+            AND status IN ('COMPLETED', 'AUTHORIZED', 'PENDING')
         `
 
     // ── 3. Shield domains count ──────────────────────────────────────────────

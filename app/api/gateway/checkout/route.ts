@@ -325,6 +325,9 @@ export async function POST(req: NextRequest) {
     // contain authentication credentials embedded in the URL.
     const proxyUrl = account.proxy_url ?? undefined
 
+    // Diagnostic: confirm we're using DB credentials, not env fallback
+    console.info(`[checkout] Using merchant account ${account.id} | clientId=${account.client_id.slice(0, 8)}... | status=${account.status}`)
+
     let paypalOrder
     try {
       paypalOrder = await createPayPalOrder({
