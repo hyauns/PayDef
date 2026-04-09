@@ -160,7 +160,7 @@ export async function markCheckoutCanceled(transactionId: string) {
     if (transaction.status === "PENDING") {
       await client.query(
         `UPDATE transactions
-         SET status = 'CANCELED',
+         SET status = 'CANCELED'::transaction_status,
              canceled_at = NOW(),
              checkout_expires_at = NULL,
              status_reason = 'buyer_canceled',
@@ -255,7 +255,7 @@ export async function processExpiredTransactions(limit = 50) {
     for (const row of sessionRows.rows) {
       await client.query(
         `UPDATE transactions
-         SET status = 'EXPIRED',
+         SET status = 'EXPIRED'::transaction_status,
              status_reason = 'session_expired',
              updated_at = NOW()
          WHERE id = $1`,
@@ -293,7 +293,7 @@ export async function processExpiredTransactions(limit = 50) {
     for (const row of authorizationRows.rows) {
       await client.query(
         `UPDATE transactions
-         SET status = 'EXPIRED',
+         SET status = 'EXPIRED'::transaction_status,
              status_reason = 'authorization_expired',
              updated_at = NOW()
          WHERE id = $1`,

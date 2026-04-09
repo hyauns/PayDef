@@ -131,7 +131,13 @@ export function OrderResultClient({ status }: { status: ResultStatus }) {
         }),
       })
 
-      const payload = (await response.json()) as BrowserResultPayload & { error?: string }
+      let payload: BrowserResultPayload & { error?: string }
+      try {
+        payload = await response.json()
+      } catch {
+        throw new Error("Server returned an invalid response. Please try again.")
+      }
+
       if (!response.ok) {
         throw new Error(payload.error ?? "Failed to finalize cancel result.")
       }
