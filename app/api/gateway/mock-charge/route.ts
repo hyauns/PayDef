@@ -28,13 +28,9 @@ interface MockChargeBody {
   currency?: string
 }
 
-interface MerchantAccountRow {
-  id: string
-}
-
 interface InsertedTransactionRow {
   id: string
-  merchant_id: string
+  merchant_id: string | null
 }
 
 interface InternalStoreRow {
@@ -42,12 +38,18 @@ interface InternalStoreRow {
   tenant_id: string
   webhook_url: string | null
   is_active: boolean
+  provider_type: string
 }
 
 type ResolvedStore = {
   id: string
   tenantId: string
   webhookUrl: string | null
+  providerType: "PAYPAL" | "CUSTOM_MOCK" | "STRIPE"
+}
+
+function normalizeProviderType(value: unknown): ResolvedStore["providerType"] {
+  return value === "CUSTOM_MOCK" || value === "STRIPE" ? value : "PAYPAL"
 }
 
 function normalizeAmount(value: number | string | undefined) {
@@ -96,7 +98,7 @@ async function resolveDashboardStore(storeId: string) {
 
   const sql = getSql()
   const rows = (await sql`
-    SELECT id, tenant_id, webhook_url, is_active
+    SELECT id, tenant_id, webhook_url, is_active, provider_type
     FROM stores
     WHERE id = ${storeId}
     LIMIT 1
@@ -116,6 +118,7 @@ async function resolveDashboardStore(storeId: string) {
     id: store.id,
     tenantId: store.tenant_id,
     webhookUrl: store.webhook_url,
+    providerType: normalizeProviderType(store.provider_type),
   } satisfies ResolvedStore
 }
 
@@ -134,10 +137,23 @@ export async function POST(req: NextRequest) {
 
     if (storeHeader && apiKeyHeader) {
       const authenticatedStore = await authenticateStoreHeaders(req)
+      const sql = getSql()
+      const rows = (await sql`
+        SELECT id, tenant_id, webhook_url, is_active, provider_type
+        FROM stores
+        WHERE id = ${authenticatedStore.id}
+        LIMIT 1
+      `) as unknown as InternalStoreRow[]
+      const activeStore = rows[0] ?? null
+      if (!activeStore || !activeStore.is_active) {
+        return NextResponse.json({ error: "Store not found or inactive." }, { status: 401 })
+      }
+
       store = {
-        id: authenticatedStore.id,
-        tenantId: authenticatedStore.tenantId,
-        webhookUrl: authenticatedStore.webhookUrl,
+        id: activeStore.id,
+        tenantId: activeStore.tenant_id,
+        webhookUrl: activeStore.webhook_url,
+        providerType: normalizeProviderType(activeStore.provider_type),
       }
 
       if (body.store_id && body.store_id !== store.id) {
@@ -178,6 +194,18 @@ export async function POST(req: NextRequest) {
     if (!buyerName) {
       return NextResponse.json({ error: "buyerName is required." }, { status: 400 })
     }
+    if (store.providerType === "PAYPAL") {
+      return NextResponse.json(
+        { error: "Mock charge is disabled for PAYPAL stores." },
+        { status: 409 }
+      )
+    }
+    if (store.providerType === "STRIPE") {
+      return NextResponse.json(
+        { error: "Mock charge is not implemented for STRIPE stores." },
+        { status: 409 }
+      )
+    }
 
     const pool = getPool()
     const client = await pool.connect()
@@ -190,30 +218,6 @@ export async function POST(req: NextRequest) {
 
     try {
       await client.query("BEGIN")
-
-      const accountResult = await client.query<MerchantAccountRow>(
-        `SELECT id
-         FROM merchant_accounts
-         WHERE tenant_id = $1
-           AND status IN ('ACTIVE', 'WARMING_UP')
-           AND (store_id = $2 OR store_id IS NULL)
-         ORDER BY
-           CASE WHEN store_id = $2 THEN 0 ELSE 1 END,
-           priority DESC,
-           created_at ASC
-         LIMIT 1
-         FOR UPDATE`,
-        [store.tenantId, store.id]
-      )
-
-      const account = accountResult.rows[0] ?? null
-      if (!account) {
-        await client.query("ROLLBACK")
-        return NextResponse.json(
-          { error: "No active merchant account is available for this store." },
-          { status: 409 }
-        )
-      }
 
       const inserted = await client.query<InsertedTransactionRow>(
         `INSERT INTO transactions (
@@ -267,7 +271,7 @@ export async function POST(req: NextRequest) {
         [
           store.tenantId,
           store.id,
-          account.id,
+          null,
           amount.toFixed(2),
           currency,
           "Mock Direct Card Charge",
@@ -288,14 +292,6 @@ export async function POST(req: NextRequest) {
       if (!transaction) {
         throw new Error("Failed to create mock transaction.")
       }
-
-      await client.query(
-        `UPDATE merchant_accounts
-         SET current_volume = current_volume + $1,
-             updated_at = NOW()
-         WHERE id = $2`,
-        [amount.toFixed(2), transaction.merchant_id]
-      )
 
       await client.query(
         `INSERT INTO billing_records (

@@ -34,6 +34,7 @@ import {
 
 type StoreStatus = "Active" | "Suspended" | "Trial"
 type CheckoutFlow = "REDIRECT" | "POPUP_BRIDGE"
+type ProviderType = "PAYPAL" | "CUSTOM_MOCK" | "STRIPE"
 type CopyField = "id" | "key" | "secret" | "checkout" | "webhookUrl"
 
 const CHECKOUT_FLOW_OPTIONS: { value: CheckoutFlow; label: string; desc: string }[] = [
@@ -57,9 +58,32 @@ const STORE_WEBHOOK_EVENTS = [
   "payment.dispute.created",
 ]
 
+const PROVIDER_OPTIONS: Array<{
+  value: ProviderType
+  label: string
+  description: string
+}> = [
+  {
+    value: "PAYPAL",
+    label: "PayPal (Default)",
+    description: "Includes item masking and account rotation for the current production flow.",
+  },
+  {
+    value: "CUSTOM_MOCK",
+    label: "Custom Mock",
+    description: "Local testing mode for direct mock charges and webhook validation.",
+  },
+  {
+    value: "STRIPE",
+    label: "Stripe",
+    description: "Placeholder for future direct-card orchestration.",
+  },
+]
+
 interface Store {
   id: string          // UUID
   name: string
+  providerType: ProviderType
   platform: string
   apiKey: string      // sk_live_...
   webhookUrl: string
@@ -81,6 +105,7 @@ interface Store {
 interface StoreApiRow {
   id: string
   name: string
+  providerType?: ProviderType | null
   platform?: string | null
   status?: StoreStatus | null
   webhookUrl?: string | null
@@ -530,6 +555,7 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
   const formId = useId()
   const [name, setName] = useState("")
   const [platform, setPlatform] = useState("Shopify")
+  const [providerType, setProviderType] = useState<ProviderType>("PAYPAL")
   const [webhookUrl, setWebhookUrl] = useState("")
   const [generated, setGenerated] = useState<{ id: string; key: string; secret: string } | null>(null)
   const [copied, setCopied] = useState<CopyField | null>(null)
@@ -556,6 +582,7 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
         body: JSON.stringify({
           name: name.trim(),
           platform,
+          providerType,
           webhookUrl: webhookUrl.trim() || undefined,
         }),
       })
@@ -566,6 +593,7 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
       const newStore: Store = {
         id: data.store.id,
         name: data.store.name,
+        providerType: data.store.providerType ?? providerType,
         platform: data.store.platform ?? platform,
         apiKey: data.apiKey,
         webhookUrl: data.store.webhookUrl ?? "",
@@ -592,7 +620,7 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
     } finally {
       setSaving(false)
     }
-  }, [name, platform, webhookUrl, onCreate])
+  }, [name, platform, providerType, webhookUrl, onCreate])
 
   return (
     <>
@@ -655,6 +683,25 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
                   <option key={p} value={p}>{p}</option>
                 ))}
               </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label htmlFor={`${formId}-provider`} className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                Payment Provider
+              </label>
+              <select
+                id={`${formId}-provider`}
+                value={providerType}
+                onChange={(e) => setProviderType(e.target.value as ProviderType)}
+                className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+              >
+                {PROVIDER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+              <p className="text-[10px] font-mono text-muted-foreground">
+                {PROVIDER_OPTIONS.find((option) => option.value === providerType)?.description}
+              </p>
             </div>
 
             {/* Webhook URL */}
@@ -908,6 +955,22 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
                 <option key={p} value={p}>{p}</option>
               ))}
             </select>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Payment Provider</label>
+            <select
+              value={draft.providerType}
+              onChange={(e) => update({ providerType: e.target.value as ProviderType })}
+              className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+            >
+              {PROVIDER_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+            <p className="text-[10px] font-mono text-muted-foreground">
+              {PROVIDER_OPTIONS.find((option) => option.value === draft.providerType)?.description}
+            </p>
           </div>
 
           {/* Webhook URL */}
@@ -1206,6 +1269,7 @@ export default function StoresPage() {
             return {
               id: s.id,
               name: s.name,
+              providerType: s.providerType ?? "PAYPAL",
               platform: s.platform ?? "Custom API",
               apiKey: "sk_live_••••••••••••••••",
               webhookUrl: s.webhookUrl ?? "",
@@ -1255,6 +1319,7 @@ export default function StoresPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: updated.name,
+        providerType: updated.providerType,
         platform: updated.platform,
         status: updated.status,
         webhookUrl: updated.webhookUrl,
@@ -1278,6 +1343,7 @@ export default function StoresPage() {
               ...s,
               ...updated,
               name: data.store.name,
+              providerType: data.store.providerType ?? updated.providerType,
               platform: data.store.platform ?? updated.platform,
               webhookUrl: data.store.webhookUrl ?? "",
               shieldDomain: data.store.shieldDomain ?? updated.shieldDomain,

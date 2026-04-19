@@ -58,6 +58,7 @@ model Store {
   id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenant_id          String               @db.Uuid
   name               String
+  provider_type      String               @default("PAYPAL")
   api_key_hash       String
   webhook_url        String?
   shield_domain      String?
@@ -119,7 +120,7 @@ model Transaction {
   id                       String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenant_id                String               @db.Uuid
   store_id                 String               @db.Uuid
-  merchant_id              String               @db.Uuid
+  merchant_id              String?              @db.Uuid
   original_amount          Decimal              @db.Decimal(12, 2)
   original_currency        String               @default("USD")
   original_item_name       String?
@@ -156,7 +157,7 @@ model Transaction {
   merchant_success_url     String?
   merchant_cancel_url      String?
   billing_records          billing_records[]
-  merchant_accounts        MerchantAccount      @relation(fields: [merchant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  merchant_accounts        MerchantAccount?     @relation(fields: [merchant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   stores                   Store                @relation(fields: [store_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenants                  Tenant               @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   webhook_deliveries       webhook_deliveries[]
