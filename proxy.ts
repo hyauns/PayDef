@@ -108,8 +108,8 @@ function getPrimaryHosts() {
       extractHostFromUrl(process.env.NEXT_PUBLIC_APP_URL),
       extractHostFromUrl(process.env.APP_BASE_URL),
       normalizeHost(process.env.PRIMARY_APP_HOST ?? null),
-      "gooytoy.com",
-      "www.gooytoy.com",
+      "paydef.io",
+      "www.paydef.io",
     ].filter(Boolean)
   )
 }

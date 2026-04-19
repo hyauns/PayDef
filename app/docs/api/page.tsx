@@ -204,7 +204,7 @@ export default function ApiDocsPage() {
                   Open Stores
                 </Link>
                 <a
-                  href="https://www.gooytoy.com"
+                  href="https://www.paydef.io"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:text-foreground"

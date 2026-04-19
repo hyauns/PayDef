@@ -609,7 +609,7 @@ export default function SettingsPage() {
                         )}
                       </div>
                       <p className="text-[10px] font-mono text-muted-foreground max-w-md">
-                        If enabled, payments will be Authorized only. You must manually capture them from the Transaction Log within 3 days.
+                        If enabled, payments will be Authorized only. You must manually capture them from the Transaction Log within 7 days.
                       </p>
                     </div>
                     <Toggle

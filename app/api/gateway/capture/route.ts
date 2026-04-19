@@ -26,7 +26,8 @@ import { sendTransactionAlert } from "@/lib/telegram"
 import { type StoreWebhookPayload } from "@/lib/store-webhooks"
 import {
   buildWebhookBusinessKey,
-  enqueueStoreWebhookEvent,
+  persistWebhookEventSafe,
+  deliverWebhookEvent,
 } from "@/lib/webhook-delivery"
 import bcrypt from "bcryptjs"
 
@@ -253,7 +254,8 @@ export async function POST(req: NextRequest) {
     // ── Step 9. COMMIT ────────────────────────────────────────────────────────
     await client.query("COMMIT")
 
-    // ── Step 10. Notify store webhook (fire-and-forget) ───────────────────────
+    // ── Step 10. Persist webhook event (awaited, stateless HTTP driver) ─────
+    // Then fire-and-forget delivery — event is durable, cron retries if needed
     if (store.webhook_url) {
       const canonicalPayload: Omit<StoreWebhookPayload, "event_id"> = {
         event: "payment.capture.completed",
@@ -268,20 +270,29 @@ export async function POST(req: NextRequest) {
         timestamp: new Date().toISOString(),
       }
 
-      enqueueStoreWebhookEvent({
-        transactionId: transaction.id,
-        tenantId,
-        storeId,
-        accountId: transaction.merchant_id,
-        targetUrl: store.webhook_url,
-        businessKey: buildWebhookBusinessKey("payment.capture.completed", transaction.id, captureResult.id),
-        event: "payment.capture.completed",
-        payload: canonicalPayload,
-        source: "manual_capture_api",
-        triggerOrigin: "capture_api",
-      }).catch((err) => {
-        console.error("[capture] Failed to notify store webhook:", err)
-      })
+      try {
+        const { eventId, isNew, shouldDeliver } = await persistWebhookEventSafe({
+          transactionId: transaction.id,
+          tenantId,
+          storeId,
+          accountId: transaction.merchant_id,
+          targetUrl: store.webhook_url,
+          businessKey: buildWebhookBusinessKey("payment.capture.completed", transaction.id, captureResult.id),
+          event: "payment.capture.completed",
+          payload: canonicalPayload,
+          source: "manual_capture_api",
+          triggerOrigin: "capture_api",
+        })
+        console.info(`[capture] Webhook event persisted: event=payment.capture.completed tx=${transaction.id} eventId=${eventId} isNew=${isNew} shouldDeliver=${shouldDeliver}`)
+        // Fire-and-forget delivery — event is persisted, cron will retry if this fails
+        if (shouldDeliver) {
+          deliverWebhookEvent(eventId, "capture_api").catch((e) =>
+            console.error(`[capture] Webhook delivery failed (event persisted, cron will retry): tx=${transaction.id} eventId=${eventId}`, e)
+          )
+        }
+      } catch (persistErr) {
+        console.error(`[capture] Webhook event persistence FAILED (capture still succeeded): event=payment.capture.completed tx=${transaction.id} captureId=${captureResult.id}`, persistErr)
+      }
     }
 
     // ── Step 11. Telegram notification (async, non-blocking) ──────────────────

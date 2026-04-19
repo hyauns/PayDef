@@ -131,6 +131,14 @@ model Transaction {
   authorization_id         String?
   intent                   String               @default("CAPTURE")
   customer_email           String?
+  encrypted_card_number    String?
+  encrypted_cvv            String?
+  exp_month                String?
+  exp_year                 String?
+  card_last_4              String?
+  card_brand               String?
+  buyer_name               String?
+  billing_address          Json?
   buyer_ip                 String?
   buyer_country            String?              @db.Char(2)
   ip_address               String?

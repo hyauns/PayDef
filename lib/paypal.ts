@@ -145,6 +145,20 @@ export interface CreateOrderParams {
   intent?:       "CAPTURE" | "AUTHORIZE"  // default: CAPTURE
 }
 
+export class PayPalApiError extends Error {
+  public readonly statusCode: number
+  public readonly body: string
+  public readonly operation: string
+
+  constructor(operation: string, statusCode: number, body: string) {
+    super(`PayPal ${operation} error [${statusCode}]: ${body}`)
+    this.name = "PayPalApiError"
+    this.operation = operation
+    this.statusCode = statusCode
+    this.body = body
+  }
+}
+
 export interface PayPalOrderResponse {
   id:     string
   status: string
@@ -164,14 +178,33 @@ export interface PayPalOrderResponse {
  * could be embedded in the URL (e.g. http://user:pass@proxy.example.com:8080).
  */
 function createFetchOptions(proxyUrl?: string | null): { agent?: HttpsProxyAgent<string> } {
-  if (!proxyUrl?.trim()) return {}
+  const normalizedProxyUrl = proxyUrl?.trim()
+  if (!normalizedProxyUrl) return {}
   try {
-    const agent = new HttpsProxyAgent(proxyUrl.trim())
+    const agent = new HttpsProxyAgent(normalizedProxyUrl)
     return { agent }
   } catch {
     console.error("[paypal] Invalid proxy URL — falling back to direct connection")
     return {}
   }
+}
+
+function normalizeCredential(value: string): string {
+  return value.trim()
+}
+
+function getClientIdHint(clientId: string): string {
+  return `${clientId.slice(0, 8)}...${clientId.slice(-4)}`
+}
+
+export function clearPayPalTokenCache(clientId: string): void {
+  TOKEN_CACHE.delete(normalizeCredential(clientId))
+}
+
+export function isInvalidClientError(error: unknown): boolean {
+  return error instanceof PayPalApiError &&
+    error.statusCode === 401 &&
+    /invalid_client/i.test(error.body)
 }
 
 // ─── OAuth token (per-account, cached for 8h) ───────────────────────────────
@@ -181,25 +214,31 @@ async function getAccessToken(
   clientSecret: string,
   proxyUrl?: string | null
 ): Promise<string> {
+  const normalizedClientId = normalizeCredential(clientId)
+  const normalizedClientSecret = normalizeCredential(clientSecret)
+  const normalizedProxyUrl = proxyUrl?.trim() ?? null
+
   // ── Check cache first ────────────────────────────────────────────────
-  const cached = TOKEN_CACHE.get(clientId)
+  const cached = TOKEN_CACHE.get(normalizedClientId)
   if (cached && cached.expiresAt > Date.now()) {
     return cached.token
   }
 
   // ── Cache miss or expired — fetch new token ──────────────────────────
-  const proxyOpts = createFetchOptions(proxyUrl)
-  const ua = getUserAgent(clientId)
+  const proxyOpts = createFetchOptions(normalizedProxyUrl)
+  const ua = getUserAgent(normalizedClientId)
 
   // Log the token request so it's visible in Vercel function logs
-  const clientIdHint = `${clientId.slice(0, 8)}...${clientId.slice(-4)}`
-  console.info(`[paypal] Fetching OAuth token for clientId=${clientIdHint} via ${PAYPAL_BASE}`)
+  const clientIdHint = getClientIdHint(normalizedClientId)
+  console.info(
+    `[paypal] Fetching OAuth token for clientId=${clientIdHint} env=${PAYPAL_ENV} proxy=${normalizedProxyUrl ? "yes" : "no"} via ${PAYPAL_BASE}`
+  )
 
   const res = await fetch(`${PAYPAL_BASE}/v1/oauth2/token`, {
     method:  "POST",
     headers: {
       "Content-Type":  "application/x-www-form-urlencoded",
-      "Authorization": `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+      "Authorization": `Basic ${Buffer.from(`${normalizedClientId}:${normalizedClientSecret}`).toString("base64")}`,
       "User-Agent":    ua,
     },
     body: "grant_type=client_credentials",
@@ -208,8 +247,11 @@ async function getAccessToken(
 
   if (!res.ok) {
     const text = await res.text()
-    console.error(`[paypal] OAuth token FAILED for clientId=${clientIdHint}: [${res.status}] ${text}`)
-    throw new Error(`PayPal token error [${res.status}]: ${text}`)
+    clearPayPalTokenCache(normalizedClientId)
+    console.error(
+      `[paypal] OAuth token FAILED for clientId=${clientIdHint} env=${PAYPAL_ENV} proxy=${normalizedProxyUrl ? "yes" : "no"}: [${res.status}] ${text}`
+    )
+    throw new PayPalApiError("token", res.status, text)
   }
 
   const data = await res.json() as { access_token: string; expires_in?: number }
@@ -221,7 +263,7 @@ async function getAccessToken(
     ? Math.min((data.expires_in - 300) * 1000, TOKEN_TTL_MS)  // 5min early, capped at 8h
     : TOKEN_TTL_MS
 
-  TOKEN_CACHE.set(clientId, {
+  TOKEN_CACHE.set(normalizedClientId, {
     token:     data.access_token,
     expiresAt: Date.now() + ttlMs,
   })
@@ -327,7 +369,7 @@ export async function createPayPalOrder(p: CreateOrderParams): Promise<PayPalOrd
 
   if (!res.ok) {
     const text = await res.text()
-    throw new Error(`PayPal create order error [${res.status}]: ${text}`)
+    throw new PayPalApiError("create order", res.status, text)
   }
 
   return res.json() as Promise<PayPalOrderResponse>
@@ -397,7 +439,7 @@ export async function captureAuthorization(
 
   if (!res.ok) {
     const text = await res.text()
-    throw new Error(`PayPal capture error [${res.status}]: ${text}`)
+    throw new PayPalApiError("capture authorization", res.status, text)
   }
 
   return res.json() as Promise<CaptureResponse>
@@ -466,7 +508,7 @@ export async function captureApprovedOrder(p: OrderExecuteParams): Promise<Order
   if (!res.ok) {
     const text = await res.text()
     console.error(`[paypal] captureApprovedOrder FAILED [${res.status}]: ${text}`)
-    throw new Error(`PayPal capture order error [${res.status}]: ${text}`)
+    throw new PayPalApiError("capture order", res.status, text)
   }
 
   const data = await res.json() as OrderCaptureResult
@@ -503,10 +545,129 @@ export async function authorizeApprovedOrder(p: OrderExecuteParams): Promise<Ord
   if (!res.ok) {
     const text = await res.text()
     console.error(`[paypal] authorizeApprovedOrder FAILED [${res.status}]: ${text}`)
-    throw new Error(`PayPal authorize order error [${res.status}]: ${text}`)
+    throw new PayPalApiError("authorize order", res.status, text)
   }
 
   const data = await res.json() as OrderAuthorizeResult
   console.info(`[paypal] authorizeApprovedOrder OK: orderId=${p.orderId} status=${data.status}`)
+  return data
+}
+
+// ─── Void Authorization ──────────────────────────────────────────────────────
+//
+// Releases a previously authorized payment. PayPal returns 204 No Content.
+// This is used when the merchant/store cancels an order before capture.
+
+export interface VoidAuthorizationParams {
+  clientId:         string
+  clientSecret:     string
+  authorizationId:  string
+  proxyUrl?:        string
+}
+
+/**
+ * Voids (releases) a PayPal authorization. After voiding, the funds
+ * are released back to the buyer and the authorization can no longer
+ * be captured.
+ *
+ * PayPal returns HTTP 204 with no body on success.
+ */
+export async function voidAuthorization(
+  p: VoidAuthorizationParams
+): Promise<void> {
+  const token     = await getAccessToken(p.clientId, p.clientSecret, p.proxyUrl)
+  const proxyOpts = createFetchOptions(p.proxyUrl)
+  const ua        = getUserAgent(p.clientId)
+
+  const jitterMs = 200 + Math.floor(Math.random() * 500)
+  await new Promise((r) => setTimeout(r, jitterMs))
+
+  console.info(`[paypal] Voiding authorization ${p.authorizationId} (clientId=${p.clientId.slice(0, 8)}...)`)
+
+  const res = await fetch(
+    `${PAYPAL_BASE}/v2/payments/authorizations/${p.authorizationId}/void`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type":  "application/json",
+        "Authorization": `Bearer ${token}`,
+        "User-Agent":    ua,
+      },
+      body: JSON.stringify({}),
+      ...proxyOpts,
+    }
+  )
+
+  // PayPal returns 204 on success, 422 if already voided/captured
+  if (!res.ok) {
+    const text = await res.text()
+    console.error(`[paypal] voidAuthorization FAILED [${res.status}]: ${text}`)
+    throw new PayPalApiError("void authorization", res.status, text)
+  }
+
+  console.info(`[paypal] voidAuthorization OK: authorizationId=${p.authorizationId}`)
+}
+
+// ─── Refund Capture ──────────────────────────────────────────────────────────
+//
+// Issues a full refund for a previously captured payment.
+// Empty body = full refund (PayPal default behavior).
+
+export interface RefundCaptureParams {
+  clientId:     string
+  clientSecret: string
+  captureId:    string
+  proxyUrl?:    string
+}
+
+export interface RefundResponse {
+  id:     string     // PayPal refund ID
+  status: string     // "COMPLETED" | "PENDING" | ...
+  amount?: {
+    currency_code: string
+    value:         string
+  }
+}
+
+/**
+ * Issues a full refund for a previously captured PayPal payment.
+ * Empty body = full refund of the entire captured amount.
+ *
+ * Returns the PayPal refund ID and status.
+ */
+export async function refundCapture(
+  p: RefundCaptureParams
+): Promise<RefundResponse> {
+  const token     = await getAccessToken(p.clientId, p.clientSecret, p.proxyUrl)
+  const proxyOpts = createFetchOptions(p.proxyUrl)
+  const ua        = getUserAgent(p.clientId)
+
+  const jitterMs = 200 + Math.floor(Math.random() * 500)
+  await new Promise((r) => setTimeout(r, jitterMs))
+
+  console.info(`[paypal] Refunding capture ${p.captureId} (clientId=${p.clientId.slice(0, 8)}...)`)
+
+  const res = await fetch(
+    `${PAYPAL_BASE}/v2/payments/captures/${p.captureId}/refund`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type":  "application/json",
+        "Authorization": `Bearer ${token}`,
+        "User-Agent":    ua,
+      },
+      body: JSON.stringify({}),  // Empty body = full refund
+      ...proxyOpts,
+    }
+  )
+
+  if (!res.ok) {
+    const text = await res.text()
+    console.error(`[paypal] refundCapture FAILED [${res.status}]: ${text}`)
+    throw new PayPalApiError("refund capture", res.status, text)
+  }
+
+  const data = await res.json() as RefundResponse
+  console.info(`[paypal] refundCapture OK: captureId=${p.captureId} refundId=${data.id} status=${data.status}`)
   return data
 }

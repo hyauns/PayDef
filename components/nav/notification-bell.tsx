@@ -112,15 +112,6 @@ export function NotificationBell() {
   const { items, unreadCount, markAllRead, clearAll } = useNotifications()
   const [open, setOpen]       = useState(false)
   const [loading, setLoading] = useState(false)
-  const [pulse, setPulse]     = useState(false)
-
-  // Track prev unread count to trigger pulse animation
-  const prevUnread = useState(0)
-  if (unreadCount > (prevUnread[0] as number)) {
-    prevUnread[1](unreadCount)
-    setPulse(true)
-    setTimeout(() => setPulse(false), 1500)
-  }
 
   const handleOpenChange = (isOpen: boolean) => {
     setOpen(isOpen)
@@ -141,12 +132,7 @@ export function NotificationBell() {
           <Bell className="w-4 h-4" />
           {unreadCount > 0 && (
             <span
-              className={`absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] flex items-center justify-center
-                bg-red-500 text-[9px] font-bold text-white rounded-full px-0.5
-                ${pulse ? "animate-ping-once" : ""}`}
-              style={pulse ? {
-                animation: "pulse-badge 0.6s ease-out 2"
-              } : undefined}
+              className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] flex items-center justify-center bg-red-500 text-[9px] font-bold text-white rounded-full px-0.5"
             >
               {unreadCount > 9 ? "9+" : unreadCount}
             </span>

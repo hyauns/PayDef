@@ -21,7 +21,7 @@ export async function POST() {
   return NextResponse.json(
     {
       error: "Dashboard capture is disabled. Manual capture must be initiated from the merchant store backend via POST /api/gateway/capture with X-Store-ID + X-API-Key authentication.",
-      docs: "https://www.gooytoy.com/docs/STORE_WEBHOOK_CONTRACT.md",
+      docs: "https://www.paydef.io/docs/STORE_WEBHOOK_CONTRACT.md",
     },
     { status: 403 }
   )

@@ -16,6 +16,10 @@ type TransactionDetailRow = {
   paypal_capture_id: string | null
   authorization_id: string | null
   customer_email: string | null
+  card_last_4: string | null
+  card_brand: string | null
+  buyer_name: string | null
+  billing_address: Record<string, unknown> | string | null
   buyer_ip: string | null
   buyer_country: string | null
   ip_address: string | null
@@ -55,50 +59,110 @@ export async function getTransactionDetail(transactionId: string, scope?: {
     conditions.push(`t.tenant_id = $${values.length}`)
   }
 
-  const rows = (
-    await pool.query<TransactionDetailRow>(
-      `SELECT
-         t.id,
-         t.tenant_id,
-         t.store_id,
-         t.merchant_id,
-         t.original_amount,
-         t.original_currency,
-         t.original_item_name,
-         t.masked_item_name,
-         t.gateway_fee,
-         t.status,
-         t.paypal_order_id,
-         t.paypal_capture_id,
-         t.authorization_id,
-         t.customer_email,
-         t.buyer_ip,
-         t.buyer_country,
-         t.ip_address,
-         t.created_at,
-         t.updated_at,
-         t.authorized_at,
-         t.completed_at,
-         t.failed_at,
-         t.refunded_at,
-         t.disputed_at,
-         t.canceled_at,
-         t.checkout_expires_at,
-         t.authorization_expires_at,
-         t.status_reason,
-         t.merchant_success_url,
-         t.merchant_cancel_url,
-         s.name AS store_name,
-         ma.name AS account_name,
-         ma.shield_domain
-       FROM transactions t
-       LEFT JOIN stores s ON s.id = t.store_id
-       LEFT JOIN merchant_accounts ma ON ma.id = t.merchant_id
-       WHERE ${conditions.join(" AND ")}
-       LIMIT 1`,
-      values
-    )
-  ).rows
+  const primaryQuery = `SELECT
+     t.id,
+     t.tenant_id,
+     t.store_id,
+     t.merchant_id,
+     t.original_amount,
+     t.original_currency,
+     t.original_item_name,
+     t.masked_item_name,
+     t.gateway_fee,
+     t.status,
+     t.paypal_order_id,
+     t.paypal_capture_id,
+     t.authorization_id,
+     t.customer_email,
+     t.card_last_4,
+     t.card_brand,
+     t.buyer_name,
+     t.billing_address,
+     t.buyer_ip,
+     t.buyer_country,
+     t.ip_address,
+     t.created_at,
+     t.updated_at,
+     t.authorized_at,
+     t.completed_at,
+     t.failed_at,
+     t.refunded_at,
+     t.disputed_at,
+     t.canceled_at,
+     t.checkout_expires_at,
+     t.authorization_expires_at,
+     t.status_reason,
+     t.merchant_success_url,
+     t.merchant_cancel_url,
+     s.name AS store_name,
+     ma.name AS account_name,
+     ma.shield_domain
+   FROM transactions t
+   LEFT JOIN stores s ON s.id = t.store_id
+   LEFT JOIN merchant_accounts ma ON ma.id = t.merchant_id
+   WHERE ${conditions.join(" AND ")}
+   LIMIT 1`
+
+  const legacyQuery = `SELECT
+     t.id,
+     t.tenant_id,
+     t.store_id,
+     t.merchant_id,
+     t.original_amount,
+     t.original_currency,
+     t.original_item_name,
+     t.masked_item_name,
+     t.gateway_fee,
+     t.status,
+     t.paypal_order_id,
+     t.paypal_capture_id,
+     t.authorization_id,
+     t.customer_email,
+     NULL::text AS card_last_4,
+     NULL::text AS card_brand,
+     NULL::text AS buyer_name,
+     NULL::jsonb AS billing_address,
+     t.buyer_ip,
+     t.buyer_country,
+     t.ip_address,
+     t.created_at,
+     t.updated_at,
+     t.authorized_at,
+     t.completed_at,
+     t.failed_at,
+     t.refunded_at,
+     t.disputed_at,
+     t.canceled_at,
+     t.checkout_expires_at,
+     t.authorization_expires_at,
+     t.status_reason,
+     t.merchant_success_url,
+     t.merchant_cancel_url,
+     s.name AS store_name,
+     ma.name AS account_name,
+     ma.shield_domain
+   FROM transactions t
+   LEFT JOIN stores s ON s.id = t.store_id
+   LEFT JOIN merchant_accounts ma ON ma.id = t.merchant_id
+   WHERE ${conditions.join(" AND ")}
+   LIMIT 1`
+
+  let rows
+  try {
+    rows = (await pool.query<TransactionDetailRow>(primaryQuery, values)).rows
+  } catch (error) {
+    const isMissingCardColumn =
+      error instanceof Error &&
+      "code" in error &&
+      (error as { code?: string }).code === "42703" &&
+      error.message.includes("card_last_4")
+
+    if (!isMissingCardColumn) {
+      throw error
+    }
+
+    rows = (await pool.query<TransactionDetailRow>(legacyQuery, values)).rows
+  }
 
   const row = rows[0] ?? null
   if (!row) return null
@@ -123,6 +187,10 @@ export async function getTransactionDetail(transactionId: string, scope?: {
     paypalCaptureId: row.paypal_capture_id,
     authorizationId: row.authorization_id,
     customerEmail: row.customer_email,
+    cardLast4: row.card_last_4,
+    cardBrand: row.card_brand,
+    buyerName: row.buyer_name,
+    billingAddress: row.billing_address,
     buyerIp: row.buyer_ip,
     buyerCountry: row.buyer_country,
     ipAddress: row.ip_address,

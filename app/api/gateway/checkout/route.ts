@@ -31,14 +31,19 @@
 import { NextRequest, NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import { getPool, getSql } from "@/lib/neon"
-import { createPayPalOrder, getApprovalUrl } from "@/lib/paypal"
+import {
+  clearPayPalTokenCache,
+  createPayPalOrder,
+  getApprovalUrl,
+  isInvalidClientError,
+} from "@/lib/paypal"
 import { maskItemName, buildShieldUrls } from "@/lib/masking"
 import {
   buildPopupBridgeUrl,
   getCheckoutPreferences,
   resolveCheckoutFlow,
 } from "@/lib/checkout-flow"
-import { decrypt } from "@/lib/encryption"
+import { decrypt, isEncrypted } from "@/lib/encryption"
 import {
   type MerchantAccountRow,
   filterEligibleAccounts,
@@ -72,6 +77,36 @@ interface StoreRow {
   cancel_return_url: string | null
 }
 
+function getClientIdHint(clientId: string): string {
+  return `${clientId.slice(0, 8)}...${clientId.slice(-4)}`
+}
+
+function normalizeSecret(secret: string): string {
+  return secret.trim()
+}
+
+function resolveProxyUrl(proxyUrl: string | null): string | undefined {
+  if (!proxyUrl) return undefined
+  const value = isEncrypted(proxyUrl) ? decrypt(proxyUrl) : proxyUrl
+  const normalized = value.trim()
+  return normalized || undefined
+}
+
+async function quarantineMerchantAccount(
+  accountId: string,
+  reason: string
+): Promise<void> {
+  const sql = getSql()
+  await sql`
+    UPDATE merchant_accounts
+    SET status = 'SUSPENDED',
+        updated_at = NOW()
+    WHERE id = ${accountId}
+      AND status IN ('ACTIVE', 'WARMING_UP')
+  `
+  console.error(`[checkout] Quarantined merchant account ${accountId} reason=${reason}`)
+}
+
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
@@ -93,6 +128,19 @@ export async function POST(req: NextRequest) {
   } catch {
     // If we can't check, proceed (fail-open for availability)
   }
+
+  // ── Resolve intent ──────────────────────────────────────────────────────────
+  // Priority: explicit intent from the store request > capture_mode fallback.
+  //
+  // The store is the authority on what intent it needs for each transaction.
+  // The gateway's capture_mode is only used as a DEFAULT when the store
+  // doesn't specify intent (backwards compatibility for older integrations).
+  //
+  // ATP-2026-00036: Previously the gateway unconditionally overrode the
+  // store's explicit intent based on capture_mode, causing CAPTURE-intent
+  // transactions to be processed as AUTHORIZE when the gateway's stores
+  // table had capture_mode=MANUAL (even if the store intended CAPTURE).
+  let intent: "CAPTURE" | "AUTHORIZE" = "CAPTURE"
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   //  PRE-FLIGHT: validate headers, body, and store credentials
@@ -128,10 +176,13 @@ export async function POST(req: NextRequest) {
     buyerCountry,
   } = body
 
-  // Normalise + validate intent
-  // If the store has capture_mode = MANUAL, force AUTHORIZE regardless of the request body
-  let intent: "CAPTURE" | "AUTHORIZE" =
-    rawIntent === "AUTHORIZE" ? "AUTHORIZE" : "CAPTURE"
+  if (rawIntent === "CAPTURE" || rawIntent === "AUTHORIZE") {
+    // Store explicitly specified intent — gateway honours it
+    intent = rawIntent
+    console.info(`[checkout] Store sent explicit intent=${intent} (store=${storeId})`)
+  }
+
+  console.info(`[checkout] Incoming intent=${rawIntent ?? "<not sent>"} amount=${amount} currency=${currency}`)
 
   if (!amount || typeof amount !== "number" || amount <= 0) {
     return NextResponse.json(
@@ -172,13 +223,19 @@ export async function POST(req: NextRequest) {
   const checkoutPreferences = await getCheckoutPreferences(sql)
   const flow = resolveCheckoutFlow(store.checkout_flow, checkoutPreferences)
 
-  // ── Override intent based on store's capture_mode ──────────────────────────
-  // If the store is configured for manual capture, force AUTHORIZE regardless
-  // of what the client requested. The merchant must then call
-  // POST /api/merchant/transactions/capture to collect the funds.
-  if (store.capture_mode === "MANUAL") {
-    intent = "AUTHORIZE"
+  // ── Finalise intent (capture_mode fallback + mismatch logging) ──────────────
+  // If store sent explicit intent above (line 144-147), it's already set.
+  // If not, derive from capture_mode now that we have the store row.
+  if (rawIntent !== "CAPTURE" && rawIntent !== "AUTHORIZE") {
+    intent = store.capture_mode === "MANUAL" ? "AUTHORIZE" : "CAPTURE"
+    console.info(`[checkout] No explicit intent → derived from capture_mode=${store.capture_mode} → intent=${intent}`)
+  } else if (
+    (intent === "CAPTURE" && store.capture_mode === "MANUAL") ||
+    (intent === "AUTHORIZE" && store.capture_mode !== "MANUAL")
+  ) {
+    console.warn(`[checkout] Intent/capture_mode mismatch: intent=${intent} capture_mode=${store.capture_mode} — honouring store's explicit intent`)
   }
+  console.info(`[checkout] Final intent=${intent} capture_mode=${store.capture_mode} store=${storeId}`)
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   //  ATOMIC TRANSACTION
@@ -196,9 +253,12 @@ export async function POST(req: NextRequest) {
   let approvalUrl:   string
   let popupUrl:      string | null = null
   let popupOrigin:   string | null = null
+  const excludedAccountIds = new Set<string>()
+  let exhaustedInvalidAccounts = false
 
   try {
-    await client.query("BEGIN")
+    checkoutAttempt: while (true) {
+      await client.query("BEGIN")
 
     // ── Step 4. Fetch eligible merchant accounts (inside transaction) ────────
     // Running this query through the transaction client ensures we see a
@@ -225,10 +285,16 @@ export async function POST(req: NextRequest) {
       [tenantId]
     )
 
-    const allAccounts = eligibleQuery.rows
+    const allAccounts = eligibleQuery.rows.filter((account) => !excludedAccountIds.has(account.id))
 
     if (allAccounts.length === 0) {
       await client.query("ROLLBACK")
+      if (exhaustedInvalidAccounts) {
+        return NextResponse.json(
+          { error: "Payment provider error. No healthy payment accounts are currently available." },
+          { status: 502 }
+        )
+      }
       return NextResponse.json(
         { error: "System Overloaded — no active payment accounts available." },
         { status: 403 }
@@ -276,6 +342,12 @@ export async function POST(req: NextRequest) {
 
     if (currentVolume + amount > effectiveLimit) {
       await client.query("ROLLBACK")
+      excludedAccountIds.add(account.id)
+      continue
+    }
+
+    if (false && currentVolume + amount > effectiveLimit) {
+      await client.query("ROLLBACK")
       return NextResponse.json(
         { error: "System Overloaded — selected account capacity exceeded. Please retry." },
         { status: 403 }
@@ -284,6 +356,12 @@ export async function POST(req: NextRequest) {
 
     // Warm-up double-check with locked data
     if (account.status === "WARMING_UP" && amount > WARMUP_MAX_TRANSACTION) {
+      await client.query("ROLLBACK")
+      excludedAccountIds.add(account.id)
+      continue
+    }
+
+    if (false && account.status === "WARMING_UP" && amount > WARMUP_MAX_TRANSACTION) {
       await client.query("ROLLBACK")
       return NextResponse.json(
         { error: "System Overloaded — warm-up account cannot process this amount." },
@@ -319,19 +397,36 @@ export async function POST(req: NextRequest) {
     // SECURITY: client_secret is decrypted just-in-time, only at this point.
     // The decrypted value exists only in memory for the duration of the
     // PayPal API call and is never persisted or logged.
-    const decryptedSecret = decrypt(account.client_secret)
+    let decryptedSecret: string
+    let proxyUrl: string | undefined
+    try {
+      decryptedSecret = normalizeSecret(decrypt(account.client_secret))
+      proxyUrl = resolveProxyUrl(account.proxy_url)
+    } catch (credentialError) {
+      await client.query("ROLLBACK")
+      excludedAccountIds.add(account.id)
+      exhaustedInvalidAccounts = true
+      clearPayPalTokenCache(account.client_id)
+      console.error(
+        `[checkout] Credential resolution failed for merchant account ${account.id} clientId=${getClientIdHint(account.client_id)} decryption_ok=false proxy=${account.proxy_url ? "configured" : "none"} env=${process.env.PAYPAL_ENV === "live" ? "live" : "sandbox"}`,
+        credentialError
+      )
+      await quarantineMerchantAccount(account.id, "credential_resolution_failed")
+      continue
+    }
 
     // Proxy URL is also decrypted just-in-time (if encrypted) — it may
     // contain authentication credentials embedded in the URL.
-    const proxyUrl = account.proxy_url ?? undefined
 
     // Diagnostic: confirm we're using DB credentials, not env fallback
-    console.info(`[checkout] Using merchant account ${account.id} | clientId=${account.client_id.slice(0, 8)}... | status=${account.status}`)
+    console.info(
+      `[checkout] Using merchant account ${account.id} clientId=${getClientIdHint(account.client_id)} status=${account.status} decryption_ok=true proxy=${proxyUrl ? "yes" : "no"} env=${process.env.PAYPAL_ENV === "live" ? "live" : "sandbox"}`
+    )
 
     let paypalOrder
     try {
       paypalOrder = await createPayPalOrder({
-        clientId:      account.client_id,
+        clientId:      account.client_id.trim(),
         clientSecret:  decryptedSecret,
         amount:        amountStr,
         currencyCode:  currency,
@@ -351,13 +446,27 @@ export async function POST(req: NextRequest) {
       })
     } catch (paypalError) {
       await client.query("ROLLBACK")
-      console.error("[checkout] PayPal order creation failed:", paypalError)
+      if (isInvalidClientError(paypalError)) {
+        exhaustedInvalidAccounts = true
+        excludedAccountIds.add(account.id)
+        clearPayPalTokenCache(account.client_id)
+        console.error(
+          `[checkout] Excluding merchant account ${account.id} after invalid_client clientId=${getClientIdHint(account.client_id)} decryption_ok=true proxy=${proxyUrl ? "yes" : "no"} env=${process.env.PAYPAL_ENV === "live" ? "live" : "sandbox"} retried=true`
+        )
+        await quarantineMerchantAccount(account.id, "paypal_invalid_client")
+        continue
+      }
+      console.error(
+        `[checkout] PayPal order creation failed for merchant account ${account.id} clientId=${getClientIdHint(account.client_id)} decryption_ok=true proxy=${proxyUrl ? "yes" : "no"} env=${process.env.PAYPAL_ENV === "live" ? "live" : "sandbox"}`,
+        paypalError
+      )
       return NextResponse.json(
         { error: "Payment provider error. Please try again." },
         { status: 502 }
       )
     }
 
+    console.info(`[checkout] PayPal order created: orderId=${paypalOrder.id} intent=${intent} status=${paypalOrder.status}`)
     approvalUrl = getApprovalUrl(paypalOrder)
     if (flow === "POPUP_BRIDGE") {
       popupUrl = buildPopupBridgeUrl(account.shield_domain, approvalUrl, transactionId)
@@ -420,6 +529,8 @@ export async function POST(req: NextRequest) {
     // Only reached if ALL prior steps succeeded.  This single COMMIT
     // atomically persists: the new transaction row + the volume increment.
     await client.query("COMMIT")
+      break checkoutAttempt
+    }
 
   } catch (err) {
     // ── ROLLBACK on any unexpected error ─────────────────────────────────────

@@ -29,7 +29,6 @@ interface ApiNotification {
 export function useNotifications() {
   const [items, setItems] = useState<Notification[]>([])
   const seenIds           = useRef<Set<string>>(new Set())
-  const lastFetchedAt     = useRef<number>(0)
 
   const mergeNotifications = useCallback((incoming: ApiNotification[]) => {
     const newItems: Notification[] = []
@@ -41,7 +40,6 @@ export function useNotifications() {
     if (newItems.length > 0) {
       setItems((prev) => [...newItems, ...prev].slice(0, 50))
     }
-    lastFetchedAt.current = Date.now()
   }, [])
 
   const fetchNotifications = useCallback(async () => {
@@ -57,9 +55,14 @@ export function useNotifications() {
 
   // Initial fetch + poll every 30 s
   useEffect(() => {
-    fetchNotifications()
+    const initialTimer = window.setTimeout(() => {
+      void fetchNotifications()
+    }, 0)
     const interval = setInterval(fetchNotifications, 30_000)
-    return () => clearInterval(interval)
+    return () => {
+      window.clearTimeout(initialTimer)
+      clearInterval(interval)
+    }
   }, [fetchNotifications])
 
   const markAllRead = useCallback(() => {

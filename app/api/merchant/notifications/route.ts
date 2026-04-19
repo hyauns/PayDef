@@ -1,111 +1,83 @@
 /**
  * GET /api/merchant/notifications
  *
- * Returns the 10 most recent actionable events for the logged-in merchant's
- * tenant from the `system_logs` table, transformed into the Notification shape
- * expected by the NotificationBell component.
- *
- * Falls back to an empty list if the table doesn't exist or query fails.
+ * Returns the most recent buyer/payment transaction updates for the logged-in
+ * user. This intentionally excludes low-level operational logs such as user
+ * logins, webhook delivery internals, and admin control events.
  */
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-config"
 import { getSql } from "@/lib/neon"
 
-interface LogRow {
-  id:         string
-  action:     string
-  level:      string
-  status:     string
-  metadata:   Record<string, unknown> | null
-  created_at: string
+type NotificationType = "success" | "failed" | "warning"
+
+interface TransactionNotificationRow {
+  id: string
+  status: string
+  original_amount: string
+  store_name: string | null
+  updated_at: string
 }
 
-function mapLogToNotification(row: LogRow) {
-  const meta    = row.metadata ?? {}
-  const timeMs  = new Date(row.created_at).getTime()
-  const action  = row.action ?? ""
-  const level   = (row.level ?? "info").toLowerCase()
+function mapStatusToNotification(row: TransactionNotificationRow) {
+  const amount = Number.parseFloat(row.original_amount)
+  const storeName = row.store_name ?? "Unknown store"
 
-  // Determine type
-  let type: "success" | "failed" | "warning" = "success"
-  if (level === "error" || row.status === "ERROR") type = "failed"
-  else if (level === "warning" || row.status === "WARN") type = "warning"
+  let type: NotificationType = "warning"
+  let title = "Transaction Updated"
+  let description = `${storeName}`
 
-  // Build human-readable title + description
-  let title       = "System Event"
-  let description = action.replace(/_/g, " ").toLowerCase()
-  let amount: number | undefined
-
-  switch (action) {
-    case "TRANSACTION_COMPLETED":
-    case "PAYMENT_CAPTURED":
-      title       = "Payment Captured"
-      description = `Store: ${meta.storeName ?? meta.storeId ?? "Unknown"}`
-      amount      = typeof meta.amount === "number" ? meta.amount
-                  : typeof meta.amount === "string" ? parseFloat(meta.amount) : undefined
+  switch (row.status) {
+    case "COMPLETED":
       type = "success"
+      title = "Payment Completed"
+      description = `${storeName} payment captured successfully`
       break
-    case "TRANSACTION_FAILED":
-    case "PAYMENT_FAILED":
-      title       = "Payment Failed"
-      description = `${meta.storeName ?? meta.storeId ?? "Unknown"} — ${meta.reason ?? "declined"}`
+    case "AUTHORIZED":
+      type = "warning"
+      title = "Payment Authorized"
+      description = `${storeName} is awaiting capture`
+      break
+    case "FAILED":
       type = "failed"
+      title = "Payment Failed"
+      description = `${storeName} payment could not be completed`
       break
-    case "CHECKOUT_CANCELED":
-      title       = "Checkout Canceled"
-      description = `Buyer canceled — ${meta.storeName ?? meta.storeId ?? "Unknown"}`
+    case "REFUNDED":
       type = "warning"
+      title = "Payment Refunded"
+      description = `${storeName} payment was refunded`
       break
-    case "CHECKOUT_EXPIRED":
-      title       = "Checkout Expired"
-      description = `Session timed out — ${meta.storeName ?? meta.storeId ?? "Unknown"}`
-      type = "warning"
-      break
-    case "AUTHORIZATION_EXPIRED":
-      title       = "Authorization Expired"
-      description = `Capture window missed — ${meta.storeName ?? meta.storeId ?? "Unknown"}`
-      type = "warning"
-      break
-    case "STORE_CREATED":
-      title       = "New Store Connected"
-      description = `${meta.storeName ?? "A new store"} joined the gateway`
-      type = "success"
-      break
-    case "MERCHANT_ACCOUNT_ADDED":
-      title       = "Merchant Account Added"
-      description = `${meta.accountName ?? meta.email ?? "New PayPal account"} added to rotation`
-      type = "success"
-      break
-    case "ACCOUNT_LIMIT_WARNING":
-    case "DAILY_LIMIT_WARNING":
-      title       = "Account Limit Warning"
-      description = `${meta.accountName ?? "A PayPal account"} is at ${meta.percentUsed ?? "high"}% daily limit`
-      type = "warning"
-      break
-    case "DISPUTE_OPENED":
-      title       = "Dispute Opened"
-      description = `${meta.storeName ?? "Unknown"} — ${meta.reason ?? "buyer dispute"}`
+    case "DISPUTED":
       type = "failed"
+      title = "Dispute Opened"
+      description = `${storeName} payment is under dispute`
       break
-    case "REFUND_ISSUED":
-      title       = "Refund Issued"
-      description = `${meta.storeName ?? "Unknown"}`
+    case "CANCELED":
       type = "warning"
-      amount = typeof meta.amount === "number" ? meta.amount : undefined
+      title = "Checkout Canceled"
+      description = `${storeName} buyer canceled checkout`
+      break
+    case "EXPIRED":
+      type = "warning"
+      title = "Checkout Expired"
+      description = `${storeName} checkout session expired`
       break
     default:
-      title       = action.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
-      description = typeof meta.storeName === "string" ? meta.storeName : ""
+      type = "warning"
+      title = "Transaction Pending"
+      description = `${storeName} transaction is still processing`
+      break
   }
 
   return {
-    id:          row.id,
+    id: row.id,
     type,
     title,
     description,
-    amount,
-    timeMs,
+    amount: Number.isFinite(amount) ? amount : undefined,
+    timeMs: new Date(row.updated_at).getTime(),
     read: false,
   }
 }
@@ -127,27 +99,39 @@ export async function GET() {
     const sql = getSql()
 
     const rows = isSuperAdmin
-      ? (await sql`
-          SELECT id, action, level, status, metadata, created_at
-          FROM system_logs
-          WHERE level IN ('error', 'warning', 'info')
-          ORDER BY created_at DESC
+      ? ((await sql`
+          SELECT
+            t.id,
+            t.status,
+            t.original_amount,
+            s.name AS store_name,
+            t.updated_at
+          FROM transactions t
+          LEFT JOIN stores s ON s.id = t.store_id
+          WHERE t.status IN ('COMPLETED', 'AUTHORIZED', 'FAILED', 'REFUNDED', 'DISPUTED', 'CANCELED', 'EXPIRED')
+          ORDER BY t.updated_at DESC
           LIMIT 10
-        `) as unknown as LogRow[]
-      : (await sql`
-          SELECT id, action, level, status, metadata, created_at
-          FROM system_logs
-          WHERE tenant_id = ${tenantId}
-            AND level IN ('error', 'warning', 'info')
-          ORDER BY created_at DESC
+        `) as unknown as TransactionNotificationRow[])
+      : ((await sql`
+          SELECT
+            t.id,
+            t.status,
+            t.original_amount,
+            s.name AS store_name,
+            t.updated_at
+          FROM transactions t
+          LEFT JOIN stores s ON s.id = t.store_id
+          WHERE t.tenant_id = ${tenantId}
+            AND t.status IN ('COMPLETED', 'AUTHORIZED', 'FAILED', 'REFUNDED', 'DISPUTED', 'CANCELED', 'EXPIRED')
+          ORDER BY t.updated_at DESC
           LIMIT 10
-        `) as unknown as LogRow[]
+        `) as unknown as TransactionNotificationRow[])
 
-    const notifications = (rows ?? []).map(mapLogToNotification)
-    return NextResponse.json({ notifications })
-  } catch (err) {
-    // Table may not exist yet — return empty list gracefully
-    console.warn("[notifications] Query failed, returning empty:", err instanceof Error ? err.message : err)
+    return NextResponse.json({
+      notifications: rows.map(mapStatusToNotification),
+    })
+  } catch (error) {
+    console.warn("[notifications] Query failed, returning empty:", error instanceof Error ? error.message : error)
     return NextResponse.json({ notifications: [] })
   }
 }

@@ -36,6 +36,11 @@ export function getPool(): Pool {
   // neonConfig.webSocketConstructor is set automatically in Node environments
   neonConfig.poolQueryViaFetch = true
   _pool = new Pool({ connectionString: getConnectionString() })
+  // Prevent unhandled 'error' EventEmitter events from crashing the Node process.
+  // Neon WebSocket transport emits these on stream/connection failures.
+  _pool.on("error", (err: Error) => {
+    console.error("[db] Neon pool background error (non-fatal):", err.message)
+  })
   return _pool
 }
 

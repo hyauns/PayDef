@@ -73,12 +73,21 @@ export async function GET() {
         `
 
     // ── 3. Shield domains count ──────────────────────────────────────────────
-    const domainsQuery = sql`
-      SELECT
-        COUNT(*)::TEXT AS total,
-        COUNT(*) FILTER (WHERE status = 'ACTIVE')::TEXT AS active
-      FROM shield_domains
-    `
+    const domainsQuery = isSuperAdmin
+      ? sql`
+          SELECT
+            COUNT(*)::TEXT AS total,
+            COUNT(*) FILTER (WHERE is_active = true)::TEXT AS active
+          FROM shield_domains
+        `
+      : sql`
+          SELECT
+            COUNT(*)::TEXT AS total,
+            COUNT(*) FILTER (WHERE is_active = true)::TEXT AS active
+          FROM shield_domains
+          WHERE tenant_id = ${tenantId}
+             OR tenant_id IS NULL
+        `
 
     // ── 4. Transaction count today ───────────────────────────────────────────
     const txCountQuery = isSuperAdmin
@@ -121,7 +130,7 @@ export async function GET() {
       percentChange = 100 // infinite increase, cap at 100
     }
 
-    const degradedDomains = totalDomains - activeDomains
+    const degradedDomains = Math.max(totalDomains - activeDomains, 0)
 
     return NextResponse.json({
       volume: {

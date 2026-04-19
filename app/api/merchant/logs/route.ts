@@ -41,6 +41,7 @@ const VALID_STATUSES = [
   "DISPUTED",
   "CANCELED",
   "EXPIRED",
+  "VOIDED",
 ] as const
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
@@ -82,9 +83,9 @@ export async function GET(req: NextRequest) {
     values.push(tenantId!)
   }
 
-  // Status filter
+  // Status filter — cast to text to avoid enum validation errors for new statuses
   if (status && (VALID_STATUSES as readonly string[]).includes(status)) {
-    conditions.push(`t.status = $${paramIdx++}`)
+    conditions.push(`t.status::text = $${paramIdx++}`)
     values.push(status)
   }
 
@@ -155,6 +156,10 @@ export async function GET(req: NextRequest) {
       t.paypal_order_id,
       t.paypal_capture_id,
       t.customer_email,
+      t.card_last_4,
+      t.card_brand,
+      t.buyer_name,
+      t.billing_address,
       t.buyer_ip,
       t.buyer_country,
       t.ip_address,
@@ -171,16 +176,63 @@ export async function GET(req: NextRequest) {
     LIMIT $${paramIdx++} OFFSET $${paramIdx++}
   `
 
+  const legacyDataSql = `
+    SELECT
+      t.id,
+      t.tenant_id,
+      t.store_id,
+      t.merchant_id,
+      t.original_amount,
+      t.original_currency,
+      t.original_item_name,
+      t.masked_item_name,
+      t.gateway_fee,
+      t.status,
+      t.paypal_order_id,
+      t.paypal_capture_id,
+      t.customer_email,
+      NULL::text AS card_last_4,
+      NULL::text AS card_brand,
+      NULL::text AS buyer_name,
+      NULL::jsonb AS billing_address,
+      t.buyer_ip,
+      t.buyer_country,
+      t.ip_address,
+      t.created_at,
+      t.updated_at,
+      s.name        AS store_name,
+      ma.name       AS account_name,
+      ma.client_id  AS account_client_id
+    FROM transactions t
+    LEFT JOIN stores s ON t.store_id = s.id
+    LEFT JOIN merchant_accounts ma ON t.merchant_id = ma.id
+    ${whereClause}
+    ORDER BY t.created_at DESC
+    LIMIT $${paramIdx - 2} OFFSET $${paramIdx - 1}
+  `
+
   const dataValues = [...values, limit, offset]
 
   // ── Execute queries ─────────────────────────────────────────────────────
   // Uses Pool (not tagged template) because of the dynamic WHERE clause
   const pool = getPool()
 
-  const [countResult, dataResult] = await Promise.all([
-    pool.query(countSql, values),
-    pool.query(dataSql, dataValues),
-  ])
+  const countPromise = pool.query(countSql, values)
+  const dataPromise = pool.query(dataSql, dataValues).catch(async (error: unknown) => {
+    const isMissingCardColumn =
+      error instanceof Error &&
+      "code" in error &&
+      (error as { code?: string }).code === "42703" &&
+      error.message.includes("card_last_4")
+
+    if (!isMissingCardColumn) {
+      throw error
+    }
+
+    return pool.query(legacyDataSql, dataValues)
+  })
+
+  const [countResult, dataResult] = await Promise.all([countPromise, dataPromise])
 
   const total      = parseInt(countResult.rows[0]?.total ?? "0", 10)
   const totalPages = Math.ceil(total / limit)
@@ -203,6 +255,10 @@ export async function GET(req: NextRequest) {
     paypalOrderId:     tx.paypal_order_id ?? null,
     paypalCaptureId:   tx.paypal_capture_id ?? null,
     customerEmail:     tx.customer_email ?? null,
+    cardLast4:         tx.card_last_4 ?? null,
+    cardBrand:         tx.card_brand ?? null,
+    buyerName:         tx.buyer_name ?? null,
+    billingAddress:    tx.billing_address ?? null,
     buyerIp:           tx.buyer_ip ?? null,
     buyerCountry:      tx.buyer_country ?? null,
     ipAddress:         tx.ip_address ?? null,

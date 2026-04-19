@@ -1215,7 +1215,6 @@ export default function AccountsPage() {
   const [syncing, setSyncing] = useState(false)
   const [selected, setSelected] = useState<Merchant | null>(null)
   const [showAdd, setShowAdd] = useState(false)
-  const [openMenu, setOpenMenu] = useState<string | null>(null)
   const [filterStatus, setFilterStatus] = useState<Status | "All">("All")
 
   // Fetch real data from API
@@ -1287,7 +1286,6 @@ export default function AccountsPage() {
     setMerchants((prev) =>
       prev.map((m) => m.id === id ? { ...m, status: newStatus as Status } : m)
     )
-    setOpenMenu(null)
 
     try {
       await fetch(`/api/merchant/accounts/${id}`, {
@@ -1300,7 +1298,6 @@ export default function AccountsPage() {
 
   const handleDelete = useCallback(async (id: string) => {
     if (!confirm("Remove this account from the rotation pool?\n\nNote: accounts with linked transactions cannot be deleted. Set them to Suspended instead.")) return
-    setOpenMenu(null)
 
     try {
       const res = await fetch(`/api/merchant/accounts/${id}`, { method: "DELETE" })
@@ -1517,7 +1514,7 @@ export default function AccountsPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-44 bg-popover border-border text-xs font-mono">
                           <DropdownMenuItem
-                            onClick={() => { setSelected(m); setOpenMenu(null) }}
+                            onClick={() => { setSelected(m) }}
                             className="flex items-center gap-2 cursor-pointer"
                           >
                             <SlidersHorizontal className="w-3.5 h-3.5 text-muted-foreground" />

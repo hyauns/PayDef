@@ -3,6 +3,7 @@
 
 import { Fragment, useCallback, useState } from "react"
 import useSWR, { mutate as globalMutate } from "swr"
+import { toast } from "sonner"
 import {
   Search,
   Filter,
@@ -18,7 +19,7 @@ import {
   EyeOff,
   RefreshCw,
   Loader2,
-  Zap,
+  FlaskConical,
 } from "lucide-react"
 import { DashboardHeader } from "@/components/dashboard/header"
 
@@ -31,6 +32,7 @@ type TxStatus =
   | "Disputed"
   | "Canceled"
   | "Expired"
+  | "Voided"
 
 interface Transaction {
   id: string
@@ -45,6 +47,12 @@ interface Transaction {
   amount: number
   fee: number
   status: TxStatus
+  paymentMethodLabel: string
+  isCardPayment: boolean
+  cardBrand: string | null
+  cardLast4: string | null
+  buyerName: string | null
+  billingAddress: Record<string, unknown> | string | null
   customerEmail: string
   paypalTxId: string
   ipCountry: string
@@ -68,6 +76,10 @@ interface LogsApiResponse {
     paypalOrderId: string | null
     paypalCaptureId: string | null
     customerEmail: string | null
+    cardLast4: string | null
+    cardBrand: string | null
+    buyerName: string | null
+    billingAddress: Record<string, unknown> | string | null
     buyerIp: string | null
     buyerCountry: string | null
     ipAddress: string | null
@@ -101,6 +113,10 @@ interface TransactionDetailResponse {
   paypal_capture_id: string | null
   authorization_id: string | null
   customer_email: string | null
+  card_last_4: string | null
+  card_brand: string | null
+  buyer_name: string | null
+  billing_address: Record<string, unknown> | string | null
   buyer_ip: string | null
   buyer_country: string | null
   ip_address: string | null
@@ -147,6 +163,17 @@ interface TransactionDetailResponse {
   }>
 }
 
+interface MockChargeFormState {
+  storeId: string
+  amount: string
+  cardNumber: string
+  cvv: string
+  expMonth: string
+  expYear: string
+  buyerName: string
+  billingAddress: string
+}
+
 function mapStatus(dbStatus: string): TxStatus {
   switch (dbStatus) {
     case "COMPLETED": return "Completed"
@@ -157,6 +184,7 @@ function mapStatus(dbStatus: string): TxStatus {
     case "DISPUTED": return "Disputed"
     case "CANCELED": return "Canceled"
     case "EXPIRED": return "Expired"
+    case "VOIDED": return "Voided"
     default: return "Pending"
   }
 }
@@ -166,6 +194,10 @@ function mapTransaction(tx: LogsApiResponse["transactions"][number]): Transactio
   const originalProduct = tx.originalItemName ?? "—"
   const maskedProduct = tx.maskedItemName ?? originalProduct
   const isMasked = !!tx.maskedItemName && tx.maskedItemName !== tx.originalItemName
+  const isCardPayment = !!tx.cardBrand && !!tx.cardLast4
+  const paymentMethodLabel = isCardPayment
+    ? `${tx.cardBrand} •••• ${tx.cardLast4}`
+    : "PayPal"
 
   return {
     id: tx.id,
@@ -180,6 +212,12 @@ function mapTransaction(tx: LogsApiResponse["transactions"][number]): Transactio
     amount: tx.originalAmount,
     fee: tx.gatewayFee,
     status: mapStatus(tx.status),
+    paymentMethodLabel,
+    isCardPayment,
+    cardBrand: tx.cardBrand,
+    cardLast4: tx.cardLast4,
+    buyerName: tx.buyerName,
+    billingAddress: tx.billingAddress,
     customerEmail: tx.customerEmail ?? "—",
     paypalTxId: tx.paypalCaptureId ?? tx.paypalOrderId ?? "—",
     ipCountry: tx.buyerCountry ?? tx.ipAddress ?? "—",
@@ -202,9 +240,10 @@ const STATUS_CFG: Record<TxStatus, { label: string; bg: string; text: string; do
   Disputed: { label: "Disputed", bg: "bg-amber-500/10", text: "text-amber-500", dot: "bg-amber-500" },
   Canceled: { label: "Canceled", bg: "bg-zinc-400/10", text: "text-zinc-300", dot: "bg-zinc-400" },
   Expired: { label: "Expired", bg: "bg-orange-400/10", text: "text-orange-400", dot: "bg-orange-400" },
+  Voided: { label: "Voided", bg: "bg-slate-400/10", text: "text-slate-400", dot: "bg-slate-400" },
 }
 
-const ALL_STATUSES: TxStatus[] = ["Completed", "Authorized", "Pending", "Failed", "Refunded", "Disputed", "Canceled", "Expired"]
+const ALL_STATUSES: TxStatus[] = ["Completed", "Authorized", "Pending", "Failed", "Refunded", "Disputed", "Canceled", "Expired", "Voided"]
 
 function statusToDb(status: TxStatus): string {
   switch (status) {
@@ -216,11 +255,53 @@ function statusToDb(status: TxStatus): string {
     case "Disputed": return "DISPUTED"
     case "Canceled": return "CANCELED"
     case "Expired": return "EXPIRED"
+    case "Voided": return "VOIDED"
   }
 }
 
 function fmt(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value)
+}
+
+function formatPaymentMethod(input: { cardBrand?: string | null; cardLast4?: string | null }) {
+  if (input.cardBrand && input.cardLast4) {
+    return `${input.cardBrand} •••• ${input.cardLast4}`
+  }
+  return "PayPal"
+}
+
+function formatBillingAddress(address: Record<string, unknown> | string | null | undefined) {
+  if (!address) return "—"
+  if (typeof address === "string") return address
+
+  const fields = [
+    address.line1,
+    address.line2,
+    address.city,
+    address.state,
+    address.postal_code,
+    address.postalCode,
+    address.country,
+  ]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .map((value) => value.trim())
+
+  if (fields.length > 0) {
+    return fields.join(", ")
+  }
+
+  return JSON.stringify(address, null, 2)
+}
+
+function parseBillingAddressInput(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+
+  try {
+    return JSON.parse(trimmed)
+  } catch {
+    throw new Error("Billing Address must be valid JSON.")
+  }
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -252,8 +333,205 @@ function SkeletonRow() {
       <td className="px-4 py-3"><div className="h-3 w-28 bg-secondary rounded" /></td>
       <td className="px-4 py-3"><div className="h-3 w-16 bg-secondary rounded" /></td>
       <td className="px-4 py-3"><div className="h-3 w-16 bg-secondary rounded" /></td>
+      <td className="px-4 py-3"><div className="h-3 w-24 bg-secondary rounded" /></td>
       <td className="px-4 py-3"><div className="h-3 w-14 bg-secondary rounded" /></td>
     </tr>
+  )
+}
+
+function MockChargeModal({
+  open,
+  onClose,
+  onSuccess,
+}: {
+  open: boolean
+  onClose: () => void
+  onSuccess: () => Promise<void> | void
+}) {
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [form, setForm] = useState<MockChargeFormState>({
+    storeId: "",
+    amount: "",
+    cardNumber: "4111111111111111",
+    cvv: "123",
+    expMonth: "12",
+    expYear: String(new Date().getFullYear() + 1),
+    buyerName: "",
+    billingAddress: '{\n  "line1": "123 Test Street",\n  "city": "Bangkok",\n  "state": "Bangkok",\n  "postal_code": "10110",\n  "country": "TH"\n}',
+  })
+
+  if (!open) return null
+
+  const setField = (field: keyof MockChargeFormState, value: string) => {
+    setForm((current) => ({ ...current, [field]: value }))
+  }
+
+  const handleSubmit = async () => {
+    setSubmitting(true)
+    setError(null)
+
+    try {
+      const billingAddress = parseBillingAddressInput(form.billingAddress)
+      const response = await fetch("/api/gateway/mock-charge", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          store_id: form.storeId.trim(),
+          amount: form.amount.trim(),
+          currency: "USD",
+          cardNumber: form.cardNumber.trim(),
+          cvv: form.cvv.trim(),
+          expMonth: form.expMonth.trim(),
+          expYear: form.expYear.trim(),
+          buyerName: form.buyerName.trim(),
+          billingAddress,
+        }),
+      })
+
+      const payload = await response.json()
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Mock charge failed")
+      }
+
+      toast.success(`Mock charge completed for ${payload.card_brand ?? "card"} ${payload.card_last_4 ?? ""}`.trim())
+      await onSuccess()
+      onClose()
+    } catch (submitError) {
+      const message = submitError instanceof Error ? submitError.message : "Mock charge failed"
+      setError(message)
+      toast.error(message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-2xl rounded-xl border border-border bg-card shadow-2xl">
+          <div className="flex items-center justify-between border-b border-border px-5 py-4">
+            <div>
+              <p className="text-sm font-semibold text-foreground">Test Mock Charge</p>
+              <p className="text-xs font-mono text-muted-foreground mt-1">
+                Create a completed mock card transaction and trigger the existing webhook flow.
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              className="rounded-md border border-border p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="space-y-4 px-5 py-5">
+            {error && (
+              <div className="rounded-md border border-red-500/20 bg-red-500/5 px-3 py-2 text-[11px] font-mono text-red-400">
+                {error}
+              </div>
+            )}
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="space-y-1">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Store ID</span>
+                <input
+                  value={form.storeId}
+                  onChange={(event) => setField("storeId", event.target.value)}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none"
+                />
+              </label>
+
+              <label className="space-y-1">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Amount</span>
+                <input
+                  value={form.amount}
+                  onChange={(event) => setField("amount", event.target.value)}
+                  placeholder="49.99"
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none"
+                />
+              </label>
+
+              <label className="space-y-1 md:col-span-2">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Mock Card Number</span>
+                <input
+                  value={form.cardNumber}
+                  onChange={(event) => setField("cardNumber", event.target.value)}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none"
+                />
+              </label>
+
+              <label className="space-y-1">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">CVV</span>
+                <input
+                  value={form.cvv}
+                  onChange={(event) => setField("cvv", event.target.value)}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none"
+                />
+              </label>
+
+              <div className="grid grid-cols-2 gap-4">
+                <label className="space-y-1">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Exp Month</span>
+                  <input
+                    value={form.expMonth}
+                    onChange={(event) => setField("expMonth", event.target.value)}
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Exp Year</span>
+                  <input
+                    value={form.expYear}
+                    onChange={(event) => setField("expYear", event.target.value)}
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none"
+                  />
+                </label>
+              </div>
+
+              <label className="space-y-1 md:col-span-2">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Buyer Name</span>
+                <input
+                  value={form.buyerName}
+                  onChange={(event) => setField("buyerName", event.target.value)}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none"
+                />
+              </label>
+
+              <label className="space-y-1 md:col-span-2">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Billing Address JSON</span>
+                <textarea
+                  value={form.billingAddress}
+                  onChange={(event) => setField("billingAddress", event.target.value)}
+                  rows={7}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground focus:outline-none"
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-4">
+            <button
+              onClick={onClose}
+              className="rounded-md border border-border px-3 py-2 text-xs font-mono text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => void handleSubmit()}
+              disabled={submitting}
+              className="inline-flex items-center gap-2 rounded-md border border-cyan-400/30 px-3 py-2 text-xs font-mono text-cyan-400 transition-colors hover:bg-cyan-400/10 disabled:opacity-40"
+            >
+              {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FlaskConical className="w-3.5 h-3.5" />}
+              Submit Mock Charge
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
   )
 }
 
@@ -273,6 +551,12 @@ function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }
   const fee = data ? Number(data.gateway_fee) : tx.fee
   const customerEmail = data?.customer_email ?? tx.customerEmail
   const masked = !!data?.masked_item_name && data.masked_item_name !== data.original_item_name
+  const paymentMethod = formatPaymentMethod({
+    cardBrand: data?.card_brand ?? tx.cardBrand,
+    cardLast4: data?.card_last_4 ?? tx.cardLast4,
+  })
+  const buyerName = data?.buyer_name ?? tx.buyerName ?? "—"
+  const billingAddress = formatBillingAddress(data?.billing_address ?? tx.billingAddress)
 
   const handleReplay = async (eventId?: string) => {
     setReplayBusy(true)
@@ -416,6 +700,39 @@ function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }
           </div>
 
           <div className="border border-border rounded-lg p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <CreditCard className="w-3.5 h-3.5 text-cyan-400" />
+              <p className="text-xs font-mono font-semibold text-foreground">Payment Details</p>
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Method</p>
+                <div className="rounded-md border border-border bg-background px-3 py-2 text-xs font-mono text-foreground">
+                  {paymentMethod}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Buyer Name</p>
+                <div className="rounded-md border border-border bg-background px-3 py-2 text-xs font-mono text-foreground">
+                  {buyerName}
+                </div>
+              </div>
+            </div>
+            {(data?.card_brand || tx.cardBrand) ? (
+              <div className="space-y-1">
+                <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Billing Address</p>
+                <div className="rounded-md border border-border bg-background px-3 py-2 text-xs font-mono text-foreground whitespace-pre-wrap break-words">
+                  {billingAddress}
+                </div>
+              </div>
+            ) : (
+              <p className="text-[11px] font-mono text-muted-foreground">
+                PayPal transaction. No stored mock card metadata for this payment.
+              </p>
+            )}
+          </div>
+
+          <div className="border border-border rounded-lg p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <div>
                 <p className="text-xs font-mono font-semibold text-foreground">Delivery Recovery</p>
@@ -532,6 +849,7 @@ export default function TransactionsPage() {
   const [dateTo, setDateTo] = useState("")
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null)
   const [showFilters, setShowFilters] = useState(false)
+  const [showMockChargeModal, setShowMockChargeModal] = useState(false)
   const [page, setPage] = useState(1)
 
   const perPage = 20
@@ -592,6 +910,10 @@ export default function TransactionsPage() {
     URL.revokeObjectURL(url)
   }
 
+  const refreshTransactions = useCallback(async () => {
+    await globalMutate((key) => typeof key === "string" && key.startsWith("/api/merchant/logs"))
+  }, [])
+
 
 
   return (
@@ -607,13 +929,22 @@ export default function TransactionsPage() {
               Review routed payments, webhook delivery history, and recovery actions.
             </p>
           </div>
-          <button
-            onClick={handleExportCsv}
-            className="flex items-center gap-2 px-3 py-2 text-xs font-mono border border-border text-muted-foreground hover:text-foreground hover:bg-secondary rounded-md transition-colors"
-          >
-            <Download className="w-3.5 h-3.5" />
-            Export CSV
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowMockChargeModal(true)}
+              className="flex items-center gap-2 px-3 py-2 text-xs font-mono border border-cyan-400/30 text-cyan-400 hover:bg-cyan-400/10 rounded-md transition-colors"
+            >
+              <FlaskConical className="w-3.5 h-3.5" />
+              Test Mock Charge
+            </button>
+            <button
+              onClick={handleExportCsv}
+              className="flex items-center gap-2 px-3 py-2 text-xs font-mono border border-border text-muted-foreground hover:text-foreground hover:bg-secondary rounded-md transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Export CSV
+            </button>
+          </div>
         </div>
 
 
@@ -745,6 +1076,7 @@ export default function TransactionsPage() {
                   <th className="px-4 py-3 font-medium">Masked Product</th>
                   <th className="px-4 py-3 font-medium">PayPal Account</th>
                   <th className="px-4 py-3 font-medium">Amount</th>
+                  <th className="px-4 py-3 font-medium">Payment Method</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                 </tr>
               </thead>
@@ -753,13 +1085,13 @@ export default function TransactionsPage() {
                   Array.from({ length: 8 }).map((_, index) => <SkeletonRow key={index} />)
                 ) : error ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center text-red-400">
+                    <td colSpan={9} className="px-4 py-10 text-center text-red-400">
                       Failed to load transactions.
                     </td>
                   </tr>
                 ) : transactions.length === 0 ? (
                   <tr>
-                    <td colSpan={8}>
+                    <td colSpan={9}>
                       <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                         <ArrowRightLeft className="w-8 h-8 mb-3 opacity-30" />
                         <p className="text-sm font-mono">No transactions match your filters</p>
@@ -818,6 +1150,12 @@ export default function TransactionsPage() {
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
                             <span className="text-foreground font-semibold">{fmt(tx.amount)}</span>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <div className="flex items-center gap-1.5 text-foreground">
+                              <CreditCard className={`w-3 h-3 shrink-0 ${tx.isCardPayment ? "text-cyan-400" : "text-muted-foreground"}`} />
+                              <span>{tx.paymentMethodLabel}</span>
+                            </div>
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
                             <div className="flex items-center gap-2">
@@ -885,6 +1223,11 @@ export default function TransactionsPage() {
       </main>
 
       {selectedTx && <TxDetailPanel tx={selectedTx} onClose={() => setSelectedTx(null)} />}
+      <MockChargeModal
+        open={showMockChargeModal}
+        onClose={() => setShowMockChargeModal(false)}
+        onSuccess={refreshTransactions}
+      />
     </div>
   )
 }

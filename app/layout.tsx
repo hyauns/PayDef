@@ -25,6 +25,7 @@ export const metadata: Metadata = {
     ],
     apple: '/apple-icon.png',
   },
+  metadataBase: new URL('https://www.paydef.io'),
 }
 
 export default function RootLayout({

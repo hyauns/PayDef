@@ -14,6 +14,7 @@ export type StoreWebhookLifecycleEvent =
   | "payment.checkout.canceled"
   | "payment.session.expired"
   | "payment.authorization.expired"
+  | "payment.authorization.voided"
 
 export type StoreWebhookEvent = PayPalMappedStoreWebhookEvent | StoreWebhookLifecycleEvent
 
@@ -23,6 +24,7 @@ export interface StoreWebhookPayload {
   transaction_id: string
   paypal_order_id: string | null
   amount: string
+  currency?: string
   status: string
   timestamp: string
   status_reason?: string
@@ -31,6 +33,13 @@ export interface StoreWebhookPayload {
   authorization_id?: string
   gateway_fee?: string
   net_amount?: string
+  payment_method?: "paypal" | "card" | "mock_card"
+  card_last_4?: string
+  card_brand?: string
+  exp_month?: string
+  exp_year?: string
+  buyer_name?: string
+  billing_address?: string | Record<string, unknown> | null
 }
 
 export function resolveStoreWebhookEvent(eventType: string): StoreWebhookEvent | null {

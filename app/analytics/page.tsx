@@ -22,6 +22,7 @@ interface AnalyticsResponse {
     failedCount: number
     refundedCount: number
     disputedCount: number
+    voidedCount: number
     successRate: number
     refundRate: number
     disputeRate: number
@@ -275,7 +276,7 @@ export default function AnalyticsPage() {
             <MetricCard
               label="Refund Rate"
               value={`${s.refundRate}%`}
-              sub={`${s.refundedCount} refunded`}
+              sub={`${s.refundedCount} refunded · ${s.voidedCount} voided`}
               trend={s.refundRate <= 2 ? "Normal" : "Elevated"}
               trendUp={s.refundRate <= 2}
               accent="border-amber-400/20"

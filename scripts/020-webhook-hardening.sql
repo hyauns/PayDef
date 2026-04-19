@@ -39,7 +39,7 @@ UPDATE transactions
 SET authorization_expires_at = COALESCE(
       authorization_expires_at,
       CASE
-        WHEN intent = 'AUTHORIZE' THEN created_at + INTERVAL '72 hours'
+        WHEN intent = 'AUTHORIZE' THEN created_at + INTERVAL '7 days'
         ELSE NULL
       END
     )

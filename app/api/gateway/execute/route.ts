@@ -34,7 +34,9 @@ import { sendTransactionAlert } from "@/lib/telegram"
 import { type StoreWebhookPayload } from "@/lib/store-webhooks"
 import {
   buildWebhookBusinessKey,
-  enqueueStoreWebhookEvent,
+  persistWebhookEventSafe,
+  deliverWebhookEvent,
+  deliverWebhookEventReliably,
 } from "@/lib/webhook-delivery"
 import { getSql } from "@/lib/neon"
 
@@ -108,10 +110,56 @@ export async function POST(req: NextRequest) {
     }
 
     // ── 2. Idempotency check ─────────────────────────────────────────────────
-    // If already executed (not PENDING), return current state — safe to retry
+    // If already executed (not PENDING), return current state — safe to retry.
+    // SPECIAL CASE: For AUTHORIZED status, also attempt to re-fire the webhook
+    // in case the PayPal IPN ran first (set status to AUTHORIZED) but its
+    // delivery attempt failed or timed out. This is the most common race.
     if (tx.status !== "PENDING") {
       await client.query("ROLLBACK")
-      console.info(`[execute] Transaction ${transactionId} already in status ${tx.status} — skipping`)
+      console.info(`[execute] Transaction ${transactionId} already in status ${tx.status} — skipping execute`)
+
+      // For AUTHORIZE flow: re-attempt webhook delivery if the event exists and
+      // is still pending/retrying. The buyer redirect triggers this path when
+      // IPN wins the race, so this is a critical recovery opportunity.
+      if (tx.status === "AUTHORIZED" && tx.authorization_id && tx.webhook_url) {
+        const originalAmount  = parseFloat(tx.original_amount)
+        const gatewayFee      = originalAmount * GATEWAY_FEE_PERCENT
+        const authWebhookPayload: Omit<StoreWebhookPayload, "event_id"> = {
+          event:              "payment.authorization.created",
+          transaction_id:     tx.id,
+          paypal_order_id:    tx.paypal_order_id,
+          authorization_id:   tx.authorization_id,
+          amount:             originalAmount.toFixed(2),
+          gateway_fee:        gatewayFee.toFixed(2),
+          net_amount:         (originalAmount - gatewayFee).toFixed(2),
+          status:             "AUTHORIZED",
+          timestamp:          new Date().toISOString(),
+        }
+        try {
+          const { eventId, shouldDeliver } = await persistWebhookEventSafe({
+            transactionId,
+            tenantId:    tx.tenant_id,
+            storeId:     tx.store_id,
+            accountId:   tx.merchant_id,
+            targetUrl:   tx.webhook_url,
+            businessKey: buildWebhookBusinessKey("payment.authorization.created", transactionId, tx.authorization_id),
+            event:       "payment.authorization.created",
+            payload:     authWebhookPayload,
+            source:      "execute_api_idempotency_recovery",
+            triggerOrigin: "buyer_return",
+          })
+          console.info(`[execute] Idempotency-recovery: auth webhook persisted eventId=${eventId} shouldDeliver=${shouldDeliver} authId=${tx.authorization_id}`)
+          if (shouldDeliver) {
+            const delivery = await deliverWebhookEventReliably(eventId, "buyer_return")
+            console.info(
+              `[execute] Idempotency-recovery delivery result: tx=${transactionId} eventId=${eventId} status=${delivery.finalStatus} deliveredAt=${delivery.deliveredAt ?? "pending"} nextRetry=${delivery.nextRetryAt ?? "none"}`
+            )
+          }
+        } catch (err) {
+          console.error(`[execute] Idempotency-recovery: webhook persist failed tx=${transactionId} authId=${tx.authorization_id}`, err)
+        }
+      }
+
       return NextResponse.json({
         status:         tx.status,
         transaction_id: tx.id,
@@ -145,6 +193,7 @@ export async function POST(req: NextRequest) {
 
     // ── 4. Execute PayPal call based on intent ───────────────────────────────
     const intent = (tx.intent ?? "CAPTURE").toUpperCase()
+    console.info(`[execute] tx=${transactionId} intent=${intent} (db.intent=${tx.intent}) paypal_order=${tx.paypal_order_id}`)
 
     if (intent === "AUTHORIZE") {
       // ── Manual Capture flow: authorize only ────────────────────────────────
@@ -188,7 +237,7 @@ export async function POST(req: NextRequest) {
          SET    status = 'AUTHORIZED'::transaction_status,
                 authorization_id = $1,
                 gateway_fee = $2,
-                authorization_expires_at = NOW() + INTERVAL '72 hours',
+                authorization_expires_at = NOW() + INTERVAL '7 days',
                 checkout_expires_at = NULL,
                 updated_at = NOW()
          WHERE  id = $3`,
@@ -197,7 +246,10 @@ export async function POST(req: NextRequest) {
 
       await client.query("COMMIT")
 
-      // Notify store webhook (fire-and-forget)
+      console.info(`[execute] AUTHORIZE complete: tx=${transactionId} status=AUTHORIZED authId=${authId}`)
+
+      // ── Persist webhook event (awaited, uses stateless HTTP driver) ───────
+      // Then fire-and-forget delivery — event is durable, cron retries if needed
       if (tx.webhook_url) {
         const payload: Omit<StoreWebhookPayload, "event_id"> = {
           event:              "payment.authorization.created",
@@ -210,18 +262,31 @@ export async function POST(req: NextRequest) {
           status:             "AUTHORIZED",
           timestamp:          new Date().toISOString(),
         }
-        enqueueStoreWebhookEvent({
-          transactionId,
-          tenantId:   tx.tenant_id,
-          storeId:    tx.store_id,
-          accountId:  tx.merchant_id,
-          targetUrl:  tx.webhook_url,
-          businessKey: buildWebhookBusinessKey("payment.authorization.created", transactionId, authId),
-          event:      "payment.authorization.created",
-          payload,
-          source:     "execute_api",
-          triggerOrigin: "buyer_return",
-        }).catch((e) => console.error("[execute] webhook enqueue failed:", e))
+        try {
+          const { eventId, isNew, shouldDeliver } = await persistWebhookEventSafe({
+            transactionId,
+            tenantId:   tx.tenant_id,
+            storeId:    tx.store_id,
+            accountId:  tx.merchant_id,
+            targetUrl:  tx.webhook_url,
+            businessKey: buildWebhookBusinessKey("payment.authorization.created", transactionId, authId),
+            event:      "payment.authorization.created",
+            payload,
+            source:     "execute_api",
+            triggerOrigin: "buyer_return",
+          })
+          console.info(`[execute] Webhook event persisted: event=payment.authorization.created tx=${transactionId} eventId=${eventId} isNew=${isNew} shouldDeliver=${shouldDeliver}`)
+          // Authorization delivery is awaited here because buyer-return runs
+          // inside the checkout UX and background promises are not reliable on Vercel.
+          if (shouldDeliver) {
+            const delivery = await deliverWebhookEventReliably(eventId, "buyer_return")
+            console.info(
+              `[execute] Auth webhook delivery result: tx=${transactionId} eventId=${eventId} status=${delivery.finalStatus} deliveredAt=${delivery.deliveredAt ?? "pending"} nextRetry=${delivery.nextRetryAt ?? "none"}`
+            )
+          }
+        } catch (persistErr) {
+          console.error(`[execute] Webhook event persistence FAILED (payment still succeeded): event=payment.authorization.created tx=${transactionId} authId=${authId}`, persistErr)
+        }
       }
 
       // Telegram alert (fire-and-forget)
@@ -234,6 +299,7 @@ export async function POST(req: NextRequest) {
         } catch { /* silent */ }
       })()
 
+      console.info(`[execute] Responding: status=AUTHORIZED tx=${transactionId} (redirect will carry this status)`)
       return NextResponse.json({
         status:           "AUTHORIZED",
         transaction_id:   transactionId,
@@ -313,7 +379,10 @@ export async function POST(req: NextRequest) {
 
       await client.query("COMMIT")
 
-      // Notify store webhook (fire-and-forget)
+      console.info(`[execute] CAPTURE complete: tx=${transactionId} status=COMPLETED captureId=${captureId}`)
+
+      // ── Persist webhook event (awaited, uses stateless HTTP driver) ───────
+      // Then fire-and-forget delivery — event is durable, cron retries if needed
       if (tx.webhook_url) {
         const payload: Omit<StoreWebhookPayload, "event_id"> = {
           event:             "payment.capture.completed",
@@ -326,18 +395,29 @@ export async function POST(req: NextRequest) {
           status:            "COMPLETED",
           timestamp:         new Date().toISOString(),
         }
-        enqueueStoreWebhookEvent({
-          transactionId,
-          tenantId:   tx.tenant_id,
-          storeId:    tx.store_id,
-          accountId:  tx.merchant_id,
-          targetUrl:  tx.webhook_url,
-          businessKey: buildWebhookBusinessKey("payment.capture.completed", transactionId, captureId),
-          event:      "payment.capture.completed",
-          payload,
-          source:     "execute_api",
-          triggerOrigin: "buyer_return",
-        }).catch((e) => console.error("[execute] webhook enqueue failed:", e))
+        try {
+          const { eventId, isNew, shouldDeliver } = await persistWebhookEventSafe({
+            transactionId,
+            tenantId:   tx.tenant_id,
+            storeId:    tx.store_id,
+            accountId:  tx.merchant_id,
+            targetUrl:  tx.webhook_url,
+            businessKey: buildWebhookBusinessKey("payment.capture.completed", transactionId, captureId),
+            event:      "payment.capture.completed",
+            payload,
+            source:     "execute_api",
+            triggerOrigin: "buyer_return",
+          })
+          console.info(`[execute] Webhook event persisted: event=payment.capture.completed tx=${transactionId} eventId=${eventId} isNew=${isNew} shouldDeliver=${shouldDeliver}`)
+          // Fire-and-forget delivery — event is persisted, cron will retry if this fails
+          if (shouldDeliver) {
+            deliverWebhookEvent(eventId, "buyer_return").catch((e) =>
+              console.error(`[execute] Webhook delivery failed (event persisted, cron will retry): tx=${transactionId} eventId=${eventId}`, e)
+            )
+          }
+        } catch (persistErr) {
+          console.error(`[execute] Webhook event persistence FAILED (payment still succeeded): event=payment.capture.completed tx=${transactionId} captureId=${captureId}`, persistErr)
+        }
       }
 
       // Telegram alert (fire-and-forget)
@@ -350,6 +430,7 @@ export async function POST(req: NextRequest) {
         } catch { /* silent */ }
       })()
 
+      console.info(`[execute] Responding: status=COMPLETED tx=${transactionId} captureId=${captureId} (redirect will carry this status)`)
       return NextResponse.json({
         status:            "COMPLETED",
         transaction_id:    transactionId,

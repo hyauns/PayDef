@@ -20,6 +20,7 @@ const RETRY_DELAYS_MS = [
 
 const RESPONSE_SNIPPET_LIMIT = 1200
 const REPLAY_COOLDOWN_MS = 60_000
+const DELIVERY_LEASE_MS = 15_000
 
 export type WebhookDeliveryFinalStatus =
   | "pending"
@@ -27,6 +28,13 @@ export type WebhookDeliveryFinalStatus =
   | "retrying"
   | "dead_letter"
   | "canceled"
+
+export type WebhookDeliveryResult = {
+  deliveryId: string | null
+  finalStatus: WebhookDeliveryFinalStatus
+  nextRetryAt: string | null
+  deliveredAt: string | null
+}
 
 type WebhookEventRow = {
   id: string
@@ -194,6 +202,63 @@ async function loadStoreSecret(storeId: string) {
   return rows[0]?.webhook_secret ? decrypt(rows[0].webhook_secret) : null
 }
 
+async function claimDeliveryAttempt(eventId: string, deliveryId: string, force = false) {
+  const sql = getSql()
+
+  if (force) {
+    const rows = (await sql`
+      UPDATE webhook_events
+      SET last_delivery_id = ${deliveryId},
+          last_attempt_at = NOW(),
+          updated_at = NOW()
+      WHERE id = ${eventId}
+        AND delivery_status IN ('pending', 'retrying')
+      RETURNING *
+    `) as unknown as WebhookEventRow[]
+
+    return rows[0] ?? null
+  }
+
+  const leaseCutoff = new Date(Date.now() - DELIVERY_LEASE_MS).toISOString()
+  const rows = (await sql`
+    UPDATE webhook_events
+    SET last_delivery_id = ${deliveryId},
+        last_attempt_at = NOW(),
+        updated_at = NOW()
+    WHERE id = ${eventId}
+      AND delivery_status IN ('pending', 'retrying')
+      AND (
+        last_attempt_at IS NULL
+        OR last_attempt_at < ${leaseCutoff}
+      )
+    RETURNING *
+  `) as unknown as WebhookEventRow[]
+
+  return rows[0] ?? null
+}
+
+function shouldFastRetryAuthorization(event: WebhookEventRow | null) {
+  if (!event || event.event_name !== "payment.authorization.created") {
+    return false
+  }
+
+  if (event.delivery_status !== "retrying") {
+    return false
+  }
+
+  if (event.latest_http_status !== null) {
+    return event.latest_http_status >= 500 || event.latest_http_status === 408 || event.latest_http_status === 429
+  }
+
+  const latestError = event.latest_error?.toLowerCase() ?? ""
+  return (
+    latestError.includes("timeout") ||
+    latestError.includes("aborted") ||
+    latestError.includes("network") ||
+    latestError.includes("fetch")
+  )
+}
+
 async function finalizeDeliveryAttempt(input: {
   event: WebhookEventRow
   deliveryId: string
@@ -272,6 +337,109 @@ async function finalizeDeliveryAttempt(input: {
     deliveredAt,
   }
 }
+/**
+ * Persist a webhook event row using the STATELESS HTTP SQL driver (getSql).
+ * This is safe for Vercel serverless — no WebSocket/pool connection needed.
+ *
+ * IMPORTANT: This function does NOT attempt delivery.
+ * Callers should explicitly decide whether to await delivery or queue it.
+ * If delivery fails or the function dies, the event row is durable and
+ * the recovery cron will retry delivery on its next sweep.
+ *
+ * Returns { eventId, isNew, shouldDeliver }:
+ *   - isNew: true if a new event row was created
+ *   - shouldDeliver: true if a delivery attempt should be fired immediately
+ *     (new event, OR existing event that is still pending/retrying)
+ */
+export async function persistWebhookEventSafe(
+  input: EnqueueWebhookEventInput
+): Promise<{ eventId: string; isNew: boolean; shouldDeliver: boolean }> {
+  const sql = getSql()
+
+  // ── Idempotency check via business_key ──────────────────────────────────
+  const existing = (await sql`
+    SELECT id, delivery_status FROM webhook_events
+    WHERE business_key = ${input.businessKey}
+    LIMIT 1
+  `) as unknown as Array<{ id: string; delivery_status: string }>
+
+  if (existing[0]) {
+    // Event already exists — update payload/metadata, return existing ID
+    const eventId = existing[0].id
+    const existingStatus = existing[0].delivery_status
+    const payload = {
+      ...input.payload,
+      event: input.event,
+      event_id: eventId,
+    } satisfies StoreWebhookPayload
+
+    await sql`
+      UPDATE webhook_events
+      SET target_url = ${input.targetUrl},
+          raw_payload = ${JSON.stringify(payload)},
+          source = ${input.source},
+          trigger_origin = ${input.triggerOrigin ?? "automatic"},
+          canceled_at = NULL,
+          updated_at = NOW()
+      WHERE id = ${eventId}
+    `
+
+    // Re-fire delivery if the event hasn't been delivered yet.
+    // This handles: PayPal IPN arriving after execute already persisted the
+    // event but delivery failed/is-still-pending.
+    const shouldDeliver = existingStatus === "pending" || existingStatus === "retrying"
+
+    console.info(
+      `[webhook-delivery] Event EXISTS (safe-persist): eventId=${eventId} event=${input.event} tx=${input.transactionId} existingStatus=${existingStatus} shouldDeliver=${shouldDeliver}`
+    )
+    return { eventId, isNew: false, shouldDeliver }
+  }
+
+  // ── Create new event ────────────────────────────────────────────────────
+  const eventId = randomUUID()
+  const payload = {
+    ...input.payload,
+    event: input.event,
+    event_id: eventId,
+  } satisfies StoreWebhookPayload
+
+  await sql`
+    INSERT INTO webhook_events (
+      id, transaction_id, tenant_id, store_id, account_id,
+      event_name, business_key, target_url, raw_payload,
+      payload_version, source, trigger_origin, delivery_status, next_retry_at
+    ) VALUES (
+      ${eventId}, ${input.transactionId}, ${input.tenantId}, ${input.storeId}, ${input.accountId ?? null},
+      ${input.event}, ${input.businessKey}, ${input.targetUrl}, ${JSON.stringify(payload)},
+      '2026-04-08', ${input.source}, ${input.triggerOrigin ?? "automatic"}, 'pending', NOW()
+    )
+  `
+
+  console.info(
+    `[webhook-delivery] Event CREATED (safe-persist): eventId=${eventId} event=${input.event} tx=${input.transactionId} source=${input.source}`
+  )
+
+  // System log (best-effort, non-blocking)
+  writeSystemLog({
+    action: "WEBHOOK_EVENT_CREATED",
+    status: "OK",
+    level: "info",
+    tenantId: input.tenantId,
+    storeId: input.storeId,
+    accountId: input.accountId ?? null,
+    metadata: {
+      eventId,
+      event: input.event,
+      transactionId: input.transactionId,
+      businessKey: input.businessKey,
+      targetUrl: input.targetUrl,
+      source: input.source,
+    },
+  }).catch(() => null)
+
+  return { eventId, isNew: true, shouldDeliver: true }
+}
+
 
 export async function enqueueStoreWebhookEvent(input: EnqueueWebhookEventInput) {
   const pool = getPool()
@@ -318,8 +486,10 @@ export async function enqueueStoreWebhookEvent(input: EnqueueWebhookEventInput) 
         ]
       )
       eventId = inserted.rows[0].id
+      console.info(`[webhook-delivery] Event CREATED: eventId=${eventId} event=${input.event} tx=${input.transactionId} source=${input.source}`)
     } else {
       eventId = existing.id
+      console.info(`[webhook-delivery] Event DUPLICATE (idempotent): eventId=${eventId} event=${input.event} tx=${input.transactionId} businessKey=${input.businessKey}`)
     }
 
     const payload = {
@@ -386,19 +556,46 @@ export async function enqueueStoreWebhookEvent(input: EnqueueWebhookEventInput) 
   return { event: await loadEventRow(eventId), delivery, duplicate: false }
 }
 
-export async function deliverWebhookEvent(eventId: string, triggerOrigin = "retry") {
-  const event = await loadEventRow(eventId)
-  if (!event) {
+export async function deliverWebhookEvent(
+  eventId: string,
+  triggerOrigin = "retry",
+  options?: { force?: boolean; timeoutMs?: number }
+): Promise<WebhookDeliveryResult> {
+  const existing = await loadEventRow(eventId)
+  if (!existing) {
     throw new Error("Webhook event not found.")
   }
 
-  if (event.delivery_status === "canceled") {
-    return { deliveryId: null, finalStatus: "canceled" as const, nextRetryAt: null, deliveredAt: null }
+  if (existing.delivery_status === "canceled") {
+    return { deliveryId: null, finalStatus: "canceled", nextRetryAt: null, deliveredAt: null }
+  }
+
+  if (existing.delivery_status === "delivered") {
+    return {
+      deliveryId: existing.last_delivery_id,
+      finalStatus: "delivered",
+      nextRetryAt: existing.next_retry_at,
+      deliveredAt: existing.delivered_at,
+    }
+  }
+
+  const deliveryId = randomUUID()
+  const event = await claimDeliveryAttempt(eventId, deliveryId, options?.force ?? false)
+  if (!event) {
+    const current = await loadEventRow(eventId)
+    if (!current) {
+      throw new Error("Webhook event not found.")
+    }
+    return {
+      deliveryId: current.last_delivery_id,
+      finalStatus: current.delivery_status,
+      nextRetryAt: current.next_retry_at,
+      deliveredAt: current.delivered_at,
+    }
   }
 
   const attemptNumber = event.attempt_count + 1
   const timestamp = new Date().toISOString()
-  const deliveryId = randomUUID()
   const secret = await loadStoreSecret(event.store_id)
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -434,12 +631,14 @@ export async function deliverWebhookEvent(eventId: string, triggerOrigin = "retr
     )
   `
 
+  console.info(`[webhook-delivery] Delivery ATTEMPT: eventId=${eventId} event=${event.event_name} tx=${event.transaction_id} attempt=${attemptNumber} target=${event.target_url} trigger=${triggerOrigin}`)
+
   try {
     const response = await fetch(event.target_url, {
       method: "POST",
       headers,
       body: event.raw_payload,
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(options?.timeoutMs ?? 10_000),
     })
     const responseText = toSnippet(await response.text().catch(() => null))
     const finalized = await finalizeDeliveryAttempt({
@@ -452,17 +651,53 @@ export async function deliverWebhookEvent(eventId: string, triggerOrigin = "retr
       delivered: response.ok,
     })
 
+    if (response.ok) {
+      console.info(`[webhook-delivery] Delivery SUCCESS: eventId=${eventId} event=${event.event_name} tx=${event.transaction_id} attempt=${attemptNumber} httpStatus=${response.status}`)
+    } else {
+      console.warn(`[webhook-delivery] Delivery REJECTED: eventId=${eventId} event=${event.event_name} tx=${event.transaction_id} attempt=${attemptNumber} httpStatus=${response.status} finalStatus=${finalized.finalStatus} nextRetry=${finalized.nextRetryAt ?? "none"}`)
+    }
+
     return finalized
   } catch (error) {
+    const errMessage = error instanceof Error ? error.message : "Unknown delivery error"
+    console.error(`[webhook-delivery] Delivery NETWORK ERROR: eventId=${eventId} event=${event.event_name} tx=${event.transaction_id} attempt=${attemptNumber} error=${errMessage}`)
     return finalizeDeliveryAttempt({
       event,
       deliveryId,
       attemptNumber,
       triggerOrigin,
-      errorMessage: error instanceof Error ? error.message : "Unknown delivery error",
+      errorMessage: errMessage,
       delivered: false,
     })
   }
+}
+
+export async function deliverWebhookEventReliably(
+  eventId: string,
+  triggerOrigin: string,
+  options?: { timeoutMs?: number }
+): Promise<WebhookDeliveryResult> {
+  const firstAttempt = await deliverWebhookEvent(eventId, triggerOrigin, {
+    timeoutMs: options?.timeoutMs,
+  })
+
+  if (firstAttempt.finalStatus === "delivered") {
+    return firstAttempt
+  }
+
+  const afterFirstAttempt = await loadEventRow(eventId)
+  if (!shouldFastRetryAuthorization(afterFirstAttempt)) {
+    return firstAttempt
+  }
+
+  console.warn(
+    `[webhook-delivery] Immediate auth retry: eventId=${eventId} tx=${afterFirstAttempt?.transaction_id ?? "unknown"} trigger=${triggerOrigin}`
+  )
+
+  return deliverWebhookEvent(eventId, `${triggerOrigin}_immediate_retry`, {
+    force: true,
+    timeoutMs: options?.timeoutMs,
+  })
 }
 
 export async function processDueWebhookEvents(limit = 50) {
@@ -479,12 +714,23 @@ export async function processDueWebhookEvents(limit = 50) {
     LIMIT ${limit}
   `) as unknown as Array<{ id: string }>
 
+  if (rows.length > 0) {
+    console.info(`[webhook-delivery] Recovery sweep: ${rows.length} due event(s) found`)
+  }
+
   const results = []
   for (const row of rows) {
     results.push({
       eventId: row.id,
       ...(await deliverWebhookEvent(row.id, "retry")),
     })
+  }
+
+  if (rows.length > 0) {
+    const delivered = results.filter(r => r.finalStatus === "delivered").length
+    const retrying = results.filter(r => r.finalStatus === "retrying").length
+    const deadLetter = results.filter(r => r.finalStatus === "dead_letter").length
+    console.info(`[webhook-delivery] Recovery sweep complete: total=${results.length} delivered=${delivered} retrying=${retrying} dead_letter=${deadLetter}`)
   }
 
   return results

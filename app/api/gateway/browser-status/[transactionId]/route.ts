@@ -13,6 +13,8 @@ export async function GET(_req: Request, context: RouteContext) {
     return NextResponse.json({ error: "Transaction not found." }, { status: 404 })
   }
 
+  console.info(`[browser-status] tx=${transactionId} status=${status.status} (this status will be carried in the redirect to the store)`)
+
   return NextResponse.json({
     transaction_id: status.transactionId,
     status: status.status,

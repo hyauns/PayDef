@@ -30,7 +30,8 @@ import {
 } from "@/lib/store-webhooks"
 import {
   buildWebhookBusinessKey,
-  enqueueStoreWebhookEvent,
+  persistWebhookEventSafe,
+  deliverWebhookEvent,
 } from "@/lib/webhook-delivery"
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -308,7 +309,9 @@ function resolveTransactionRef(event: PayPalWebhookEvent): {
 } {
   // PAYMENT.CAPTURE.* events
   const transactionId = event.resource.custom_id
-  const paypalOrderId = event.resource.supplementary_data?.related_ids?.order_id
+  const paypalOrderId =
+    event.resource.supplementary_data?.related_ids?.order_id ??
+    event.resource.parent_payment
 
   // CUSTOMER.DISPUTE.* events reference the PayPal transaction ID
   // We'll need to match via paypal_capture_id or paypal_order_id
@@ -343,6 +346,8 @@ async function handleAuthorizationCreated(
   }
 
   const authorizationId = event.resource.id
+  const originalAmount = parseFloat(transaction.original_amount)
+  const gatewayFee = originalAmount * GATEWAY_FEE_PERCENT
 
   // Save the authorization_id so the store can use it for manual capture
   await client.query(
@@ -350,10 +355,12 @@ async function handleAuthorizationCreated(
      SET authorization_id = $1,
          status = 'AUTHORIZED',
          authorized_at = NOW(),
-         authorization_expires_at = NOW() + INTERVAL '72 hours',
+         authorization_expires_at = NOW() + INTERVAL '7 days',
+         checkout_expires_at = NULL,
+         gateway_fee = $2,
          updated_at = NOW()
-     WHERE id = $2`,
-    [authorizationId, transaction.id]
+     WHERE id = $3`,
+    [authorizationId, gatewayFee.toFixed(2), transaction.id]
   )
 
   await client.query("COMMIT")
@@ -363,6 +370,7 @@ async function handleAuthorizationCreated(
     transaction_id: transaction.id,
     authorization_id: authorizationId,
     new_status: "AUTHORIZED",
+    gateway_fee: gatewayFee.toFixed(2),
   }
 }
 
@@ -621,7 +629,8 @@ export async function POST(req: NextRequest) {
     // Dispatch to the appropriate event handler
     const result = await handler(client, transaction, event)
 
-    // ── Send store webhook notification (fire-and-forget) ──────────────────
+    // ── Persist store webhook event (awaited, stateless HTTP driver) ────────
+    // Then fire-and-forget delivery — event is durable, cron retries if needed
     if (result.status === "processed") {
       const storeResult = await sql`
         SELECT webhook_url, webhook_secret FROM stores WHERE id = ${transaction.store_id}
@@ -658,20 +667,29 @@ export async function POST(req: NextRequest) {
             ? String(result.authorization_id)
             : event.resource.id
 
-        enqueueStoreWebhookEvent({
-          transactionId: transaction.id,
-          tenantId: transaction.tenant_id,
-          storeId: transaction.store_id,
-          accountId: transaction.merchant_id,
-          targetUrl: store.webhook_url,
-          businessKey: buildWebhookBusinessKey(storeEvent, transaction.id, reference),
-          event: storeEvent,
-          payload: canonicalPayload,
-          source: event.event_type,
-          triggerOrigin: "paypal_webhook",
-        }).catch((err) => {
-          console.error("[PayPal Webhook] Failed to send store notification:", err)
-        })
+        try {
+          const { eventId, isNew, shouldDeliver } = await persistWebhookEventSafe({
+            transactionId: transaction.id,
+            tenantId: transaction.tenant_id,
+            storeId: transaction.store_id,
+            accountId: transaction.merchant_id,
+            targetUrl: store.webhook_url,
+            businessKey: buildWebhookBusinessKey(storeEvent, transaction.id, reference),
+            event: storeEvent,
+            payload: canonicalPayload,
+            source: event.event_type,
+            triggerOrigin: "paypal_webhook",
+          })
+          console.info(`[PayPal Webhook] Store webhook event persisted: event=${storeEvent} tx=${transaction.id} eventId=${eventId} isNew=${isNew} shouldDeliver=${shouldDeliver}`)
+          // Fire-and-forget delivery — event is persisted, cron will retry if this fails
+          if (shouldDeliver) {
+            deliverWebhookEvent(eventId, "paypal_webhook").catch((e) =>
+              console.error(`[PayPal Webhook] Store webhook delivery failed (event persisted, cron will retry): tx=${transaction.id} eventId=${eventId}`, e)
+            )
+          }
+        } catch (persistErr) {
+          console.error(`[PayPal Webhook] Store webhook persistence FAILED: event=${storeEvent} tx=${transaction.id}`, persistErr)
+        }
       }
     }
 
