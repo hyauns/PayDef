@@ -295,7 +295,13 @@ export async function POST(req: NextRequest) {
         try {
           const sn = await sql`SELECT name FROM stores WHERE id = ${tx.store_id} LIMIT 1` as unknown as { name: string }[]
           const an = await sql`SELECT name FROM merchant_accounts WHERE id = ${tx.merchant_id} LIMIT 1` as unknown as { name: string }[]
-          sendTransactionAlert(tx.tenant_id, originalAmount, sn[0]?.name ?? "Unknown", an[0]?.name ?? "Unknown")
+          sendTransactionAlert({
+            tenantId: tx.tenant_id,
+            amount: originalAmount,
+            storeName: sn[0]?.name ?? "Unknown",
+            accountName: an[0]?.name ?? "Unknown",
+            transactionId,
+          })
         } catch { /* silent */ }
       })()
 
@@ -426,7 +432,13 @@ export async function POST(req: NextRequest) {
         try {
           const sn = await sql`SELECT name FROM stores WHERE id = ${tx.store_id} LIMIT 1` as unknown as { name: string }[]
           const an = await sql`SELECT name FROM merchant_accounts WHERE id = ${tx.merchant_id} LIMIT 1` as unknown as { name: string }[]
-          sendTransactionAlert(tx.tenant_id, originalAmount, sn[0]?.name ?? "Unknown", an[0]?.name ?? "Unknown")
+          sendTransactionAlert({
+            tenantId: tx.tenant_id,
+            amount: originalAmount,
+            storeName: sn[0]?.name ?? "Unknown",
+            accountName: an[0]?.name ?? "Unknown",
+            transactionId,
+          })
         } catch { /* silent */ }
       })()
 

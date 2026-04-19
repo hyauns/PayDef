@@ -11,6 +11,7 @@ import {
   deliverWebhookEvent,
   persistWebhookEventSafe,
 } from "@/lib/webhook-delivery"
+import { sendTransactionAlert } from "@/lib/telegram"
 
 const GATEWAY_FEE_PERCENT = 0.02
 
@@ -379,6 +380,14 @@ export async function POST(req: NextRequest) {
         )
       }
     }
+
+    sendTransactionAlert({
+      tenantId: store.tenantId,
+      amount,
+      storeName: "Unknown Store",
+      accountName: "Custom Mock",
+      transactionId: transaction?.id ?? null,
+    })
 
     return NextResponse.json(
       {

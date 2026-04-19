@@ -301,12 +301,13 @@ export async function POST(req: NextRequest) {
       try {
         const storeNameRows = await sql`SELECT name FROM stores WHERE id = ${storeId} LIMIT 1` as unknown as StoreNameRow[]
         const acctNameRows = await sql`SELECT name FROM merchant_accounts WHERE id = ${transaction.merchant_id} LIMIT 1` as unknown as MerchantNameRow[]
-        sendTransactionAlert(
+        sendTransactionAlert({
           tenantId,
-          originalAmount,
-          storeNameRows[0]?.name ?? "Unknown Store",
-          acctNameRows[0]?.name ?? "Unknown Account"
-        )
+          amount: originalAmount,
+          storeName: storeNameRows[0]?.name ?? "Unknown Store",
+          accountName: acctNameRows[0]?.name ?? "Unknown Account",
+          transactionId: transaction.id,
+        })
       } catch { /* silent */ }
     })()
 
