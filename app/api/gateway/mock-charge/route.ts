@@ -366,7 +366,7 @@ export async function POST(req: NextRequest) {
         })
 
         if (shouldDeliver) {
-          await deliverWebhookEvent(eventId, "mock_charge_api").catch((error) => {
+          void deliverWebhookEvent(eventId, "mock_charge_api").catch((error) => {
             console.error(
               `[mock-charge] Webhook delivery failed (event persisted, cron will retry): tx=${transaction?.id} eventId=${eventId}`,
               error
