@@ -415,9 +415,8 @@ export async function POST(req: NextRequest) {
             triggerOrigin: "buyer_return",
           })
           console.info(`[execute] Webhook event persisted: event=payment.capture.completed tx=${transactionId} eventId=${eventId} isNew=${isNew} shouldDeliver=${shouldDeliver}`)
-          // Fire-and-forget delivery — event is persisted, cron will retry if this fails
           if (shouldDeliver) {
-            deliverWebhookEvent(eventId, "buyer_return").catch((e) =>
+            await deliverWebhookEvent(eventId, "buyer_return").catch((e) =>
               console.error(`[execute] Webhook delivery failed (event persisted, cron will retry): tx=${transactionId} eventId=${eventId}`, e)
             )
           }
