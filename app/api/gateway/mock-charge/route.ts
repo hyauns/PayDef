@@ -86,7 +86,19 @@ function normalizeBillingAddress(value: BillingAddress) {
     return trimmed || null
   }
   if (typeof value === "object" && !Array.isArray(value)) {
-    return value
+    const address = value as Record<string, unknown>
+    const normalized = {
+      line1: typeof address.line1 === "string" ? address.line1.trim() : undefined,
+      line2: typeof address.line2 === "string" ? address.line2.trim() : undefined,
+      city: typeof address.city === "string" ? address.city.trim() : undefined,
+      state: typeof address.state === "string" ? address.state.trim() : undefined,
+      postal_code: typeof address.postal_code === "string" ? address.postal_code.trim() : undefined,
+      country: typeof address.country === "string" ? address.country.trim() : undefined,
+    }
+
+    return Object.values(normalized).some((part) => typeof part === "string" && part.length > 0)
+      ? normalized
+      : null
   }
   return null
 }
@@ -366,7 +378,7 @@ export async function POST(req: NextRequest) {
         })
 
         if (shouldDeliver) {
-          void deliverWebhookEvent(eventId, "mock_charge_api").catch((error) => {
+          await deliverWebhookEvent(eventId, "mock_charge_api").catch((error) => {
             console.error(
               `[mock-charge] Webhook delivery failed (event persisted, cron will retry): tx=${transaction?.id} eventId=${eventId}`,
               error
@@ -381,13 +393,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    sendTransactionAlert({
-      tenantId: store.tenantId,
-      amount,
-      storeName: "Unknown Store",
-      accountName: "Custom Mock",
-      transactionId: transaction?.id ?? null,
-    })
+    try {
+      await sendTransactionAlert({
+        tenantId: store.tenantId,
+        amount,
+        storeName: "Unknown Store",
+        accountName: "Custom Mock",
+        transactionId: transaction?.id ?? null,
+      })
+    } catch (error) {
+      console.error("[mock-charge] Telegram notification failed:", error)
+    }
 
     return NextResponse.json(
       {

