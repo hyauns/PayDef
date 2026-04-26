@@ -12,6 +12,7 @@ import {
   persistWebhookEventSafe,
 } from "@/lib/webhook-delivery"
 import { sendTransactionAlert } from "@/lib/telegram"
+import { checkRateLimit } from "@/lib/gateway-rate-limit"
 
 const GATEWAY_FEE_PERCENT = 0.02
 
@@ -178,6 +179,15 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "store_id is required." }, { status: 400 })
       }
       store = await resolveDashboardStore(requestedStoreId)
+    }
+
+    // ── Rate limiting (after store resolution) ───────────────────────────────
+    const { allowed, headers: rlHeaders } = await checkRateLimit(store.id)
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429, headers: rlHeaders }
+      )
     }
 
     const amount = normalizeAmount(body.amount)

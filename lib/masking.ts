@@ -179,15 +179,20 @@ export function resolveShieldBaseUrl(shieldDomain: string | null | undefined): s
  */
 export function buildShieldUrls(
   shieldDomain: string | null | undefined,
-  transactionId: string
+  transactionId: string,
+  executeToken?: string | null
 ): { returnUrl: string; cancelUrl: string } {
   const base = resolveShieldBaseUrl(shieldDomain)
 
-  // Only expose an opaque transaction reference — no product or store data
-  const safeRef = encodeURIComponent(transactionId)
+  // Use URLSearchParams for safe encoding — never manually concatenate raw params
+  const returnParams = new URLSearchParams({ ref: transactionId })
+  if (executeToken) {
+    returnParams.set("et", executeToken)
+  }
+  const cancelParams = new URLSearchParams({ ref: transactionId })
 
   return {
-    returnUrl: `${base}/order/success?ref=${safeRef}`,
-    cancelUrl: `${base}/order/cancel?ref=${safeRef}`,
+    returnUrl: `${base}/order/success?${returnParams.toString()}`,
+    cancelUrl: `${base}/order/cancel?${cancelParams.toString()}`,
   }
 }

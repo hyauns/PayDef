@@ -51,6 +51,7 @@ function postResult(status: ResultStatus, ref: string | null) {
 export function OrderResultClient({ status }: { status: ResultStatus }) {
   const searchParams = useSearchParams()
   const ref = searchParams.get("ref")
+  const et = searchParams.get("et")
   const [phase, setPhase] = useState<"processing" | "ready" | "error">("processing")
   const [message, setMessage] = useState<string>(
     status === "success"
@@ -158,7 +159,7 @@ export function OrderResultClient({ status }: { status: ResultStatus }) {
         const execRes = await fetch("/api/gateway/execute", {
           method:  "POST",
           headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ transactionId: ref }),
+          body:    JSON.stringify({ transactionId: ref, executeToken: et ?? undefined }),
           cache:   "no-store",
         })
 
@@ -239,6 +240,8 @@ export function OrderResultClient({ status }: { status: ResultStatus }) {
 
   return (
     <main className="min-h-screen bg-background text-foreground font-mono flex items-center justify-center px-6">
+      {/* Prevent executeToken from leaking via Referer header on redirects */}
+      <meta name="referrer" content="no-referrer" />
       <div className="w-full max-w-sm bg-card border border-border rounded-lg p-6 text-center space-y-4">
         <div className={`mx-auto w-12 h-12 rounded-full border flex items-center justify-center ${statusTone.iconBg}`}>
           {effectivePhase === "processing" ? (

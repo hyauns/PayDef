@@ -26,6 +26,8 @@ import {
   deliverWebhookEvent,
 } from "@/lib/webhook-delivery"
 import bcrypt from "bcryptjs"
+import { checkRateLimit } from "@/lib/gateway-rate-limit"
+import { compareApiKeyCached } from "@/lib/api-key-cache"
 
 // ─── Row shapes ───────────────────────────────────────────────────────────────
 
@@ -124,10 +126,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Store not found or inactive." }, { status: 401 })
   }
 
-  const keyValid = await bcrypt.compare(apiKey, store.api_key_hash)
+  const keyValid = await compareApiKeyCached(apiKey, store.api_key_hash)
   if (!keyValid) {
     console.warn(`${LOG} Invalid API key for storeId=${storeId}`)
     return NextResponse.json({ error: "Invalid API key." }, { status: 401 })
+  }
+
+  // ── Rate limiting (after auth) ──────────────────────────────────────────────
+  const { allowed, headers: rlHeaders } = await checkRateLimit(storeId)
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again later." },
+      { status: 429, headers: rlHeaders }
+    )
   }
 
   const tenantId = store.tenant_id

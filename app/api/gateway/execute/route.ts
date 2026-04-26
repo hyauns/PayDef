@@ -39,6 +39,7 @@ import {
   deliverWebhookEventReliably,
 } from "@/lib/webhook-delivery"
 import { getSql } from "@/lib/neon"
+import { verifyExecuteToken } from "@/lib/execute-token"
 
 const GATEWAY_FEE_PERCENT = 0.02
 
@@ -69,7 +70,7 @@ interface MerchantRow {
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-  let body: { transactionId?: string }
+  let body: { transactionId?: string; executeToken?: string }
   try {
     body = await req.json()
   } catch {
@@ -79,6 +80,21 @@ export async function POST(req: NextRequest) {
   const transactionId = body.transactionId?.trim()
   if (!transactionId) {
     return NextResponse.json({ error: "transactionId is required." }, { status: 400 })
+  }
+
+  // ── Execute token verification (shadow/enforce) ────────────────────────────
+  const tokenResult = verifyExecuteToken(transactionId, body.executeToken)
+  if (!tokenResult.valid) {
+    console.warn(
+      `[execute] Token check: tx=${transactionId} reason=${tokenResult.reason} ` +
+      `mode=${process.env.EXECUTE_TOKEN_MODE ?? "shadow"} blocked=${tokenResult.shouldBlock}`
+    )
+  }
+  if (tokenResult.shouldBlock) {
+    return NextResponse.json(
+      { error: "Invalid or missing executeToken." },
+      { status: 403 }
+    )
   }
 
   const pool   = getPool()

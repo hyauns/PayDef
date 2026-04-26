@@ -51,6 +51,9 @@ import {
   getEffectiveDailyLimit,
   WARMUP_MAX_TRANSACTION,
 } from "@/lib/merchant-rotation"
+import { checkRateLimit } from "@/lib/gateway-rate-limit"
+import { compareApiKeyCached } from "@/lib/api-key-cache"
+import { generateExecuteToken } from "@/lib/execute-token"
 
 // ─── Request body shape ───────────────────────────────────────────────────────
 
@@ -214,9 +217,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Store not found or inactive." }, { status: 401 })
   }
 
-  const keyValid = await bcrypt.compare(apiKey, store.api_key_hash)
+  const keyValid = await compareApiKeyCached(apiKey, store.api_key_hash)
   if (!keyValid) {
     return NextResponse.json({ error: "Invalid API key." }, { status: 401 })
+  }
+
+  // ── Rate limiting (after auth to avoid blocking valid payments pre-verify) ──
+  const { allowed, headers: rlHeaders } = await checkRateLimit(storeId)
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again later." },
+      { status: 429, headers: rlHeaders }
+    )
   }
 
   const { tenant_id: tenantId } = store
@@ -381,9 +393,11 @@ export async function POST(req: NextRequest) {
     )
     transactionId = txIdRow.rows[0].id
 
+    const executeToken = generateExecuteToken(transactionId)
     const { returnUrl, cancelUrl } = buildShieldUrls(
       account.shield_domain,
-      transactionId
+      transactionId,
+      executeToken
     )
 
     // ── Step 9. Create PayPal order ──────────────────────────────────────────
@@ -553,6 +567,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(
     {
       transactionId,
+      executeToken: generateExecuteToken(transactionId),
       approvalUrl,
       flow,
       popupUrl,

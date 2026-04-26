@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs"
 import type { NextRequest } from "next/server"
 import { getSql } from "@/lib/neon"
+import { compareApiKeyCached } from "@/lib/api-key-cache"
 
 export interface AuthenticatedStore {
   id: string
@@ -58,7 +59,7 @@ export async function authenticateStoreHeaders(req: NextRequest) {
     throw new Error("Store not found or inactive.")
   }
 
-  const keyValid = await bcrypt.compare(apiKey, store.api_key_hash)
+  const keyValid = await compareApiKeyCached(apiKey, store.api_key_hash)
   if (!keyValid) {
     throw new Error("Invalid API key.")
   }
