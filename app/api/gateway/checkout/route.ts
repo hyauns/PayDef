@@ -36,7 +36,13 @@ import {
   createPayPalOrder,
   getApprovalUrl,
   isInvalidClientError,
+  isFatalForbiddenError,
+  isTemporaryForbiddenError,
+  isRateLimitError,
+  PayPalApiError,
 } from "@/lib/paypal"
+import { sendTelegramMessage } from "@/lib/telegram"
+import { recordPayPalError, filterOpenCircuits } from "@/lib/circuit-breaker"
 import { maskItemName, buildShieldUrls } from "@/lib/masking"
 import {
   buildPopupBridgeUrl,
@@ -97,17 +103,51 @@ function resolveProxyUrl(proxyUrl: string | null): string | undefined {
 
 async function quarantineMerchantAccount(
   accountId: string,
-  reason: string
+  reason: string,
+  tenantId?: string
 ): Promise<void> {
   const sql = getSql()
-  await sql`
+  // Only returns rows that actually changed status — for anti-spam alerting
+  const result = await sql`
     UPDATE merchant_accounts
     SET status = 'SUSPENDED',
         updated_at = NOW()
     WHERE id = ${accountId}
       AND status IN ('ACTIVE', 'WARMING_UP')
+    RETURNING id
   `
-  console.error(`[checkout] Quarantined merchant account ${accountId} reason=${reason}`)
+  const statusChanged = (result as unknown[]).length > 0
+  console.error(
+    `[merchant-quarantine] account=${accountId} reason=${reason} status_changed=${statusChanged}`
+  )
+
+  // Telegram alert only if status actually changed (anti-spam)
+  if (statusChanged && tenantId) {
+    try {
+      const tenantRows = await sql`
+        SELECT telegram_bot_token, telegram_chat_id
+        FROM tenants WHERE id = ${tenantId} LIMIT 1
+      `
+      const tenant = tenantRows[0] as { telegram_bot_token: string | null; telegram_chat_id: string | null } | undefined
+      if (tenant?.telegram_bot_token && tenant?.telegram_chat_id) {
+        const message = [
+          "\u{1F6A8} <b>CRITICAL: PayPal Account Quarantined</b>",
+          "",
+          `Account: <code>${accountId}</code>`,
+          `Reason: <b>${reason}</b>`,
+          "",
+          "Check PayPal Business Dashboard immediately.",
+        ].join("\n")
+        const alertResult = await sendTelegramMessage(tenant.telegram_bot_token, tenant.telegram_chat_id, message)
+        if (!alertResult.ok) {
+          console.error(`[merchant-quarantine] Telegram alert failed: ${alertResult.error}`)
+        }
+      }
+    } catch (alertErr) {
+      // Alert failure must never block checkout
+      console.error("[merchant-quarantine] Telegram alert error (non-blocking):", alertErr)
+    }
+  }
 }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
@@ -324,7 +364,10 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const candidate = await selectByStrategy(eligible, tenantId, getSql())
+    // ── Circuit breaker filter (shadow/enforce) ──────────────────────────────
+    const circuitFiltered = await filterOpenCircuits(eligible, storeId)
+
+    const candidate = await selectByStrategy(circuitFiltered, tenantId, getSql())
 
     // ── Step 6. SELECT … FOR UPDATE — row-level lock ─────────────────────────
     // Acquires an exclusive row lock on the chosen merchant account.
@@ -430,7 +473,7 @@ export async function POST(req: NextRequest) {
         `[checkout] Credential resolution failed for merchant account ${account.id} clientId=${getClientIdHint(account.client_id)} decryption_ok=false proxy=${account.proxy_url ? "configured" : "none"} env=${process.env.PAYPAL_ENV === "live" ? "live" : "sandbox"}`,
         credentialError
       )
-      await quarantineMerchantAccount(account.id, "credential_resolution_failed")
+      await quarantineMerchantAccount(account.id, "credential_resolution_failed", tenantId)
       continue
     }
 
@@ -465,6 +508,8 @@ export async function POST(req: NextRequest) {
       })
     } catch (paypalError) {
       await client.query("ROLLBACK")
+
+      // ── 401 invalid_client → quarantine ──────────────────────────────────
       if (isInvalidClientError(paypalError)) {
         exhaustedInvalidAccounts = true
         excludedAccountIds.add(account.id)
@@ -472,9 +517,56 @@ export async function POST(req: NextRequest) {
         console.error(
           `[checkout] Excluding merchant account ${account.id} after invalid_client clientId=${getClientIdHint(account.client_id)} decryption_ok=true proxy=${proxyUrl ? "yes" : "no"} env=${process.env.PAYPAL_ENV === "live" ? "live" : "sandbox"} retried=true`
         )
-        await quarantineMerchantAccount(account.id, "paypal_invalid_client")
+        await quarantineMerchantAccount(account.id, "paypal_invalid_client", tenantId)
         continue
       }
+
+      // ── 403 fatal (PERMISSION_DENIED, ACCOUNT_RESTRICTED) → quarantine ──
+      if (isFatalForbiddenError(paypalError)) {
+        exhaustedInvalidAccounts = true
+        excludedAccountIds.add(account.id)
+        clearPayPalTokenCache(account.client_id)
+        const safeReason = paypalError instanceof PayPalApiError
+          ? `paypal_403_fatal_${paypalError.body.slice(0, 80).replace(/[^a-zA-Z0-9_]/g, "_")}`
+          : "paypal_403_fatal"
+        console.error(
+          `[checkout] Fatal 403 for account ${account.id} clientId=${getClientIdHint(account.client_id)} reason=${safeReason}`
+        )
+        await quarantineMerchantAccount(account.id, safeReason, tenantId)
+        continue
+      }
+
+      // ── 403 ambiguous → circuit breaker cooldown (NOT suspend) ───────────
+      if (isTemporaryForbiddenError(paypalError)) {
+        excludedAccountIds.add(account.id)
+        console.warn(
+          `[checkout] Ambiguous 403 for account ${account.id} clientId=${getClientIdHint(account.client_id)} — recording for circuit breaker`
+        )
+        await recordPayPalError(account.id, "403_ambiguous", tenantId)
+        continue
+      }
+
+      // ── 429 rate limit → circuit breaker cooldown (NEVER suspend) ────────
+      if (isRateLimitError(paypalError)) {
+        excludedAccountIds.add(account.id)
+        console.warn(
+          `[checkout] PayPal 429 for account ${account.id} clientId=${getClientIdHint(account.client_id)} — recording for circuit breaker`
+        )
+        await recordPayPalError(account.id, "429", tenantId)
+        continue
+      }
+
+      // ── 5xx or timeout → circuit breaker cooldown + try next account ─────
+      if (paypalError instanceof PayPalApiError && paypalError.statusCode >= 500) {
+        excludedAccountIds.add(account.id)
+        console.warn(
+          `[checkout] PayPal 5xx (${paypalError.statusCode}) for account ${account.id} — recording for circuit breaker`
+        )
+        await recordPayPalError(account.id, "5xx", tenantId)
+        continue
+      }
+
+      // ── Unknown error → log and return 502 (existing behavior) ───────────
       console.error(
         `[checkout] PayPal order creation failed for merchant account ${account.id} clientId=${getClientIdHint(account.client_id)} decryption_ok=true proxy=${proxyUrl ? "yes" : "no"} env=${process.env.PAYPAL_ENV === "live" ? "live" : "sandbox"}`,
         paypalError

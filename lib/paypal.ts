@@ -207,6 +207,41 @@ export function isInvalidClientError(error: unknown): boolean {
     /invalid_client/i.test(error.body)
 }
 
+/**
+ * Fatal 403 — account restriction or credential-level denial.
+ * These indicate the account should be quarantined (SUSPENDED).
+ */
+const FATAL_403_PATTERNS = [
+  /PERMISSION_DENIED/i,
+  /ACCOUNT_RESTRICTED/i,
+  /AUTHORIZATION_ERROR/i,
+  /NOT_AUTHORIZED/i,
+  /PAYEE_ACCOUNT_RESTRICTED/i,
+]
+
+export function isFatalForbiddenError(error: unknown): boolean {
+  if (!(error instanceof PayPalApiError) || error.statusCode !== 403) return false
+  return FATAL_403_PATTERNS.some((pattern) => pattern.test(error.body))
+}
+
+/**
+ * Ambiguous/temporary 403 — does not match any known fatal pattern.
+ * These should go into circuit breaker cooldown, NOT permanent SUSPENDED.
+ */
+export function isTemporaryForbiddenError(error: unknown): boolean {
+  if (!(error instanceof PayPalApiError) || error.statusCode !== 403) return false
+  // If it's not a known fatal pattern, treat as temporary
+  return !FATAL_403_PATTERNS.some((pattern) => pattern.test(error.body))
+}
+
+/**
+ * HTTP 429 — PayPal rate limit. Must NEVER suspend the account.
+ * Should only feed into circuit breaker cooldown.
+ */
+export function isRateLimitError(error: unknown): boolean {
+  return error instanceof PayPalApiError && error.statusCode === 429
+}
+
 // ─── OAuth token (per-account, cached for 8h) ───────────────────────────────
 
 async function getAccessToken(
