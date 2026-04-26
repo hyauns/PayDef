@@ -53,7 +53,7 @@ import {
 } from "@/lib/merchant-rotation"
 import { checkRateLimit } from "@/lib/gateway-rate-limit"
 import { compareApiKeyCached } from "@/lib/api-key-cache"
-import { generateExecuteToken } from "@/lib/execute-token"
+import { generateExecuteToken, getMode as getExecuteTokenMode } from "@/lib/execute-token"
 
 // ─── Request body shape ───────────────────────────────────────────────────────
 
@@ -398,6 +398,11 @@ export async function POST(req: NextRequest) {
       account.shield_domain,
       transactionId,
       executeToken
+    )
+    console.info(
+      `[checkout] Execute token: tx=${transactionId} enabled=${executeToken !== null} ` +
+      `mode=${getExecuteTokenMode()} generated=${executeToken !== null} ` +
+      `returnUrlHasEt=${returnUrl.includes("et=")}`
     )
 
     // ── Step 9. Create PayPal order ──────────────────────────────────────────

@@ -38,7 +38,7 @@ function getSecret(): string | null {
   return _secretValid ? raw : null
 }
 
-function getMode(): "shadow" | "enforce" {
+export function getMode(): "shadow" | "enforce" {
   const mode = process.env.EXECUTE_TOKEN_MODE?.trim().toLowerCase()
   return mode === "enforce" ? "enforce" : "shadow"
 }

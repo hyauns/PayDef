@@ -84,11 +84,13 @@ export async function POST(req: NextRequest) {
 
   // ── Execute token verification (shadow/enforce) ────────────────────────────
   const tokenResult = verifyExecuteToken(transactionId, body.executeToken)
-  if (!tokenResult.valid) {
-    console.warn(
-      `[execute] Token check: tx=${transactionId} reason=${tokenResult.reason} ` +
-      `mode=${process.env.EXECUTE_TOKEN_MODE ?? "shadow"} blocked=${tokenResult.shouldBlock}`
-    )
+  const tokenLogLine =
+    `[execute] Token check: tx=${transactionId} reason=${tokenResult.reason} ` +
+    `mode=${process.env.EXECUTE_TOKEN_MODE ?? "shadow"} blocked=${tokenResult.shouldBlock}`
+  if (tokenResult.valid) {
+    console.info(tokenLogLine)
+  } else {
+    console.warn(tokenLogLine)
   }
   if (tokenResult.shouldBlock) {
     return NextResponse.json(
