@@ -714,24 +714,51 @@ export async function processDueWebhookEvents(limit = 50) {
     LIMIT ${limit}
   `) as unknown as Array<{ id: string }>
 
-  if (rows.length > 0) {
-    console.info(`[webhook-delivery] Recovery sweep: ${rows.length} due event(s) found`)
+  if (rows.length === 0) {
+    return []
   }
 
-  const results = []
-  for (const row of rows) {
-    results.push({
-      eventId: row.id,
-      ...(await deliverWebhookEvent(row.id, "retry")),
-    })
+  console.info(`[webhook-delivery] Recovery sweep: ${rows.length} due event(s) found`)
+
+  const concurrency = parseInt(process.env.WEBHOOK_SWEEP_CONCURRENCY || "5", 10)
+  const results: Array<{ eventId: string } & WebhookDeliveryResult> = []
+
+  // If concurrency is 1, maintain exact sequential behaviour
+  if (concurrency === 1) {
+    for (const row of rows) {
+      results.push({
+        eventId: row.id,
+        ...(await deliverWebhookEvent(row.id, "retry")),
+      })
+    }
+  } else {
+    // Process in bounded concurrent chunks
+    for (let i = 0; i < rows.length; i += concurrency) {
+      const chunk = rows.slice(i, i + concurrency)
+      const chunkPromises = chunk.map((row) =>
+        deliverWebhookEvent(row.id, "retry").then((res) => ({
+          eventId: row.id,
+          ...res,
+        }))
+      )
+
+      const chunkResults = await Promise.allSettled(chunkPromises)
+      
+      for (const res of chunkResults) {
+        if (res.status === "fulfilled") {
+          results.push(res.value)
+        } else {
+          // Promise rejected (e.g. unexpected error outside of deliverWebhookEvent's internal try/catch)
+          console.error(`[webhook-delivery] Unexpected error during sweep chunk execution:`, res.reason)
+        }
+      }
+    }
   }
 
-  if (rows.length > 0) {
-    const delivered = results.filter(r => r.finalStatus === "delivered").length
-    const retrying = results.filter(r => r.finalStatus === "retrying").length
-    const deadLetter = results.filter(r => r.finalStatus === "dead_letter").length
-    console.info(`[webhook-delivery] Recovery sweep complete: total=${results.length} delivered=${delivered} retrying=${retrying} dead_letter=${deadLetter}`)
-  }
+  const delivered = results.filter(r => r.finalStatus === "delivered").length
+  const retrying = results.filter(r => r.finalStatus === "retrying").length
+  const deadLetter = results.filter(r => r.finalStatus === "dead_letter").length
+  console.info(`[webhook-delivery] Recovery sweep complete: total=${results.length} delivered=${delivered} retrying=${retrying} dead_letter=${deadLetter}`)
 
   return results
 }

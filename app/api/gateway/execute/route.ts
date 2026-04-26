@@ -310,8 +310,10 @@ export async function POST(req: NextRequest) {
       // Telegram alert (fire-and-forget)
       const sql = getSql()
       try {
-        const sn = await sql`SELECT name FROM stores WHERE id = ${tx.store_id} LIMIT 1` as unknown as { name: string }[]
-        const an = await sql`SELECT name FROM merchant_accounts WHERE id = ${tx.merchant_id} LIMIT 1` as unknown as { name: string }[]
+        const [sn, an] = await Promise.all([
+          sql`SELECT name FROM stores WHERE id = ${tx.store_id} LIMIT 1` as unknown as Promise<{ name: string }[]>,
+          sql`SELECT name FROM merchant_accounts WHERE id = ${tx.merchant_id} LIMIT 1` as unknown as Promise<{ name: string }[]>
+        ])
         await sendTransactionAlert({
           tenantId: tx.tenant_id,
           amount: originalAmount,
@@ -446,8 +448,10 @@ export async function POST(req: NextRequest) {
       // Telegram alert (fire-and-forget)
       const sql = getSql()
       try {
-        const sn = await sql`SELECT name FROM stores WHERE id = ${tx.store_id} LIMIT 1` as unknown as { name: string }[]
-        const an = await sql`SELECT name FROM merchant_accounts WHERE id = ${tx.merchant_id} LIMIT 1` as unknown as { name: string }[]
+        const [sn, an] = await Promise.all([
+          sql`SELECT name FROM stores WHERE id = ${tx.store_id} LIMIT 1` as unknown as Promise<{ name: string }[]>,
+          sql`SELECT name FROM merchant_accounts WHERE id = ${tx.merchant_id} LIMIT 1` as unknown as Promise<{ name: string }[]>
+        ])
         await sendTransactionAlert({
           tenantId: tx.tenant_id,
           amount: originalAmount,
