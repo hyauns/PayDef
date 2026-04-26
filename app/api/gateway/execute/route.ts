@@ -27,6 +27,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
+import { createLogger } from "@/lib/logger"
 import { getPool } from "@/lib/neon"
 import { decrypt } from "@/lib/encryption"
 import { captureApprovedOrder, authorizeApprovedOrder } from "@/lib/paypal"
@@ -70,6 +71,9 @@ interface MerchantRow {
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+  const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID()
+  const log = createLogger({ route: "/api/gateway/execute", requestId })
+
   let body: { transactionId?: string; executeToken?: string }
   try {
     body = await req.json()
@@ -82,15 +86,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "transactionId is required." }, { status: 400 })
   }
 
+  const txLog = log.child({ transactionId, traceId: transactionId })
+
   // ── Execute token verification (shadow/enforce) ────────────────────────────
   const tokenResult = verifyExecuteToken(transactionId, body.executeToken)
   const tokenLogLine =
     `[execute] Token check: tx=${transactionId} reason=${tokenResult.reason} ` +
     `mode=${process.env.EXECUTE_TOKEN_MODE ?? "shadow"} blocked=${tokenResult.shouldBlock}`
   if (tokenResult.valid) {
-    console.info(tokenLogLine)
+    txLog.info("execute.token_check", tokenLogLine)
   } else {
-    console.warn(tokenLogLine)
+    txLog.warn("execute.token_check", tokenLogLine)
   }
   if (tokenResult.shouldBlock) {
     return NextResponse.json(
@@ -134,7 +140,12 @@ export async function POST(req: NextRequest) {
     // delivery attempt failed or timed out. This is the most common race.
     if (tx.status !== "PENDING") {
       await client.query("ROLLBACK")
-      console.info(`[execute] Transaction ${transactionId} already in status ${tx.status} — skipping execute`)
+      txLog.info("execute.already_completed", `Transaction ${transactionId} already in status ${tx.status} — skipping execute`, {
+        storeId: tx.store_id,
+        tenantId: tx.tenant_id,
+        merchantAccountId: tx.merchant_id,
+        status: tx.status,
+      })
 
       // For AUTHORIZE flow: re-attempt webhook delivery if the event exists and
       // is still pending/retrying. The buyer redirect triggers this path when
@@ -166,15 +177,36 @@ export async function POST(req: NextRequest) {
             source:      "execute_api_idempotency_recovery",
             triggerOrigin: "buyer_return",
           })
-          console.info(`[execute] Idempotency-recovery: auth webhook persisted eventId=${eventId} shouldDeliver=${shouldDeliver} authId=${tx.authorization_id}`)
+          txLog.info("execute.recovery_webhook_persisted", `Idempotency-recovery: auth webhook persisted eventId=${eventId} shouldDeliver=${shouldDeliver} authId=${tx.authorization_id}`, {
+            storeId: tx.store_id,
+            tenantId: tx.tenant_id,
+            merchantAccountId: tx.merchant_id,
+            authorizationId: tx.authorization_id,
+            eventId,
+          })
           if (shouldDeliver) {
             const delivery = await deliverWebhookEventReliably(eventId, "buyer_return")
-            console.info(
-              `[execute] Idempotency-recovery delivery result: tx=${transactionId} eventId=${eventId} status=${delivery.finalStatus} deliveredAt=${delivery.deliveredAt ?? "pending"} nextRetry=${delivery.nextRetryAt ?? "none"}`
+            txLog.info(
+              "execute.recovery_webhook_delivery_success",
+              `Idempotency-recovery delivery result: tx=${transactionId} eventId=${eventId} status=${delivery.finalStatus} deliveredAt=${delivery.deliveredAt ?? "pending"} nextRetry=${delivery.nextRetryAt ?? "none"}`,
+              {
+                storeId: tx.store_id,
+                tenantId: tx.tenant_id,
+                merchantAccountId: tx.merchant_id,
+                authorizationId: tx.authorization_id,
+                eventId,
+                deliveryStatus: delivery.finalStatus,
+              }
             )
           }
         } catch (err) {
-          console.error(`[execute] Idempotency-recovery: webhook persist failed tx=${transactionId} authId=${tx.authorization_id}`, err)
+          txLog.error("execute.recovery_webhook_persist_failed", `Idempotency-recovery: webhook persist failed tx=${transactionId} authId=${tx.authorization_id}`, {
+            storeId: tx.store_id,
+            tenantId: tx.tenant_id,
+            merchantAccountId: tx.merchant_id,
+            authorizationId: tx.authorization_id,
+            error: err,
+          })
         }
       }
 
@@ -211,11 +243,23 @@ export async function POST(req: NextRequest) {
 
     // ── 4. Execute PayPal call based on intent ───────────────────────────────
     const intent = (tx.intent ?? "CAPTURE").toUpperCase()
-    console.info(`[execute] tx=${transactionId} intent=${intent} (db.intent=${tx.intent}) paypal_order=${tx.paypal_order_id}`)
+    txLog.info("execute.started", `tx=${transactionId} intent=${intent} (db.intent=${tx.intent}) paypal_order=${tx.paypal_order_id}`, {
+      storeId: tx.store_id,
+      tenantId: tx.tenant_id,
+      merchantAccountId: tx.merchant_id,
+      paypalOrderId: tx.paypal_order_id,
+      intent,
+    })
 
     if (intent === "AUTHORIZE") {
       // ── Manual Capture flow: authorize only ────────────────────────────────
-      console.info(`[execute] Authorizing order ${tx.paypal_order_id} for tx ${transactionId}`)
+      txLog.info("execute.authorize_started", `Authorizing order ${tx.paypal_order_id} for tx ${transactionId}`, {
+        storeId: tx.store_id,
+        tenantId: tx.tenant_id,
+        merchantAccountId: tx.merchant_id,
+        paypalOrderId: tx.paypal_order_id,
+        intent,
+      })
 
       let authResult
       try {
@@ -227,7 +271,14 @@ export async function POST(req: NextRequest) {
         })
       } catch (err) {
         await client.query("ROLLBACK")
-        console.error("[execute] PayPal authorize failed:", err)
+        txLog.error("execute.paypal_authorize_failed", "PayPal authorize failed:", {
+          storeId: tx.store_id,
+          tenantId: tx.tenant_id,
+          merchantAccountId: tx.merchant_id,
+          paypalOrderId: tx.paypal_order_id,
+          intent,
+          error: err,
+        })
         // Mark FAILED in DB so we don't retry infinitely
         await client.query(
           `UPDATE transactions SET status = 'FAILED'::transaction_status,
@@ -264,7 +315,15 @@ export async function POST(req: NextRequest) {
 
       await client.query("COMMIT")
 
-      console.info(`[execute] AUTHORIZE complete: tx=${transactionId} status=AUTHORIZED authId=${authId}`)
+      txLog.info("execute.authorize_completed", `AUTHORIZE complete: tx=${transactionId} status=AUTHORIZED authId=${authId}`, {
+        storeId: tx.store_id,
+        tenantId: tx.tenant_id,
+        merchantAccountId: tx.merchant_id,
+        paypalOrderId: tx.paypal_order_id,
+        authorizationId: authId,
+        intent,
+        status: "AUTHORIZED",
+      })
 
       // ── Persist webhook event (awaited, uses stateless HTTP driver) ───────
       // Then fire-and-forget delivery — event is durable, cron retries if needed
@@ -293,17 +352,40 @@ export async function POST(req: NextRequest) {
             source:     "execute_api",
             triggerOrigin: "buyer_return",
           })
-          console.info(`[execute] Webhook event persisted: event=payment.authorization.created tx=${transactionId} eventId=${eventId} isNew=${isNew} shouldDeliver=${shouldDeliver}`)
+          txLog.info("execute.webhook_event_persisted", `Webhook event persisted: event=payment.authorization.created tx=${transactionId} eventId=${eventId} isNew=${isNew} shouldDeliver=${shouldDeliver}`, {
+            storeId: tx.store_id,
+            tenantId: tx.tenant_id,
+            merchantAccountId: tx.merchant_id,
+            authorizationId: authId,
+            eventId,
+            webhookEvent: "payment.authorization.created",
+          })
           // Authorization delivery is awaited here because buyer-return runs
           // inside the checkout UX and background promises are not reliable on Vercel.
           if (shouldDeliver) {
             const delivery = await deliverWebhookEventReliably(eventId, "buyer_return")
-            console.info(
-              `[execute] Auth webhook delivery result: tx=${transactionId} eventId=${eventId} status=${delivery.finalStatus} deliveredAt=${delivery.deliveredAt ?? "pending"} nextRetry=${delivery.nextRetryAt ?? "none"}`
+            txLog.info(
+              "execute.webhook_delivery_success",
+              `Auth webhook delivery result: tx=${transactionId} eventId=${eventId} status=${delivery.finalStatus} deliveredAt=${delivery.deliveredAt ?? "pending"} nextRetry=${delivery.nextRetryAt ?? "none"}`,
+              {
+                storeId: tx.store_id,
+                tenantId: tx.tenant_id,
+                merchantAccountId: tx.merchant_id,
+                authorizationId: authId,
+                eventId,
+                deliveryStatus: delivery.finalStatus,
+              }
             )
           }
         } catch (persistErr) {
-          console.error(`[execute] Webhook event persistence FAILED (payment still succeeded): event=payment.authorization.created tx=${transactionId} authId=${authId}`, persistErr)
+          txLog.error("execute.webhook_persist_failed", `Webhook event persistence FAILED (payment still succeeded): event=payment.authorization.created tx=${transactionId} authId=${authId}`, {
+            storeId: tx.store_id,
+            tenantId: tx.tenant_id,
+            merchantAccountId: tx.merchant_id,
+            authorizationId: authId,
+            webhookEvent: "payment.authorization.created",
+            error: persistErr,
+          })
         }
       }
 
@@ -322,10 +404,21 @@ export async function POST(req: NextRequest) {
           transactionId,
         })
       } catch (error) {
-        console.error("[execute] Telegram notification failed (authorized):", error)
+        txLog.error("execute.telegram_alert_failed", "Telegram notification failed (authorized):", {
+          storeId: tx.store_id,
+          tenantId: tx.tenant_id,
+          merchantAccountId: tx.merchant_id,
+          error,
+        })
       }
 
-      console.info(`[execute] Responding: status=AUTHORIZED tx=${transactionId} (redirect will carry this status)`)
+      txLog.info("execute.responding", `Responding: status=AUTHORIZED tx=${transactionId} (redirect will carry this status)`, {
+        storeId: tx.store_id,
+        tenantId: tx.tenant_id,
+        merchantAccountId: tx.merchant_id,
+        authorizationId: authId,
+        status: "AUTHORIZED",
+      })
       return NextResponse.json({
         status:           "AUTHORIZED",
         transaction_id:   transactionId,
@@ -336,7 +429,13 @@ export async function POST(req: NextRequest) {
 
     } else {
       // ── Automatic Capture flow: capture immediately ────────────────────────
-      console.info(`[execute] Capturing order ${tx.paypal_order_id} for tx ${transactionId}`)
+      txLog.info("execute.capture_started", `Capturing order ${tx.paypal_order_id} for tx ${transactionId}`, {
+        storeId: tx.store_id,
+        tenantId: tx.tenant_id,
+        merchantAccountId: tx.merchant_id,
+        paypalOrderId: tx.paypal_order_id,
+        intent,
+      })
 
       let captureResult
       try {
@@ -348,7 +447,14 @@ export async function POST(req: NextRequest) {
         })
       } catch (err) {
         await client.query("ROLLBACK")
-        console.error("[execute] PayPal capture failed:", err)
+        txLog.error("execute.paypal_capture_failed", "PayPal capture failed:", {
+          storeId: tx.store_id,
+          tenantId: tx.tenant_id,
+          merchantAccountId: tx.merchant_id,
+          paypalOrderId: tx.paypal_order_id,
+          intent,
+          error: err,
+        })
         await client.query(
           `UPDATE transactions SET status = 'FAILED'::transaction_status,
                   status_reason = $1, updated_at = NOW() WHERE id = $2`,
@@ -405,7 +511,15 @@ export async function POST(req: NextRequest) {
 
       await client.query("COMMIT")
 
-      console.info(`[execute] CAPTURE complete: tx=${transactionId} status=COMPLETED captureId=${captureId}`)
+      txLog.info("execute.capture_completed", `CAPTURE complete: tx=${transactionId} status=COMPLETED captureId=${captureId}`, {
+        storeId: tx.store_id,
+        tenantId: tx.tenant_id,
+        merchantAccountId: tx.merchant_id,
+        paypalOrderId: tx.paypal_order_id,
+        captureId,
+        intent,
+        status: "COMPLETED",
+      })
 
       // ── Persist webhook event (awaited, uses stateless HTTP driver) ───────
       // Then fire-and-forget delivery — event is durable, cron retries if needed
@@ -434,14 +548,36 @@ export async function POST(req: NextRequest) {
             source:     "execute_api",
             triggerOrigin: "buyer_return",
           })
-          console.info(`[execute] Webhook event persisted: event=payment.capture.completed tx=${transactionId} eventId=${eventId} isNew=${isNew} shouldDeliver=${shouldDeliver}`)
+          txLog.info("execute.webhook_event_persisted", `Webhook event persisted: event=payment.capture.completed tx=${transactionId} eventId=${eventId} isNew=${isNew} shouldDeliver=${shouldDeliver}`, {
+            storeId: tx.store_id,
+            tenantId: tx.tenant_id,
+            merchantAccountId: tx.merchant_id,
+            captureId,
+            eventId,
+            webhookEvent: "payment.capture.completed",
+          })
           if (shouldDeliver) {
             await deliverWebhookEvent(eventId, "buyer_return").catch((e) =>
-              console.error(`[execute] Webhook delivery failed (event persisted, cron will retry): tx=${transactionId} eventId=${eventId}`, e)
+              txLog.error("execute.webhook_delivery_failed", `Webhook delivery failed (event persisted, cron will retry): tx=${transactionId} eventId=${eventId}`, {
+                storeId: tx.store_id,
+                tenantId: tx.tenant_id,
+                merchantAccountId: tx.merchant_id,
+                captureId,
+                eventId,
+                webhookEvent: "payment.capture.completed",
+                error: e,
+              })
             )
           }
         } catch (persistErr) {
-          console.error(`[execute] Webhook event persistence FAILED (payment still succeeded): event=payment.capture.completed tx=${transactionId} captureId=${captureId}`, persistErr)
+          txLog.error("execute.webhook_persist_failed", `Webhook event persistence FAILED (payment still succeeded): event=payment.capture.completed tx=${transactionId} captureId=${captureId}`, {
+            storeId: tx.store_id,
+            tenantId: tx.tenant_id,
+            merchantAccountId: tx.merchant_id,
+            captureId,
+            webhookEvent: "payment.capture.completed",
+            error: persistErr,
+          })
         }
       }
 
@@ -460,10 +596,21 @@ export async function POST(req: NextRequest) {
           transactionId,
         })
       } catch (error) {
-        console.error("[execute] Telegram notification failed (completed):", error)
+        txLog.error("execute.telegram_alert_failed", "Telegram notification failed (completed):", {
+          storeId: tx.store_id,
+          tenantId: tx.tenant_id,
+          merchantAccountId: tx.merchant_id,
+          error,
+        })
       }
 
-      console.info(`[execute] Responding: status=COMPLETED tx=${transactionId} captureId=${captureId} (redirect will carry this status)`)
+      txLog.info("execute.responding", `Responding: status=COMPLETED tx=${transactionId} captureId=${captureId} (redirect will carry this status)`, {
+        storeId: tx.store_id,
+        tenantId: tx.tenant_id,
+        merchantAccountId: tx.merchant_id,
+        captureId,
+        status: "COMPLETED",
+      })
       return NextResponse.json({
         status:            "COMPLETED",
         transaction_id:    transactionId,
@@ -476,7 +623,9 @@ export async function POST(req: NextRequest) {
 
   } catch (err) {
     await client.query("ROLLBACK").catch(() => null)
-    console.error("[execute] Unexpected error:", err)
+    txLog.error("execute.unexpected_error", "Unexpected error:", {
+      error: err,
+    })
     return NextResponse.json(
       { error: "An unexpected error occurred during payment execution." },
       { status: 500 }

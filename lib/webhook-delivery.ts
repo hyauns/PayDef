@@ -6,6 +6,17 @@ import {
   type StoreWebhookEvent,
   type StoreWebhookPayload,
 } from "@/lib/store-webhooks"
+import { createLogger } from "@/lib/logger"
+
+const log = createLogger({ route: "webhook-delivery" })
+
+function safeTargetHost(url: string): string {
+  try {
+    return new URL(url).hostname
+  } catch {
+    return "unknown"
+  }
+}
 
 const RETRY_DELAYS_MS = [
   0,
@@ -389,8 +400,18 @@ export async function persistWebhookEventSafe(
     // event but delivery failed/is-still-pending.
     const shouldDeliver = existingStatus === "pending" || existingStatus === "retrying"
 
-    console.info(
-      `[webhook-delivery] Event EXISTS (safe-persist): eventId=${eventId} event=${input.event} tx=${input.transactionId} existingStatus=${existingStatus} shouldDeliver=${shouldDeliver}`
+    log.info(
+      "webhook.event_exists",
+      `Event EXISTS (safe-persist): eventId=${eventId} event=${input.event} tx=${input.transactionId} existingStatus=${existingStatus} shouldDeliver=${shouldDeliver}`,
+      {
+        eventId,
+        traceId: input.transactionId,
+        transactionId: input.transactionId,
+        tenantId: input.tenantId,
+        storeId: input.storeId,
+        merchantAccountId: input.accountId ?? undefined,
+        webhookEvent: input.event,
+      }
     )
     return { eventId, isNew: false, shouldDeliver }
   }
@@ -415,8 +436,19 @@ export async function persistWebhookEventSafe(
     )
   `
 
-  console.info(
-    `[webhook-delivery] Event CREATED (safe-persist): eventId=${eventId} event=${input.event} tx=${input.transactionId} source=${input.source}`
+  log.info(
+    "webhook.event_created",
+    `Event CREATED (safe-persist): eventId=${eventId} event=${input.event} tx=${input.transactionId} source=${input.source}`,
+    {
+      eventId,
+      traceId: input.transactionId,
+      transactionId: input.transactionId,
+      tenantId: input.tenantId,
+      storeId: input.storeId,
+      merchantAccountId: input.accountId ?? undefined,
+      webhookEvent: input.event,
+      source: input.source,
+    }
   )
 
   // System log (best-effort, non-blocking)
@@ -486,10 +518,27 @@ export async function enqueueStoreWebhookEvent(input: EnqueueWebhookEventInput) 
         ]
       )
       eventId = inserted.rows[0].id
-      console.info(`[webhook-delivery] Event CREATED: eventId=${eventId} event=${input.event} tx=${input.transactionId} source=${input.source}`)
+      log.info("webhook.event_created", `Event CREATED: eventId=${eventId} event=${input.event} tx=${input.transactionId} source=${input.source}`, {
+        eventId,
+        traceId: input.transactionId,
+        transactionId: input.transactionId,
+        tenantId: input.tenantId,
+        storeId: input.storeId,
+        merchantAccountId: input.accountId ?? undefined,
+        webhookEvent: input.event,
+        source: input.source,
+      })
     } else {
       eventId = existing.id
-      console.info(`[webhook-delivery] Event DUPLICATE (idempotent): eventId=${eventId} event=${input.event} tx=${input.transactionId} businessKey=${input.businessKey}`)
+      log.info("webhook.event_duplicate", `Event DUPLICATE (idempotent): eventId=${eventId} event=${input.event} tx=${input.transactionId} businessKey=${input.businessKey}`, {
+        eventId,
+        traceId: input.transactionId,
+        transactionId: input.transactionId,
+        tenantId: input.tenantId,
+        storeId: input.storeId,
+        merchantAccountId: input.accountId ?? undefined,
+        webhookEvent: input.event,
+      })
     }
 
     const payload = {
@@ -631,7 +680,19 @@ export async function deliverWebhookEvent(
     )
   `
 
-  console.info(`[webhook-delivery] Delivery ATTEMPT: eventId=${eventId} event=${event.event_name} tx=${event.transaction_id} attempt=${attemptNumber} target=${event.target_url} trigger=${triggerOrigin}`)
+  const targetHost = safeTargetHost(event.target_url)
+  log.info("webhook.delivery_attempt", `Delivery ATTEMPT: eventId=${eventId} event=${event.event_name} tx=${event.transaction_id} attempt=${attemptNumber} target=${targetHost} trigger=${triggerOrigin}`, {
+    eventId,
+    traceId: event.transaction_id,
+    transactionId: event.transaction_id,
+    tenantId: event.tenant_id,
+    storeId: event.store_id,
+    merchantAccountId: event.account_id ?? undefined,
+    webhookEvent: event.event_name,
+    attempt: attemptNumber,
+    targetHost,
+    triggerOrigin,
+  })
 
   try {
     const response = await fetch(event.target_url, {
@@ -652,15 +713,36 @@ export async function deliverWebhookEvent(
     })
 
     if (response.ok) {
-      console.info(`[webhook-delivery] Delivery SUCCESS: eventId=${eventId} event=${event.event_name} tx=${event.transaction_id} attempt=${attemptNumber} httpStatus=${response.status}`)
+      log.info("webhook.delivery_success", `Delivery SUCCESS: eventId=${eventId} event=${event.event_name} tx=${event.transaction_id} attempt=${attemptNumber} httpStatus=${response.status}`, {
+        eventId,
+        traceId: event.transaction_id,
+        transactionId: event.transaction_id,
+        webhookEvent: event.event_name,
+        attempt: attemptNumber,
+        httpStatus: response.status,
+      })
     } else {
-      console.warn(`[webhook-delivery] Delivery REJECTED: eventId=${eventId} event=${event.event_name} tx=${event.transaction_id} attempt=${attemptNumber} httpStatus=${response.status} finalStatus=${finalized.finalStatus} nextRetry=${finalized.nextRetryAt ?? "none"}`)
+      log.warn("webhook.delivery_rejected", `Delivery REJECTED: eventId=${eventId} event=${event.event_name} tx=${event.transaction_id} attempt=${attemptNumber} httpStatus=${response.status} finalStatus=${finalized.finalStatus} nextRetry=${finalized.nextRetryAt ?? "none"}`, {
+        eventId,
+        traceId: event.transaction_id,
+        transactionId: event.transaction_id,
+        webhookEvent: event.event_name,
+        attempt: attemptNumber,
+        httpStatus: response.status,
+      })
     }
 
     return finalized
   } catch (error) {
     const errMessage = error instanceof Error ? error.message : "Unknown delivery error"
-    console.error(`[webhook-delivery] Delivery NETWORK ERROR: eventId=${eventId} event=${event.event_name} tx=${event.transaction_id} attempt=${attemptNumber} error=${errMessage}`)
+    log.error("webhook.delivery_network_error", `Delivery NETWORK ERROR: eventId=${eventId} event=${event.event_name} tx=${event.transaction_id} attempt=${attemptNumber} error=${errMessage}`, {
+      eventId,
+      traceId: event.transaction_id,
+      transactionId: event.transaction_id,
+      webhookEvent: event.event_name,
+      attempt: attemptNumber,
+      error,
+    })
     return finalizeDeliveryAttempt({
       event,
       deliveryId,
@@ -690,8 +772,15 @@ export async function deliverWebhookEventReliably(
     return firstAttempt
   }
 
-  console.warn(
-    `[webhook-delivery] Immediate auth retry: eventId=${eventId} tx=${afterFirstAttempt?.transaction_id ?? "unknown"} trigger=${triggerOrigin}`
+  log.warn(
+    "webhook.immediate_auth_retry",
+    `Immediate auth retry: eventId=${eventId} tx=${afterFirstAttempt?.transaction_id ?? "unknown"} trigger=${triggerOrigin}`,
+    {
+      eventId,
+      traceId: afterFirstAttempt?.transaction_id ?? undefined,
+      transactionId: afterFirstAttempt?.transaction_id ?? undefined,
+      triggerOrigin,
+    }
   )
 
   return deliverWebhookEvent(eventId, `${triggerOrigin}_immediate_retry`, {
@@ -718,7 +807,9 @@ export async function processDueWebhookEvents(limit = 50) {
     return []
   }
 
-  console.info(`[webhook-delivery] Recovery sweep: ${rows.length} due event(s) found`)
+  log.info("webhook.recovery_sweep_started", `Recovery sweep: ${rows.length} due event(s) found`, {
+    eventCount: rows.length,
+  })
 
   const concurrency = parseInt(process.env.WEBHOOK_SWEEP_CONCURRENCY || "5", 10)
   const results: Array<{ eventId: string } & WebhookDeliveryResult> = []
@@ -749,7 +840,9 @@ export async function processDueWebhookEvents(limit = 50) {
           results.push(res.value)
         } else {
           // Promise rejected (e.g. unexpected error outside of deliverWebhookEvent's internal try/catch)
-          console.error(`[webhook-delivery] Unexpected error during sweep chunk execution:`, res.reason)
+          log.error("webhook.recovery_sweep_chunk_error", `Unexpected error during sweep chunk execution`, {
+            error: res.reason,
+          })
         }
       }
     }
@@ -758,7 +851,12 @@ export async function processDueWebhookEvents(limit = 50) {
   const delivered = results.filter(r => r.finalStatus === "delivered").length
   const retrying = results.filter(r => r.finalStatus === "retrying").length
   const deadLetter = results.filter(r => r.finalStatus === "dead_letter").length
-  console.info(`[webhook-delivery] Recovery sweep complete: total=${results.length} delivered=${delivered} retrying=${retrying} dead_letter=${deadLetter}`)
+  log.info("webhook.recovery_sweep_completed", `Recovery sweep complete: total=${results.length} delivered=${delivered} retrying=${retrying} dead_letter=${deadLetter}`, {
+    total: results.length,
+    delivered,
+    retrying,
+    deadLetter,
+  })
 
   return results
 }
