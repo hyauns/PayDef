@@ -281,11 +281,8 @@ export async function POST(req: NextRequest) {
   if (rawIntent !== "CAPTURE" && rawIntent !== "AUTHORIZE") {
     intent = store.capture_mode === "MANUAL" ? "AUTHORIZE" : "CAPTURE"
     console.info(`[checkout] No explicit intent → derived from capture_mode=${store.capture_mode} → intent=${intent}`)
-  } else if (
-    (intent === "CAPTURE" && store.capture_mode === "MANUAL") ||
-    (intent === "AUTHORIZE" && store.capture_mode !== "MANUAL")
-  ) {
-    console.warn(`[checkout] Intent/capture_mode mismatch: intent=${intent} capture_mode=${store.capture_mode} — honouring store's explicit intent`)
+  } else {
+    console.info(`[checkout] Store sent explicit intent=${intent}; using explicit intent`)
   }
   console.info(`[checkout] Final intent=${intent} capture_mode=${store.capture_mode} store=${storeId}`)
 
