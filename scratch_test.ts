@@ -1,37 +1,15 @@
-type BillingAddress = Record<string, unknown> | string | null
+import { getSql } from './lib/neon'
 
-function normalizeBillingAddress(value: BillingAddress) {
-  if (value == null) return null
-  if (typeof value === "string") {
-    const trimmed = value.trim()
-    return trimmed || null
-  }
-  if (typeof value === "object" && !Array.isArray(value)) {
-    const address = value as Record<string, unknown>
-    const normalized = {
-      line1: typeof address.line1 === "string" ? address.line1.trim() : undefined,
-      line2: typeof address.line2 === "string" ? address.line2.trim() : undefined,
-      city: typeof address.city === "string" ? address.city.trim() : undefined,
-      state: typeof address.state === "string" ? address.state.trim() : undefined,
-      postal_code: typeof address.postal_code === "string" ? address.postal_code.trim() : undefined,
-      country: typeof address.country === "string" ? address.country.trim() : undefined,
-    }
-
-    return Object.values(normalized).some((part) => typeof part === "string" && part.length > 0)
-      ? normalized
-      : null
-  }
-  return null
+async function run() {
+  const sql = getSql()
+  const rows = await sql`
+    SELECT id, name, tenant_id, 
+           api_key_hash IS NOT NULL AS has_api_key_hash, 
+           LENGTH(api_key_hash) AS api_key_hash_length, 
+           updated_at, api_key_hash 
+    FROM stores 
+    WHERE id = '9d7e0d84-145b-4daf-a080-21ecf5b43b6a'`
+  console.log(rows)
+  process.exit(0)
 }
-
-const payload = {
-  billingAddress: {
-    line1: "123 Street",
-    city: "NY",
-    state: "NY",
-    postal_code: "10001",
-    country: "US"
-  }
-}
-
-console.log(normalizeBillingAddress(payload.billingAddress));
+run()

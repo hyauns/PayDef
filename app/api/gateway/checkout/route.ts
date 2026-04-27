@@ -62,7 +62,7 @@ import {
   WARMUP_MAX_TRANSACTION,
 } from "@/lib/merchant-rotation"
 import { checkRateLimit } from "@/lib/gateway-rate-limit"
-import { compareApiKeyCached } from "@/lib/api-key-cache"
+import { authenticateStoreHeaders } from "@/lib/gateway-auth"
 import { generateExecuteToken, getMode as getExecuteTokenMode } from "@/lib/execute-token"
 
 // ─── Request body shape ───────────────────────────────────────────────────────
@@ -79,17 +79,7 @@ interface CheckoutBody {
 
 // ─── DB row shapes ────────────────────────────────────────────────────────────
 
-interface StoreRow {
-  id:            string
-  name:          string
-  tenant_id:     string
-  api_key_hash:  string
-  is_active:     boolean
-  capture_mode:  string   // 'INSTANT' | 'MANUAL'
-  checkout_flow: string | null
-  success_return_url: string | null
-  cancel_return_url: string | null
-}
+// StoreRow removed since we use AuthenticatedStore
 
 function getClientIdHint(clientId: string): string {
   return `${clientId.slice(0, 8)}...${clientId.slice(-4)}`
@@ -204,16 +194,8 @@ export async function POST(req: NextRequest) {
   //  (no DB mutation — safe to run outside the transaction)
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  // ── Step 1. Extract & validate headers ─────────────────────────────────────
-  const storeId = req.headers.get("X-Store-ID")
-  const apiKey  = req.headers.get("X-API-Key")
-
-  if (!storeId || !apiKey) {
-    return NextResponse.json(
-      { error: "Missing X-Store-ID or X-API-Key header." },
-      { status: 401 }
-    )
-  }
+  // ── Step 1. Extract headers (validation handled by auth helper) ────────────
+  const storeId = req.headers.get("X-Store-ID") // Kept for early logging
 
   // ── Step 2. Parse & validate body ──────────────────────────────────────────
   let body: CheckoutBody
@@ -237,13 +219,13 @@ export async function POST(req: NextRequest) {
     // Store explicitly specified intent — gateway honours it
     intent = rawIntent
     log.info("checkout.intent_explicit", `Store sent explicit intent=${intent} (store=${storeId})`, {
-      storeId,
+      storeId: storeId ?? undefined,
       intent,
     })
   }
 
   log.info("checkout.request_started", `Incoming intent=${rawIntent ?? "<not sent>"} amount=${amount} currency=${currency}`, {
-    storeId,
+    storeId: storeId ?? undefined,
     intent: rawIntent ?? undefined,
     amount,
     currency,
@@ -261,31 +243,25 @@ export async function POST(req: NextRequest) {
 
   const amountStr = amount.toFixed(2)
 
-  // ── Step 3. Resolve store + verify API key (read-only, no mutation) ────────
-  const sql = getSql()
-  const storeRows = (await sql`
-    SELECT id, name, tenant_id, api_key_hash, is_active,
-           COALESCE(capture_mode, 'INSTANT') AS capture_mode,
-           checkout_flow,
-           success_return_url,
-           cancel_return_url
-    FROM   stores
-    WHERE  id = ${storeId}
-    LIMIT  1
-  `) as unknown as StoreRow[]
-  const store = storeRows[0] ?? null
-
-  if (!store || !store.is_active) {
+  // ── Step 3. Resolve store + verify API key via shared helper ───────────────
+  let store
+  try {
+    store = await authenticateStoreHeaders(req)
+  } catch (error: any) {
+    const msg = error.message
+    if (msg.includes("Missing")) {
+      return NextResponse.json({ error: msg }, { status: 401 })
+    }
+    if (msg.includes("Invalid")) {
+      return NextResponse.json({ error: "Invalid API key." }, { status: 401 })
+    }
     return NextResponse.json({ error: "Store not found or inactive." }, { status: 401 })
   }
 
-  const keyValid = await compareApiKeyCached(apiKey, store.api_key_hash)
-  if (!keyValid) {
-    return NextResponse.json({ error: "Invalid API key." }, { status: 401 })
-  }
+  const sql = getSql()
 
-  // ── Rate limiting (after auth to avoid blocking valid payments pre-verify) ──
-  const { allowed, headers: rlHeaders } = await checkRateLimit(storeId)
+  // ── Rate limiting (after auth) ──────────────────────────────────────────────
+  const { allowed, headers: rlHeaders } = await checkRateLimit(store.id)
   if (!allowed) {
     return NextResponse.json(
       { error: "Too many requests. Please try again later." },
@@ -293,40 +269,40 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const { tenant_id: tenantId } = store
+  const tenantId = store.tenantId
   const checkoutPreferences = await getCheckoutPreferences(sql)
-  const flow = resolveCheckoutFlow(store.checkout_flow, checkoutPreferences)
+  const flow = resolveCheckoutFlow(store.checkoutFlow, checkoutPreferences)
 
   // ── Finalise intent (capture_mode fallback + mismatch logging) ──────────────
   // If store sent explicit intent above (line 144-147), it's already set.
   // If not, derive from capture_mode now that we have the store row.
   if (rawIntent !== "CAPTURE" && rawIntent !== "AUTHORIZE") {
-    intent = store.capture_mode === "MANUAL" ? "AUTHORIZE" : "CAPTURE"
-    log.info("checkout.intent_derived", `No explicit intent → derived from capture_mode=${store.capture_mode} → intent=${intent}`, {
-      storeId,
+    intent = store.captureMode === "MANUAL" ? "AUTHORIZE" : "CAPTURE"
+    log.info("checkout.intent_derived", `No explicit intent → derived from capture_mode=${store.captureMode} → intent=${intent}`, {
+      storeId: store.id,
       tenantId,
-      captureMode: store.capture_mode,
+      captureMode: store.captureMode,
       intent,
     })
   } else {
     log.info("checkout.intent_explicit", `Store sent explicit intent=${intent}; using explicit intent`, {
-      storeId,
+      storeId: store.id,
       tenantId,
       intent,
     })
   }
-  log.info("checkout.intent_finalized", `Final intent=${intent} capture_mode=${store.capture_mode} store=${storeId}`, {
-    storeId,
+  log.info("checkout.intent_finalized", `Final intent=${intent} capture_mode=${store.captureMode} store=${store.id}`, {
+    storeId: store.id,
     tenantId,
-    captureMode: store.capture_mode,
+    captureMode: store.captureMode,
     intent,
   })
 
   // ── Pre-resolve Payment Display Profile to guide account selection (Phase 4)
   const preliminaryProfile = await resolvePaymentDisplayProfile({
     tenantId,
-    storeId,
-    storeName: store.name,
+    storeId: store.id,
+    storeName: "Unknown Store", // The store name is not in AuthenticatedStore, we'll fetch it if needed inside
   })
   const preferredProfileId = preliminaryProfile.profileId
 
@@ -425,7 +401,7 @@ export async function POST(req: NextRequest) {
       
       log.info("payment_display_profile.account_filter", "Account filtered by profile preference", {
         tenantId,
-        storeId,
+        storeId: store.id,
         resolvedProfileId: preferredProfileId,
         eligibleAccountCount: eligible.length,
         matchingAccountCount,
@@ -435,7 +411,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Circuit breaker filter (shadow/enforce) ──────────────────────────────
-    const circuitFiltered = await filterOpenCircuits(matchedAccounts, storeId)
+    const circuitFiltered = await filterOpenCircuits(matchedAccounts, store.id)
 
     const candidate = await selectByStrategy(circuitFiltered, tenantId, getSql())
 
@@ -510,9 +486,9 @@ export async function POST(req: NextRequest) {
     
     const profile = await resolvePaymentDisplayProfile({
       tenantId,
-      storeId,
+      storeId: store.id,
       merchantAccountId: account.id,
-      storeName: store.name,
+      storeName: "Unknown Store", // Will be fetched inside if needed
     })
     
     const legacyMasker = (realName: string) => account.item_masking 
@@ -537,7 +513,7 @@ export async function POST(req: NextRequest) {
     txLog.info("payment_display_profile.resolved",
       `Payment Display Profile resolved source=${profile.source} mode=${profileMode}`,
       {
-        storeId,
+        storeId: store.id,
         tenantId,
         merchantAccountId: account.id,
         profileId: profile.profileId,
@@ -572,7 +548,7 @@ export async function POST(req: NextRequest) {
       txLog.warn("payment_display_profile.line_item_invariant_failed",
         `Amount invariant failed for policy=${lineItemResult.lineItemPolicy} — fell back to SINGLE_SEMANTIC_ITEM`,
         {
-          storeId,
+          storeId: store.id,
           tenantId,
           merchantAccountId: account.id,
           lineItemPolicy: lineItemResult.lineItemPolicy,
@@ -611,7 +587,7 @@ export async function POST(req: NextRequest) {
 
     txLog.info("payment_display_profile.shield_domain_selected", "Shield domain selected for transaction", {
       tenantId,
-      storeId,
+      storeId: store.id,
       resolvedProfileId: preferredProfileId,
       shieldDomainId,
       profileMatched: shieldProfileMatched,
@@ -629,7 +605,7 @@ export async function POST(req: NextRequest) {
       `mode=${getExecuteTokenMode()} generated=${executeToken !== null} ` +
       `returnUrlHasEt=${returnUrl.includes("et=")}`,
       {
-        storeId,
+        storeId: store.id,
         tenantId,
         merchantAccountId: account.id,
         tokenEnabled: executeToken !== null,
@@ -662,7 +638,7 @@ export async function POST(req: NextRequest) {
       txLog.error("checkout.paypal_order_failed",
         `Credential resolution failed for merchant account ${account.id} clientId=${getClientIdHint(account.client_id)} decryption_ok=false proxy=${account.proxy_url ? "configured" : "none"} env=${process.env.PAYPAL_ENV === "live" ? "live" : "sandbox"}`,
         {
-          storeId,
+          storeId: store.id,
           tenantId,
           merchantAccountId: account.id,
           intent,
@@ -685,7 +661,7 @@ export async function POST(req: NextRequest) {
     txLog.info("checkout.account_selected",
       `Using merchant account ${account.id} clientId=${getClientIdHint(account.client_id)} status=${account.status} decryption_ok=true proxy=${proxyUrl ? "yes" : "no"} env=${process.env.PAYPAL_ENV === "live" ? "live" : "sandbox"}`,
       {
-        storeId,
+        storeId: store.id,
         tenantId,
         merchantAccountId: account.id,
         intent,
@@ -741,7 +717,7 @@ export async function POST(req: NextRequest) {
         txLog.error("payment_display_profile.paypal_payload_mismatch",
           `PREFLIGHT ASSERTION FAILED: enforce+SINGLE_SEMANTIC_ITEM but items=${itemCount} legacy=${anyLegacy} totalMatch=${totalMatch} skipRand=${lineItemResult.skipRandomization}`,
           {
-            storeId,
+            storeId: store.id,
             tenantId,
             merchantAccountId: account.id,
             mode: profileMode,
@@ -787,7 +763,7 @@ export async function POST(req: NextRequest) {
         txLog.error("checkout.account_retry",
           `Excluding merchant account ${account.id} after invalid_client clientId=${getClientIdHint(account.client_id)} decryption_ok=true proxy=${proxyUrl ? "yes" : "no"} env=${process.env.PAYPAL_ENV === "live" ? "live" : "sandbox"} retried=true`,
           {
-            storeId,
+            storeId: store.id,
             tenantId,
             merchantAccountId: account.id,
             proxyEnabled: !!proxyUrl,
@@ -811,7 +787,7 @@ export async function POST(req: NextRequest) {
         txLog.error("checkout.account_retry",
           `Fatal 403 for account ${account.id} clientId=${getClientIdHint(account.client_id)} reason=${safeReason}`,
           {
-            storeId,
+            storeId: store.id,
             tenantId,
             merchantAccountId: account.id,
             clientIdHint: getClientIdHint(account.client_id),
@@ -828,7 +804,7 @@ export async function POST(req: NextRequest) {
         txLog.warn("checkout.account_retry",
           `Ambiguous 403 for account ${account.id} clientId=${getClientIdHint(account.client_id)} — recording for circuit breaker`,
           {
-            storeId,
+            storeId: store.id,
             tenantId,
             merchantAccountId: account.id,
             clientIdHint: getClientIdHint(account.client_id),
@@ -845,7 +821,7 @@ export async function POST(req: NextRequest) {
         txLog.warn("checkout.account_retry",
           `PayPal 429 for account ${account.id} clientId=${getClientIdHint(account.client_id)} — recording for circuit breaker`,
           {
-            storeId,
+            storeId: store.id,
             tenantId,
             merchantAccountId: account.id,
             clientIdHint: getClientIdHint(account.client_id),
@@ -862,7 +838,7 @@ export async function POST(req: NextRequest) {
         txLog.warn("checkout.account_retry",
           `PayPal 5xx (${paypalError.statusCode}) for account ${account.id} — recording for circuit breaker`,
           {
-            storeId,
+            storeId: store.id,
             tenantId,
             merchantAccountId: account.id,
             error: paypalError
@@ -876,7 +852,7 @@ export async function POST(req: NextRequest) {
       txLog.error("checkout.paypal_order_failed",
         `PayPal order creation failed for merchant account ${account.id} clientId=${getClientIdHint(account.client_id)} decryption_ok=true proxy=${proxyUrl ? "yes" : "no"} env=${process.env.PAYPAL_ENV === "live" ? "live" : "sandbox"}`,
         {
-          storeId,
+          storeId: store.id,
           tenantId,
           merchantAccountId: account.id,
           proxyEnabled: !!proxyUrl,
@@ -892,7 +868,7 @@ export async function POST(req: NextRequest) {
     }
 
     txLog.info("checkout.paypal_order_created", `PayPal order created: orderId=${paypalOrder.id} intent=${intent} status=${paypalOrder.status}`, {
-      storeId,
+      storeId: store.id,
       tenantId,
       merchantAccountId: account.id,
       paypalOrderId: paypalOrder.id,
@@ -935,7 +911,7 @@ export async function POST(req: NextRequest) {
       [
         transactionId,             // $1
         tenantId,                  // $2
-        storeId,                   // $3
+        store.id,                  // $3
         account.id,                // $4
         amount,                    // $5
         currency,                  // $6  — original_currency
@@ -946,8 +922,8 @@ export async function POST(req: NextRequest) {
         buyerIp       ?? null,     // $11 — buyer_ip + ip_address
         buyerCountry  ?? null,     // $12 — buyer_country
         intent,                    // $13 — intent (CAPTURE | AUTHORIZE) for execute step
-        store.success_return_url ?? null, // $14
-        store.cancel_return_url ?? null, // $15
+        store.successReturnUrl ?? null, // $14
+        store.cancelReturnUrl ?? null, // $15
       ]
     )
 
@@ -993,7 +969,7 @@ export async function POST(req: NextRequest) {
       popupOrigin,
       intent,
       status: "PENDING",
-      merchantReturnConfigured: !!(store.success_return_url || store.cancel_return_url),
+      merchantReturnConfigured: !!(store.successReturnUrl || store.cancelReturnUrl),
     },
     { status: 201 }
   )

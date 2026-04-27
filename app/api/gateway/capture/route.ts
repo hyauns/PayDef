@@ -29,24 +29,15 @@ import {
   persistWebhookEventSafe,
   deliverWebhookEvent,
 } from "@/lib/webhook-delivery"
-import bcrypt from "bcryptjs"
 import { checkRateLimit } from "@/lib/gateway-rate-limit"
-import { compareApiKeyCached } from "@/lib/api-key-cache"
-
+import { authenticateStoreHeaders } from "@/lib/gateway-auth"
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const GATEWAY_FEE_PERCENT = 0.02
 
 // ─── Row shapes ───────────────────────────────────────────────────────────────
 
-interface StoreRow {
-  id:            string
-  tenant_id:     string
-  api_key_hash:  string
-  is_active:     boolean
-  webhook_url:   string | null
-  webhook_secret: string | null
-}
+// StoreRow removed since we use AuthenticatedStore
 
 interface TransactionRow {
   id:               string
@@ -111,27 +102,25 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // ── Step 3. Verify store + API key ──────────────────────────────────────────
-  const sql = getSql()
-  const storeRows = (await sql`
-    SELECT id, tenant_id, api_key_hash, is_active, webhook_url, webhook_secret
-    FROM   stores
-    WHERE  id = ${storeId}
-    LIMIT  1
-  `) as unknown as StoreRow[]
-  const store = storeRows[0] ?? null
-
-  if (!store || !store.is_active) {
+  // ── Step 3. Verify store + API key via shared helper ────────────────────────
+  let store
+  try {
+    store = await authenticateStoreHeaders(req)
+  } catch (error: any) {
+    const msg = error.message
+    if (msg.includes("Missing")) {
+      return NextResponse.json({ error: msg }, { status: 401 })
+    }
+    if (msg.includes("Invalid")) {
+      return NextResponse.json({ error: "Invalid API key." }, { status: 401 })
+    }
     return NextResponse.json({ error: "Store not found or inactive." }, { status: 401 })
   }
 
-  const keyValid = await compareApiKeyCached(apiKey, store.api_key_hash)
-  if (!keyValid) {
-    return NextResponse.json({ error: "Invalid API key." }, { status: 401 })
-  }
+  const sql = getSql()
 
   // ── Rate limiting (after auth) ────────────────────────────────────────────
-  const { allowed, headers: rlHeaders } = await checkRateLimit(storeId)
+  const { allowed, headers: rlHeaders } = await checkRateLimit(store.id)
   if (!allowed) {
     return NextResponse.json(
       { error: "Too many requests. Please try again later." },
@@ -139,7 +128,7 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const { tenant_id: tenantId } = store
+  const tenantId = store.tenantId
 
   // ── Step 4. Look up the AUTHORIZED transaction ──────────────────────────────
   const pool   = getPool()
@@ -158,7 +147,7 @@ export async function POST(req: NextRequest) {
          AND  store_id = $2
          AND  tenant_id = $3
        FOR UPDATE`,
-      [authorization_id, storeId, tenantId]
+      [authorization_id, store.id, tenantId]
     )
 
     const transaction = txResult.rows[0]
@@ -267,7 +256,7 @@ export async function POST(req: NextRequest) {
 
     // ── Step 10. Persist webhook event (awaited, stateless HTTP driver) ─────
     // Then fire-and-forget delivery — event is durable, cron retries if needed
-    if (store.webhook_url) {
+    if (store.webhookUrl) {
       const canonicalPayload: Omit<StoreWebhookPayload, "event_id"> = {
         event: "payment.capture.completed",
         transaction_id: transaction.id,
@@ -285,9 +274,9 @@ export async function POST(req: NextRequest) {
         const { eventId, isNew, shouldDeliver } = await persistWebhookEventSafe({
           transactionId: transaction.id,
           tenantId,
-          storeId,
+          storeId: store.id,
           accountId: transaction.merchant_id,
-          targetUrl: store.webhook_url,
+          targetUrl: store.webhookUrl,
           businessKey: buildWebhookBusinessKey("payment.capture.completed", transaction.id, captureResult.id),
           event: "payment.capture.completed",
           payload: canonicalPayload,
@@ -308,7 +297,8 @@ export async function POST(req: NextRequest) {
     // ── Step 11. Telegram notification (async, non-blocking) ──────────────────
     // Fetch store and account names for the message, then fire-and-forget
     try {
-      const storeNameRows = await sql`SELECT name FROM stores WHERE id = ${storeId} LIMIT 1` as unknown as StoreNameRow[]
+      const sql = getSql()
+      const storeNameRows = await sql`SELECT name FROM stores WHERE id = ${store.id} LIMIT 1` as unknown as StoreNameRow[]
       const acctNameRows = await sql`SELECT name FROM merchant_accounts WHERE id = ${transaction.merchant_id} LIMIT 1` as unknown as MerchantNameRow[]
       await sendTransactionAlert({
         tenantId,

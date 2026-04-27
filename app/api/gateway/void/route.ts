@@ -25,20 +25,12 @@ import {
   persistWebhookEventSafe,
   deliverWebhookEvent,
 } from "@/lib/webhook-delivery"
-import bcrypt from "bcryptjs"
 import { checkRateLimit } from "@/lib/gateway-rate-limit"
-import { compareApiKeyCached } from "@/lib/api-key-cache"
+import { authenticateStoreHeaders } from "@/lib/gateway-auth"
 
 // ─── Row shapes ───────────────────────────────────────────────────────────────
 
-interface StoreRow {
-  id:            string
-  tenant_id:     string
-  api_key_hash:  string
-  is_active:     boolean
-  webhook_url:   string | null
-  webhook_secret: string | null
-}
+// StoreRow removed since we use AuthenticatedStore
 
 interface TransactionRow {
   id:               string
@@ -103,37 +95,25 @@ export async function POST(req: NextRequest) {
   console.info(`${LOG} START: storeId=${storeId} authId=${authorization_id}`)
 
   // ── Step 3. Verify store + API key ──────────────────────────────────────────
-  const sql = getSql()
-  let store: StoreRow | null = null
+  // ── Step 3. Verify store + API key via shared helper ────────────────────────
+  let store
   try {
-    const storeRows = (await sql`
-      SELECT id, tenant_id, api_key_hash, is_active, webhook_url, webhook_secret
-      FROM   stores
-      WHERE  id = ${storeId}
-      LIMIT  1
-    `) as unknown as StoreRow[]
-    store = storeRows[0] ?? null
-  } catch (dbErr) {
-    console.error(`${LOG} Store lookup DB error: storeId=${storeId}`, dbErr)
-    return NextResponse.json(
-      { error: "Database error during authentication." },
-      { status: 500 }
-    )
-  }
-
-  if (!store || !store.is_active) {
-    console.warn(`${LOG} Store not found or inactive: storeId=${storeId}`)
+    store = await authenticateStoreHeaders(req)
+  } catch (error: any) {
+    const msg = error.message
+    if (msg.includes("Missing")) {
+      return NextResponse.json({ error: msg }, { status: 401 })
+    }
+    if (msg.includes("Invalid")) {
+      return NextResponse.json({ error: "Invalid API key." }, { status: 401 })
+    }
     return NextResponse.json({ error: "Store not found or inactive." }, { status: 401 })
   }
 
-  const keyValid = await compareApiKeyCached(apiKey, store.api_key_hash)
-  if (!keyValid) {
-    console.warn(`${LOG} Invalid API key for storeId=${storeId}`)
-    return NextResponse.json({ error: "Invalid API key." }, { status: 401 })
-  }
+  const sql = getSql()
 
-  // ── Rate limiting (after auth) ──────────────────────────────────────────────
-  const { allowed, headers: rlHeaders } = await checkRateLimit(storeId)
+  // ── Rate limiting (after auth) ────────────────────────────────────────────
+  const { allowed, headers: rlHeaders } = await checkRateLimit(store.id)
   if (!allowed) {
     return NextResponse.json(
       { error: "Too many requests. Please try again later." },
@@ -141,8 +121,7 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const tenantId = store.tenant_id
-  console.info(`${LOG} Auth OK: storeId=${storeId} tenantId=${tenantId}`)
+  const tenantId = store.tenantId
 
   // ── Step 4. Look up and lock the transaction ────────────────────────────────
   // Use stateless SQL first for the lookup — avoids pool/WebSocket issues.
@@ -155,7 +134,7 @@ export async function POST(req: NextRequest) {
              paypal_order_id, intent
       FROM   transactions
       WHERE  authorization_id = ${authorization_id}
-        AND  store_id = ${storeId}
+        AND  store_id = ${store.id}
         AND  tenant_id = ${tenantId}
       LIMIT  1
     `) as unknown as TransactionRow[]
@@ -310,7 +289,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Step 8. Persist webhook event + fire-and-forget delivery ───────────────
-  if (store.webhook_url) {
+  if (store.webhookUrl) {
     const canonicalPayload: Omit<StoreWebhookPayload, "event_id"> = {
       event:            "payment.authorization.voided",
       transaction_id:   transaction.id,
@@ -325,9 +304,9 @@ export async function POST(req: NextRequest) {
       const { eventId, shouldDeliver } = await persistWebhookEventSafe({
         transactionId: transaction.id,
         tenantId,
-        storeId,
+        storeId: store.id,
         accountId: transaction.merchant_id,
-        targetUrl: store.webhook_url,
+        targetUrl: store.webhookUrl,
         businessKey: buildWebhookBusinessKey("payment.authorization.voided", transaction.id, authorization_id),
         event: "payment.authorization.voided",
         payload: canonicalPayload,
