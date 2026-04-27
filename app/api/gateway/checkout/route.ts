@@ -29,6 +29,9 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
+import { createLogger } from "@/lib/logger"
+
+const moduleLog = createLogger({ route: "/api/gateway/checkout" })
 import bcrypt from "bcryptjs"
 import { getPool, getSql } from "@/lib/neon"
 import {
@@ -117,9 +120,10 @@ async function quarantineMerchantAccount(
     RETURNING id
   `
   const statusChanged = (result as unknown[]).length > 0
-  console.error(
-    `[merchant-quarantine] account=${accountId} reason=${reason} status_changed=${statusChanged}`
-  )
+  moduleLog.error("checkout.account_quarantined", `account=${accountId} reason=${reason} status_changed=${statusChanged}`, {
+    merchantAccountId: accountId,
+    accountStatus: "SUSPENDED"
+  })
 
   // Telegram alert only if status actually changed (anti-spam)
   if (statusChanged && tenantId) {
@@ -140,12 +144,18 @@ async function quarantineMerchantAccount(
         ].join("\n")
         const alertResult = await sendTelegramMessage(tenant.telegram_bot_token, tenant.telegram_chat_id, message)
         if (!alertResult.ok) {
-          console.error(`[merchant-quarantine] Telegram alert failed: ${alertResult.error}`)
+          moduleLog.error("checkout.telegram_alert_failed", `Telegram alert failed: ${alertResult.error}`, {
+            merchantAccountId: accountId,
+            error: alertResult.error
+          })
         }
       }
     } catch (alertErr) {
       // Alert failure must never block checkout
-      console.error("[merchant-quarantine] Telegram alert error (non-blocking):", alertErr)
+      moduleLog.error("checkout.telegram_alert_failed", "Telegram alert error (non-blocking):", {
+        merchantAccountId: accountId,
+        error: alertErr
+      })
     }
   }
 }
@@ -153,6 +163,8 @@ async function quarantineMerchantAccount(
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+  const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID()
+  const log = moduleLog.child({ requestId, traceId: requestId })
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   //  MAINTENANCE MODE CHECK
   //  If the admin has enabled maintenance mode, reject all checkout traffic.
@@ -222,10 +234,18 @@ export async function POST(req: NextRequest) {
   if (rawIntent === "CAPTURE" || rawIntent === "AUTHORIZE") {
     // Store explicitly specified intent — gateway honours it
     intent = rawIntent
-    console.info(`[checkout] Store sent explicit intent=${intent} (store=${storeId})`)
+    log.info("checkout.intent_explicit", `Store sent explicit intent=${intent} (store=${storeId})`, {
+      storeId,
+      intent,
+    })
   }
 
-  console.info(`[checkout] Incoming intent=${rawIntent ?? "<not sent>"} amount=${amount} currency=${currency}`)
+  log.info("checkout.request_started", `Incoming intent=${rawIntent ?? "<not sent>"} amount=${amount} currency=${currency}`, {
+    storeId,
+    intent: rawIntent ?? undefined,
+    amount,
+    currency,
+  })
 
   if (!amount || typeof amount !== "number" || amount <= 0) {
     return NextResponse.json(
@@ -280,11 +300,25 @@ export async function POST(req: NextRequest) {
   // If not, derive from capture_mode now that we have the store row.
   if (rawIntent !== "CAPTURE" && rawIntent !== "AUTHORIZE") {
     intent = store.capture_mode === "MANUAL" ? "AUTHORIZE" : "CAPTURE"
-    console.info(`[checkout] No explicit intent → derived from capture_mode=${store.capture_mode} → intent=${intent}`)
+    log.info("checkout.intent_derived", `No explicit intent → derived from capture_mode=${store.capture_mode} → intent=${intent}`, {
+      storeId,
+      tenantId,
+      captureMode: store.capture_mode,
+      intent,
+    })
   } else {
-    console.info(`[checkout] Store sent explicit intent=${intent}; using explicit intent`)
+    log.info("checkout.intent_explicit", `Store sent explicit intent=${intent}; using explicit intent`, {
+      storeId,
+      tenantId,
+      intent,
+    })
   }
-  console.info(`[checkout] Final intent=${intent} capture_mode=${store.capture_mode} store=${storeId}`)
+  log.info("checkout.intent_finalized", `Final intent=${intent} capture_mode=${store.capture_mode} store=${storeId}`, {
+    storeId,
+    tenantId,
+    captureMode: store.capture_mode,
+    intent,
+  })
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   //  ATOMIC TRANSACTION
@@ -433,16 +467,26 @@ export async function POST(req: NextRequest) {
     )
     transactionId = txIdRow.rows[0].id
 
+    const txLog = log.child({ transactionId, traceId: transactionId })
+
     const executeToken = generateExecuteToken(transactionId)
     const { returnUrl, cancelUrl } = buildShieldUrls(
       account.shield_domain,
       transactionId,
       executeToken
     )
-    console.info(
-      `[checkout] Execute token: tx=${transactionId} enabled=${executeToken !== null} ` +
+    txLog.info("checkout.execute_token_generated",
+      `Execute token: tx=${transactionId} enabled=${executeToken !== null} ` +
       `mode=${getExecuteTokenMode()} generated=${executeToken !== null} ` +
-      `returnUrlHasEt=${returnUrl.includes("et=")}`
+      `returnUrlHasEt=${returnUrl.includes("et=")}`,
+      {
+        storeId,
+        tenantId,
+        merchantAccountId: account.id,
+        tokenEnabled: executeToken !== null,
+        tokenGenerated: executeToken !== null,
+        returnUrlHasEt: returnUrl.includes("et=")
+      }
     )
 
     // ── Step 9. Create PayPal order ──────────────────────────────────────────
@@ -466,9 +510,20 @@ export async function POST(req: NextRequest) {
       excludedAccountIds.add(account.id)
       exhaustedInvalidAccounts = true
       clearPayPalTokenCache(account.client_id)
-      console.error(
-        `[checkout] Credential resolution failed for merchant account ${account.id} clientId=${getClientIdHint(account.client_id)} decryption_ok=false proxy=${account.proxy_url ? "configured" : "none"} env=${process.env.PAYPAL_ENV === "live" ? "live" : "sandbox"}`,
-        credentialError
+      txLog.error("checkout.paypal_order_failed",
+        `Credential resolution failed for merchant account ${account.id} clientId=${getClientIdHint(account.client_id)} decryption_ok=false proxy=${account.proxy_url ? "configured" : "none"} env=${process.env.PAYPAL_ENV === "live" ? "live" : "sandbox"}`,
+        {
+          storeId,
+          tenantId,
+          merchantAccountId: account.id,
+          intent,
+          amount,
+          currency,
+          proxyEnabled: !!account.proxy_url,
+          clientIdHint: getClientIdHint(account.client_id),
+          paypalEnv: process.env.PAYPAL_ENV === "live" ? "live" : "sandbox",
+          error: credentialError
+        }
       )
       await quarantineMerchantAccount(account.id, "credential_resolution_failed", tenantId)
       continue
@@ -478,8 +533,20 @@ export async function POST(req: NextRequest) {
     // contain authentication credentials embedded in the URL.
 
     // Diagnostic: confirm we're using DB credentials, not env fallback
-    console.info(
-      `[checkout] Using merchant account ${account.id} clientId=${getClientIdHint(account.client_id)} status=${account.status} decryption_ok=true proxy=${proxyUrl ? "yes" : "no"} env=${process.env.PAYPAL_ENV === "live" ? "live" : "sandbox"}`
+    txLog.info("checkout.account_selected",
+      `Using merchant account ${account.id} clientId=${getClientIdHint(account.client_id)} status=${account.status} decryption_ok=true proxy=${proxyUrl ? "yes" : "no"} env=${process.env.PAYPAL_ENV === "live" ? "live" : "sandbox"}`,
+      {
+        storeId,
+        tenantId,
+        merchantAccountId: account.id,
+        intent,
+        amount,
+        currency,
+        accountStatus: account.status,
+        proxyEnabled: !!proxyUrl,
+        clientIdHint: getClientIdHint(account.client_id),
+        paypalEnv: process.env.PAYPAL_ENV === "live" ? "live" : "sandbox"
+      }
     )
 
     let paypalOrder
@@ -511,8 +578,17 @@ export async function POST(req: NextRequest) {
         exhaustedInvalidAccounts = true
         excludedAccountIds.add(account.id)
         clearPayPalTokenCache(account.client_id)
-        console.error(
-          `[checkout] Excluding merchant account ${account.id} after invalid_client clientId=${getClientIdHint(account.client_id)} decryption_ok=true proxy=${proxyUrl ? "yes" : "no"} env=${process.env.PAYPAL_ENV === "live" ? "live" : "sandbox"} retried=true`
+        txLog.error("checkout.account_retry",
+          `Excluding merchant account ${account.id} after invalid_client clientId=${getClientIdHint(account.client_id)} decryption_ok=true proxy=${proxyUrl ? "yes" : "no"} env=${process.env.PAYPAL_ENV === "live" ? "live" : "sandbox"} retried=true`,
+          {
+            storeId,
+            tenantId,
+            merchantAccountId: account.id,
+            proxyEnabled: !!proxyUrl,
+            clientIdHint: getClientIdHint(account.client_id),
+            paypalEnv: process.env.PAYPAL_ENV === "live" ? "live" : "sandbox",
+            error: paypalError
+          }
         )
         await quarantineMerchantAccount(account.id, "paypal_invalid_client", tenantId)
         continue
@@ -526,8 +602,15 @@ export async function POST(req: NextRequest) {
         const safeReason = paypalError instanceof PayPalApiError
           ? `paypal_403_fatal_${paypalError.body.slice(0, 80).replace(/[^a-zA-Z0-9_]/g, "_")}`
           : "paypal_403_fatal"
-        console.error(
-          `[checkout] Fatal 403 for account ${account.id} clientId=${getClientIdHint(account.client_id)} reason=${safeReason}`
+        txLog.error("checkout.account_retry",
+          `Fatal 403 for account ${account.id} clientId=${getClientIdHint(account.client_id)} reason=${safeReason}`,
+          {
+            storeId,
+            tenantId,
+            merchantAccountId: account.id,
+            clientIdHint: getClientIdHint(account.client_id),
+            error: paypalError
+          }
         )
         await quarantineMerchantAccount(account.id, safeReason, tenantId)
         continue
@@ -536,8 +619,15 @@ export async function POST(req: NextRequest) {
       // ── 403 ambiguous → circuit breaker cooldown (NOT suspend) ───────────
       if (isTemporaryForbiddenError(paypalError)) {
         excludedAccountIds.add(account.id)
-        console.warn(
-          `[checkout] Ambiguous 403 for account ${account.id} clientId=${getClientIdHint(account.client_id)} — recording for circuit breaker`
+        txLog.warn("checkout.account_retry",
+          `Ambiguous 403 for account ${account.id} clientId=${getClientIdHint(account.client_id)} — recording for circuit breaker`,
+          {
+            storeId,
+            tenantId,
+            merchantAccountId: account.id,
+            clientIdHint: getClientIdHint(account.client_id),
+            error: paypalError
+          }
         )
         await recordPayPalError(account.id, "403_ambiguous", tenantId)
         continue
@@ -546,8 +636,15 @@ export async function POST(req: NextRequest) {
       // ── 429 rate limit → circuit breaker cooldown (NEVER suspend) ────────
       if (isRateLimitError(paypalError)) {
         excludedAccountIds.add(account.id)
-        console.warn(
-          `[checkout] PayPal 429 for account ${account.id} clientId=${getClientIdHint(account.client_id)} — recording for circuit breaker`
+        txLog.warn("checkout.account_retry",
+          `PayPal 429 for account ${account.id} clientId=${getClientIdHint(account.client_id)} — recording for circuit breaker`,
+          {
+            storeId,
+            tenantId,
+            merchantAccountId: account.id,
+            clientIdHint: getClientIdHint(account.client_id),
+            error: paypalError
+          }
         )
         await recordPayPalError(account.id, "429", tenantId)
         continue
@@ -556,17 +653,31 @@ export async function POST(req: NextRequest) {
       // ── 5xx or timeout → circuit breaker cooldown + try next account ─────
       if (paypalError instanceof PayPalApiError && paypalError.statusCode >= 500) {
         excludedAccountIds.add(account.id)
-        console.warn(
-          `[checkout] PayPal 5xx (${paypalError.statusCode}) for account ${account.id} — recording for circuit breaker`
+        txLog.warn("checkout.account_retry",
+          `PayPal 5xx (${paypalError.statusCode}) for account ${account.id} — recording for circuit breaker`,
+          {
+            storeId,
+            tenantId,
+            merchantAccountId: account.id,
+            error: paypalError
+          }
         )
         await recordPayPalError(account.id, "5xx", tenantId)
         continue
       }
 
       // ── Unknown error → log and return 502 (existing behavior) ───────────
-      console.error(
-        `[checkout] PayPal order creation failed for merchant account ${account.id} clientId=${getClientIdHint(account.client_id)} decryption_ok=true proxy=${proxyUrl ? "yes" : "no"} env=${process.env.PAYPAL_ENV === "live" ? "live" : "sandbox"}`,
-        paypalError
+      txLog.error("checkout.paypal_order_failed",
+        `PayPal order creation failed for merchant account ${account.id} clientId=${getClientIdHint(account.client_id)} decryption_ok=true proxy=${proxyUrl ? "yes" : "no"} env=${process.env.PAYPAL_ENV === "live" ? "live" : "sandbox"}`,
+        {
+          storeId,
+          tenantId,
+          merchantAccountId: account.id,
+          proxyEnabled: !!proxyUrl,
+          clientIdHint: getClientIdHint(account.client_id),
+          paypalEnv: process.env.PAYPAL_ENV === "live" ? "live" : "sandbox",
+          error: paypalError
+        }
       )
       return NextResponse.json(
         { error: "Payment provider error. Please try again." },
@@ -574,7 +685,15 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    console.info(`[checkout] PayPal order created: orderId=${paypalOrder.id} intent=${intent} status=${paypalOrder.status}`)
+    txLog.info("checkout.paypal_order_created", `PayPal order created: orderId=${paypalOrder.id} intent=${intent} status=${paypalOrder.status}`, {
+      storeId,
+      tenantId,
+      merchantAccountId: account.id,
+      paypalOrderId: paypalOrder.id,
+      intent,
+      amount,
+      currency,
+    })
     approvalUrl = getApprovalUrl(paypalOrder)
     if (flow === "POPUP_BRIDGE") {
       popupUrl = buildPopupBridgeUrl(account.shield_domain, approvalUrl, transactionId)
@@ -644,7 +763,7 @@ export async function POST(req: NextRequest) {
     // ── ROLLBACK on any unexpected error ─────────────────────────────────────
     // Guarantees: no orphan rows, no phantom volume increases.
     await client.query("ROLLBACK").catch(() => null)
-    console.error("[checkout] Unexpected error:", err)
+    log.error("checkout.unexpected_error", "Unexpected error:", { error: err })
     return NextResponse.json(
       { error: "An unexpected error occurred. Please try again." },
       { status: 500 }
