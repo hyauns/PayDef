@@ -1,7 +1,7 @@
 // Cache invalidation: 2026-04-04-v3
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import useSWR from "swr"
 import { useSession } from "next-auth/react"
 import {
@@ -20,7 +20,11 @@ import {
   XCircle,
   Mail,
   Send,
+  Package,
+  Tag
 } from "lucide-react"
+import { SuperAdminDisplayProfiles } from "@/components/dashboard/SuperAdminDisplayProfiles"
+import { SuperAdminDescriptorTemplates } from "@/components/dashboard/SuperAdminDescriptorTemplates"
 import { DashboardHeader } from "@/components/dashboard/header"
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -120,6 +124,217 @@ function Toast({ type, message, onDismiss }: { type: "success" | "error"; messag
     }`}>
       {type === "success" ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
       {message}
+    </div>
+  )
+}
+
+// ─── Payment Display Profile Component ────────────────────────────────────────
+
+function StorePaymentDisplayProfile({ storeId, storeName }: { storeId: string; storeName: string }) {
+  const { data, isLoading, mutate } = useSWR(`/api/merchant/stores/display-profile?storeId=${storeId}`, fetcher)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
+  const [success, setSuccess] = useState("")
+  
+  // Local form state
+  const [form, setForm] = useState({
+    industryVertical: "generic_ecommerce",
+    publicBrandName: "",
+    descriptorPrefix: "",
+    displayMode: "LEGACY_GENERIC",
+    lineItemPolicy: "SINGLE_SEMANTIC_ITEM",
+  })
+
+  const [previewName, setPreviewName] = useState("")
+  const [previewLoading, setPreviewLoading] = useState(false)
+
+  // Initialize form from DB
+  useEffect(() => {
+    if (data?.rawProfile) {
+      setForm({
+        industryVertical: data.rawProfile.industry_vertical,
+        publicBrandName: data.rawProfile.public_brand_name || "",
+        descriptorPrefix: data.rawProfile.descriptor_prefix || "",
+        displayMode: data.rawProfile.display_mode,
+        lineItemPolicy: data.rawProfile.line_item_policy,
+      })
+    } else if (data?.profile) {
+      setForm(prev => ({
+        ...prev,
+        industryVertical: data.profile.industryVertical,
+        displayMode: data.profile.displayMode,
+        lineItemPolicy: data.profile.lineItemPolicy,
+        publicBrandName: data.profile.publicBrandName || "",
+        descriptorPrefix: data.profile.descriptorPrefix || "",
+      }))
+    }
+  }, [data])
+
+  const loadPreview = useCallback(async (currentForm: typeof form) => {
+    setPreviewLoading(true)
+    try {
+      const res = await fetch("/api/merchant/stores/display-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...currentForm, realItemName: "Sample Product Order" }),
+      })
+      const { previewName } = await res.json()
+      setPreviewName(previewName)
+    } catch {
+      setPreviewName("Error loading preview")
+    } finally {
+      setPreviewLoading(false)
+    }
+  }, [])
+
+  // Debounced preview load
+  useEffect(() => {
+    const t = setTimeout(() => loadPreview(form), 500)
+    return () => clearTimeout(t)
+  }, [form, loadPreview])
+
+  const update = (patch: Partial<typeof form>) => setForm(p => ({ ...p, ...patch }))
+
+  const handleSave = async () => {
+    setSaving(true)
+    setError("")
+    setSuccess("")
+    try {
+      const res = await fetch("/api/merchant/stores/display-profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ storeId, ...form }),
+      })
+      const resData = await res.json()
+      if (res.ok) {
+        setSuccess(resData.message || "Profile saved!")
+        mutate()
+      } else {
+        setError(resData.error || "Failed to save profile")
+      }
+    } catch {
+      setError("Network error")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (isLoading) {
+    return <div className="py-5 flex justify-center"><Loader2 className="w-4 h-4 text-cyan-400 animate-spin" /></div>
+  }
+
+  return (
+    <div className="space-y-4 pt-4 mt-4 border-t border-border">
+      <div className="flex items-center gap-2">
+        <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Payment Display Profile</label>
+        {saving && <Loader2 className="w-3 h-3 text-cyan-400 animate-spin" />}
+      </div>
+      
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Industry Vertical */}
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Industry Vertical</label>
+          <select 
+            value={form.industryVertical} 
+            onChange={(e) => update({ industryVertical: e.target.value })}
+            className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+          >
+            <option value="automotive_tires">Automotive / Tires</option>
+            <option value="electronics">Electronics</option>
+            <option value="home_goods">Home Goods</option>
+            <option value="toys">Toys & Gifts</option>
+            <option value="beauty">Beauty / Fragrance</option>
+            <option value="apparel">Apparel</option>
+            <option value="generic_ecommerce">Generic Ecommerce</option>
+          </select>
+        </div>
+
+        {/* Display Mode */}
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Display Mode</label>
+          <select 
+            value={form.displayMode} 
+            onChange={(e) => update({ displayMode: e.target.value })}
+            className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+          >
+            <option value="BRAND_SEMANTIC">Brand + Semantic Order</option>
+            <option value="SEMANTIC_ORDER">Semantic Order Only</option>
+            <option value="REAL_SANITIZED">Sanitized Real Product Name</option>
+            <option value="LEGACY_GENERIC">Legacy Generic</option>
+          </select>
+        </div>
+
+        {/* Public Brand Name */}
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Public Brand Name</label>
+          <input 
+            value={form.publicBrandName} 
+            onChange={(e) => update({ publicBrandName: e.target.value })}
+            placeholder="e.g. TireVix"
+            className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+          />
+        </div>
+
+        {/* Descriptor Prefix */}
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Descriptor Prefix</label>
+          <input 
+            value={form.descriptorPrefix} 
+            onChange={(e) => update({ descriptorPrefix: e.target.value })}
+            placeholder="e.g. TireVix Auto"
+            className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+          />
+        </div>
+
+        {/* Line Item Policy */}
+        <div className="space-y-1.5 sm:col-span-2">
+          <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Line Item Policy</label>
+          <select 
+            value={form.lineItemPolicy} 
+            onChange={(e) => update({ lineItemPolicy: e.target.value })}
+            className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+          >
+            <option value="SINGLE_SEMANTIC_ITEM">Single Order Summary</option>
+            <option value="REAL_CART_ITEMS">Real Cart Items</option>
+            <option value="LEGACY_RANDOM_SPLIT">Legacy Random Split</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Warnings */}
+      {form.displayMode === "LEGACY_GENERIC" && form.industryVertical !== "generic_ecommerce" && (
+        <div className="bg-amber-400/10 border border-amber-400/20 text-amber-400 text-[11px] font-mono px-3 py-2 rounded-md">
+          Generic service descriptors may confuse buyers. Recommended: Brand + Semantic Order.
+        </div>
+      )}
+      {form.lineItemPolicy === "LEGACY_RANDOM_SPLIT" && (
+        <div className="bg-amber-400/10 border border-amber-400/20 text-amber-400 text-[11px] font-mono px-3 py-2 rounded-md">
+          This may create multiple PayPal line items that do not match the buyer&apos;s cart. Recommended: Single Order Summary.
+        </div>
+      )}
+
+      {/* Live Preview Box */}
+      <div className="bg-secondary/30 border border-border rounded-md p-3 space-y-2 mt-2">
+        <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Live Preview</p>
+        <div className="flex flex-col gap-1 text-[11px] font-mono text-foreground">
+          <p>Buyer may see: <span className="text-cyan-400 font-semibold">{previewLoading ? "Loading..." : previewName}</span></p>
+          <p className="text-muted-foreground mt-1">Your store receipt will still show the real product details.</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 pt-2">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className={`text-xs font-mono px-4 py-2 rounded-md transition-colors ${
+            saving ? "bg-cyan-400/50 text-background" : "border border-cyan-400 text-cyan-400 hover:bg-cyan-400/10"
+          }`}
+        >
+          {saving ? "Saving..." : "Save Profile"}
+        </button>
+        {success && <span className="text-[11px] font-mono text-emerald-400 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> {success}</span>}
+        {error && <span className="text-[11px] font-mono text-red-400 flex items-center gap-1"><XCircle className="w-3 h-3" /> {error}</span>}
+      </div>
     </div>
   )
 }
@@ -664,6 +879,8 @@ export default function SettingsPage() {
                       ))}
                     </div>
                   </div>
+                  
+                  <StorePaymentDisplayProfile storeId={store.id} storeName={store.name} />
                 </div>
               </div>
             ))
@@ -981,6 +1198,42 @@ export default function SettingsPage() {
                 <div className="h-4 w-3/4 bg-secondary rounded" />
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Super Admin Payment Display Profiles */}
+        {!settingsLoading && (
+          <div className={SECTION_CLASSES}>
+            <div className={SECTION_HEADER}>
+              <div className="w-6 h-6 rounded bg-violet-400/10 border border-violet-400/20 flex items-center justify-center">
+                <Package className="w-3.5 h-3.5 text-violet-400" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Payment Display Profiles</p>
+                <p className="text-[11px] text-muted-foreground">Manage descriptor policies across all tenants and stores</p>
+              </div>
+            </div>
+            <div className={SECTION_BODY}>
+              <SuperAdminDisplayProfiles />
+            </div>
+          </div>
+        )}
+
+        {/* Super Admin Descriptor Templates */}
+        {!settingsLoading && (
+          <div className={SECTION_CLASSES}>
+            <div className={SECTION_HEADER}>
+              <div className="w-6 h-6 rounded bg-cyan-400/10 border border-cyan-400/20 flex items-center justify-center">
+                <Tag className="w-3.5 h-3.5 text-cyan-400" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Descriptor Templates</p>
+                <p className="text-[11px] text-muted-foreground">Manage global descriptor text pools by industry</p>
+              </div>
+            </div>
+            <div className={SECTION_BODY}>
+              <SuperAdminDescriptorTemplates />
+            </div>
           </div>
         )}
 

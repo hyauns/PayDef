@@ -657,7 +657,7 @@ function SlideOver({ merchant, verifiedPlatformDomains, onClose, onSave }: Slide
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Package className="w-3.5 h-3.5 text-violet-400" />
-                <p className="text-xs font-mono font-semibold text-foreground">Item Masking</p>
+                <p className="text-xs font-mono font-semibold text-foreground">Legacy Masking</p>
               </div>
               {/* Toggle switch */}
               <button
@@ -674,16 +674,15 @@ function SlideOver({ merchant, verifiedPlatformDomains, onClose, onSave }: Slide
               </button>
             </div>
 
-            <p className="text-[11px] font-mono text-muted-foreground">
-              When enabled, PayPal receipts and checkout pages will show a generic product name
-              instead of your actual item description, reducing payment disputes.
+            <p className="text-[11px] font-mono text-amber-400">
+              Deprecated. New stores should use Payment Display Profiles. This legacy setting only controls the old fake_product_name override.
             </p>
 
             {draft.itemMasking && (
               <div className="space-y-3">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                    Fake Product Name
+                    Legacy Fake Product Name
                   </label>
                   <input
                     value={draft.fakeProductName}
@@ -1087,7 +1086,7 @@ function AddMerchantModal({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Package className="w-3.5 h-3.5 text-violet-400" />
-                  <span className="text-xs font-mono font-semibold text-foreground">Item Masking</span>
+                  <span className="text-xs font-mono font-semibold text-foreground">Legacy Masking</span>
                 </div>
                 <button
                   onClick={() => update({ itemMasking: !form.itemMasking })}
@@ -1100,7 +1099,8 @@ function AddMerchantModal({
               </div>
               {form.itemMasking && (
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Fake Product Name</label>
+                  <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Legacy Fake Product Name</label>
+                  <p className="text-[9px] font-mono text-amber-400 pb-1">Deprecated. New stores should use Payment Display Profiles.</p>
                   <input
                     value={form.fakeProductName}
                     onChange={(e) => update({ fakeProductName: e.target.value })}

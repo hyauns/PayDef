@@ -47,6 +47,7 @@ import {
 import { sendTelegramMessage } from "@/lib/telegram"
 import { recordPayPalError, filterOpenCircuits } from "@/lib/circuit-breaker"
 import { maskItemName, buildShieldUrls } from "@/lib/masking"
+import { resolvePaymentDisplayProfile, buildPaymentDisplayName } from "@/lib/payment-display-profiles"
 import {
   buildPopupBridgeUrl,
   getCheckoutPreferences,
@@ -262,7 +263,7 @@ export async function POST(req: NextRequest) {
   // ── Step 3. Resolve store + verify API key (read-only, no mutation) ────────
   const sql = getSql()
   const storeRows = (await sql`
-    SELECT id, tenant_id, api_key_hash, is_active,
+    SELECT id, name, tenant_id, api_key_hash, is_active,
            COALESCE(capture_mode, 'INSTANT') AS capture_mode,
            checkout_flow,
            success_return_url,
@@ -455,12 +456,6 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // ── Step 8. Mask item name + build shield URLs ───────────────────────────
-    // Use per-account fake product name if item masking is enabled
-    const maskedName = account.item_masking
-      ? maskItemName(itemName, account.fake_product_name)
-      : maskItemName(itemName)
-
     // Generate a provisional transaction ID for idempotency + shield URLs
     const txIdRow = await client.query<{ id: string }>(
       "SELECT gen_random_uuid()::text AS id"
@@ -468,6 +463,48 @@ export async function POST(req: NextRequest) {
     transactionId = txIdRow.rows[0].id
 
     const txLog = log.child({ transactionId, traceId: transactionId })
+
+    // ── Step 8. Mask item name + build shield URLs ───────────────────────────
+    
+    // PAYMENT_DISPLAY_PROFILE_MODE integration (Phase 2A)
+    const profileMode = process.env.PAYMENT_DISPLAY_PROFILE_MODE || "shadow"
+    
+    const profile = await resolvePaymentDisplayProfile({
+      tenantId,
+      storeId,
+      merchantAccountId: account.id,
+      storeName: store.name,
+    })
+    
+    const legacyMasker = (realName: string) => account.item_masking 
+      ? maskItemName(realName, account.fake_product_name)
+      : maskItemName(realName)
+
+    const profileDisplayName = buildPaymentDisplayName({
+      profile,
+      realItemName: itemName,
+      seed: transactionId,
+      legacyMasker
+    })
+
+    const maskedName = profileMode === "enforce" 
+      ? profileDisplayName 
+      : legacyMasker(itemName)
+
+    txLog.info("payment_display_profile.resolved",
+      `Payment Display Profile resolved source=${profile.source} mode=${profileMode}`,
+      {
+        storeId,
+        tenantId,
+        merchantAccountId: account.id,
+        profileId: profile.profileId,
+        source: profile.source,
+        industryVertical: profile.industryVertical,
+        displayMode: profile.displayMode,
+        lineItemPolicy: profile.lineItemPolicy,
+        mode: profileMode,
+      }
+    )
 
     const executeToken = generateExecuteToken(transactionId)
     const { returnUrl, cancelUrl } = buildShieldUrls(
