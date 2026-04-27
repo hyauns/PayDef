@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
   if (!(await assertMerchantCanAccessStore(session, storeId, sql))) {
     moduleLog.warn("payment_display_profile.ownership_denied", "GET denied", {
       storeId,
-      userId: session.user.id || session.user.email,
+      userId: session.user.userId || session.user.email,
       reason: "Foreign store GET access denied"
     })
     return NextResponse.json({ error: "Store not found or access denied" }, { status: 404 })
@@ -133,7 +133,7 @@ export async function PATCH(req: NextRequest) {
   if (!(await assertMerchantCanAccessStore(session, storeId, sql))) {
     moduleLog.warn("payment_display_profile.ownership_denied", "PATCH denied", {
       storeId,
-      userId: session.user.id || session.user.email,
+      userId: session.user.userId || session.user.email,
       reason: "Foreign store PATCH update denied"
     })
     return NextResponse.json({ error: "Store not found or access denied" }, { status: 404 })
@@ -216,7 +216,7 @@ export async function POST(req: NextRequest) {
   if (!(await assertMerchantCanAccessStore(session, storeId, sql))) {
     moduleLog.warn("payment_display_profile.ownership_denied", "POST preview denied", {
       storeId,
-      userId: session.user.id || session.user.email,
+      userId: session.user.userId || session.user.email,
       reason: "Foreign store POST preview denied"
     })
     return NextResponse.json({ error: "Store not found or access denied" }, { status: 404 })
