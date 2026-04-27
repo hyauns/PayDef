@@ -251,3 +251,168 @@ export async function resolvePaymentDisplayProfile(params: {
     descriptorPool: INDUSTRY_DESCRIPTOR_POOLS.generic_ecommerce,
   }
 }
+
+// ─── Phase 3: Profile-Driven PayPal Line Item Builder ────────────────────────
+
+export interface CheckoutItem {
+  name:     string
+  quantity: string
+  unitAmount: {
+    currencyCode: string
+    value:        string // 2-decimal string
+  }
+}
+
+export interface PayPalLineItem {
+  name:     string
+  quantity: string
+  unitAmount: {
+    currencyCode: string
+    value:        string
+  }
+}
+
+export interface LineItemBuildResult {
+  /** Legacy items (from existing masking) — always populated */
+  legacyItems: PayPalLineItem[]
+  /** Profile-driven items — always populated for comparison logging */
+  profileItems: PayPalLineItem[]
+  /** The items that should actually be sent to PayPal */
+  selectedItems: PayPalLineItem[]
+  /** Which policy was applied */
+  lineItemPolicy: LineItemPolicy
+  /** Whether the amount invariant passed for profileItems */
+  amountInvariantPassed: boolean
+  /** Whether randomization should be skipped by the PayPal payload builder */
+  skipRandomization: boolean
+}
+
+/**
+ * Builds PayPal line items according to the store's Payment Display Profile.
+ *
+ * INVARIANT: The sum of selectedItems must EXACTLY equal checkoutTotal.
+ * All arithmetic is done in integer cents to avoid floating-point drift.
+ *
+ * Shadow mode: selectedItems = legacyItems (no change to buyer experience).
+ * Enforce mode: selectedItems = profileItems (uses lineItemPolicy).
+ */
+export function buildPayPalLineItemsForProfile(params: {
+  profile: ResolvedPaymentDisplayProfile
+  originalItems: CheckoutItem[]
+  checkoutTotal: string  // 2-decimal string e.g. "302.41"
+  currency: string
+  transactionId: string
+  mode: "shadow" | "enforce"
+  legacyMasker: (realName: string) => string
+}): LineItemBuildResult {
+  const { profile, originalItems, checkoutTotal, currency, transactionId, mode, legacyMasker } = params
+  const totalCents = Math.round(parseFloat(checkoutTotal) * 100)
+
+  // ── Build legacy items (always, for shadow mode and comparison) ───────────
+  const legacyItems: PayPalLineItem[] = originalItems.map(item => ({
+    name:     legacyMasker(item.name),
+    quantity: item.quantity,
+    unitAmount: {
+      currencyCode: item.unitAmount.currencyCode,
+      value:        item.unitAmount.value,
+    },
+  }))
+
+  // ── Build profile-driven items based on lineItemPolicy ────────────────────
+  let profileItems: PayPalLineItem[]
+  let amountInvariantPassed = true
+
+  switch (profile.lineItemPolicy) {
+    case "SINGLE_SEMANTIC_ITEM": {
+      // Collapse everything into one semantic line item
+      const displayName = buildPaymentDisplayName({
+        profile,
+        realItemName: originalItems[0]?.name || "Product Order",
+        seed: transactionId,
+        legacyMasker,
+      })
+      profileItems = [{
+        name:     displayName,
+        quantity: "1",
+        unitAmount: { currencyCode: currency, value: checkoutTotal },
+      }]
+      break
+    }
+
+    case "REAL_CART_ITEMS": {
+      // Preserve real cart item count — use profile display names but keep quantities/amounts
+      profileItems = originalItems.map((item, i) => {
+        const displayName = buildPaymentDisplayName({
+          profile,
+          realItemName: item.name,
+          seed: `${transactionId}:item:${i}`,
+          legacyMasker,
+        })
+        return {
+          name:     displayName,
+          quantity: item.quantity,
+          unitAmount: {
+            currencyCode: item.unitAmount.currencyCode,
+            value:        item.unitAmount.value,
+          },
+        }
+      })
+
+      // Fix rounding drift: adjust the last item so total matches exactly
+      const sumCents = profileItems.reduce(
+        (s, it) => s + Math.round(parseFloat(it.unitAmount.value) * 100) * parseInt(it.quantity, 10),
+        0
+      )
+      const driftCents = totalCents - sumCents
+      if (driftCents !== 0 && profileItems.length > 0) {
+        const lastItem = profileItems[profileItems.length - 1]
+        const lastCents = Math.round(parseFloat(lastItem.unitAmount.value) * 100) + driftCents
+        if (lastCents > 0) {
+          lastItem.unitAmount.value = (lastCents / 100).toFixed(2)
+        }
+      }
+      break
+    }
+
+    case "LEGACY_RANDOM_SPLIT":
+    default: {
+      // Legacy: use legacy items as-is — randomizePayload will handle splitting
+      profileItems = legacyItems.map(item => ({ ...item }))
+      break
+    }
+  }
+
+  // ── Amount invariant check (integer cents) ────────────────────────────────
+  const profileSumCents = profileItems.reduce(
+    (s, it) => s + Math.round(parseFloat(it.unitAmount.value) * 100) * parseInt(it.quantity, 10),
+    0
+  )
+  if (profileSumCents !== totalCents) {
+    amountInvariantPassed = false
+    // Fallback to SINGLE_SEMANTIC_ITEM if invariant fails
+    const fallbackName = buildPaymentDisplayName({
+      profile,
+      realItemName: originalItems[0]?.name || "Product Order",
+      seed: transactionId,
+      legacyMasker,
+    })
+    profileItems = [{
+      name:     fallbackName,
+      quantity: "1",
+      unitAmount: { currencyCode: currency, value: checkoutTotal },
+    }]
+  }
+
+  // ── Select items based on mode ────────────────────────────────────────────
+  const isEnforce = mode === "enforce"
+  const useLegacyRandomization = !isEnforce || profile.lineItemPolicy === "LEGACY_RANDOM_SPLIT"
+
+  return {
+    legacyItems,
+    profileItems,
+    selectedItems: isEnforce ? profileItems : legacyItems,
+    lineItemPolicy: profile.lineItemPolicy,
+    amountInvariantPassed,
+    skipRandomization: isEnforce && profile.lineItemPolicy !== "LEGACY_RANDOM_SPLIT",
+  }
+}

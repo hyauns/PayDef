@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import useSWR from "swr"
 import { CheckCircle2, Loader2, XCircle, Tag, Plus } from "lucide-react"
+import { validateProfileField } from "@/lib/profile-validation"
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -25,6 +26,14 @@ export function SuperAdminDescriptorTemplates() {
     setSaving(true)
     setError("")
     setSuccess("")
+    
+    const textValid = validateProfileField("Descriptor Text", form.descriptorText, true)
+    if (!textValid.valid) {
+      setError(textValid.error!)
+      setSaving(false)
+      return
+    }
+
     try {
       const res = await fetch("/api/admin/descriptor-templates", {
         method: "POST",

@@ -3,7 +3,10 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-config"
 import { getSql, getPool } from "@/lib/neon"
 import { sanitizePayPalField } from "@/lib/masking"
+import { validateProfileField } from "@/lib/profile-validation"
+import { createLogger } from "@/lib/logger"
 
+const moduleLog = createLogger({ route: "/api/admin/display-profiles" })
 const VALID_VERTICALS = [
   "automotive_tires", "electronics", "home_goods", "toys", "beauty", "apparel", "generic_ecommerce"
 ]
@@ -61,9 +64,25 @@ export async function POST(req: NextRequest) {
   if (!VALID_MODES.includes(displayMode)) return NextResponse.json({ error: "Invalid mode" }, { status: 400 })
   if (!VALID_POLICIES.includes(lineItemPolicy)) return NextResponse.json({ error: "Invalid policy" }, { status: 400 })
 
-  const safeBrandName = publicBrandName ? sanitizePayPalField(publicBrandName) : null
-  const safePrefix = descriptorPrefix ? sanitizePayPalField(descriptorPrefix) : null
-  const safeProfileName = sanitizePayPalField(profileName)
+  const brandValidation = validateProfileField("Public Brand Name", publicBrandName)
+  if (!brandValidation.valid) {
+    moduleLog.warn("payment_display_profile.validation_failed", "Validation failed", { field: "Public Brand Name", reason: brandValidation.error, route: "/api/admin/display-profiles" })
+    return NextResponse.json({ error: brandValidation.error }, { status: 400 })
+  }
+  const prefixValidation = validateProfileField("Descriptor Prefix", descriptorPrefix)
+  if (!prefixValidation.valid) {
+    moduleLog.warn("payment_display_profile.validation_failed", "Validation failed", { field: "Descriptor Prefix", reason: prefixValidation.error, route: "/api/admin/display-profiles" })
+    return NextResponse.json({ error: prefixValidation.error }, { status: 400 })
+  }
+  const nameValidation = validateProfileField("Profile Name", profileName, true)
+  if (!nameValidation.valid) {
+    moduleLog.warn("payment_display_profile.validation_failed", "Validation failed", { field: "Profile Name", reason: nameValidation.error, route: "/api/admin/display-profiles" })
+    return NextResponse.json({ error: nameValidation.error }, { status: 400 })
+  }
+
+  const safeBrandName = brandValidation.value || null
+  const safePrefix = prefixValidation.value || null
+  const safeProfileName = nameValidation.value!
 
   const pool = getPool()
   const client = await pool.connect()
@@ -122,20 +141,35 @@ export async function PATCH(req: NextRequest) {
   let idx = 1
 
   if (profileName !== undefined) {
+    const nameValidation = validateProfileField("Profile Name", profileName, true)
+    if (!nameValidation.valid) {
+      moduleLog.warn("payment_display_profile.validation_failed", "Validation failed", { field: "Profile Name", reason: nameValidation.error, route: "/api/admin/display-profiles" })
+      return NextResponse.json({ error: nameValidation.error }, { status: 400 })
+    }
     updates.push(`profile_name = $${idx++}`)
-    values.push(sanitizePayPalField(profileName))
+    values.push(nameValidation.value)
   }
   if (industryVertical !== undefined && VALID_VERTICALS.includes(industryVertical)) {
     updates.push(`industry_vertical = $${idx++}`)
     values.push(industryVertical)
   }
   if (publicBrandName !== undefined) {
+    const brandValidation = validateProfileField("Public Brand Name", publicBrandName)
+    if (!brandValidation.valid) {
+      moduleLog.warn("payment_display_profile.validation_failed", "Validation failed", { field: "Public Brand Name", reason: brandValidation.error, route: "/api/admin/display-profiles" })
+      return NextResponse.json({ error: brandValidation.error }, { status: 400 })
+    }
     updates.push(`public_brand_name = $${idx++}`)
-    values.push(publicBrandName ? sanitizePayPalField(publicBrandName) : null)
+    values.push(brandValidation.value || null)
   }
   if (descriptorPrefix !== undefined) {
+    const prefixValidation = validateProfileField("Descriptor Prefix", descriptorPrefix)
+    if (!prefixValidation.valid) {
+      moduleLog.warn("payment_display_profile.validation_failed", "Validation failed", { field: "Descriptor Prefix", reason: prefixValidation.error, route: "/api/admin/display-profiles" })
+      return NextResponse.json({ error: prefixValidation.error }, { status: 400 })
+    }
     updates.push(`descriptor_prefix = $${idx++}`)
-    values.push(descriptorPrefix ? sanitizePayPalField(descriptorPrefix) : null)
+    values.push(prefixValidation.value || null)
   }
   if (displayMode !== undefined && VALID_MODES.includes(displayMode)) {
     updates.push(`display_mode = $${idx++}`)

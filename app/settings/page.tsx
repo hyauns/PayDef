@@ -23,6 +23,7 @@ import {
   Package,
   Tag
 } from "lucide-react"
+import { validateProfileField } from "@/lib/profile-validation"
 import { SuperAdminDisplayProfiles } from "@/components/dashboard/SuperAdminDisplayProfiles"
 import { SuperAdminDescriptorTemplates } from "@/components/dashboard/SuperAdminDescriptorTemplates"
 import { DashboardHeader } from "@/components/dashboard/header"
@@ -141,7 +142,7 @@ function StorePaymentDisplayProfile({ storeId, storeName }: { storeId: string; s
     industryVertical: "generic_ecommerce",
     publicBrandName: "",
     descriptorPrefix: "",
-    displayMode: "LEGACY_GENERIC",
+    displayMode: "BRAND_SEMANTIC",
     lineItemPolicy: "SINGLE_SEMANTIC_ITEM",
   })
 
@@ -171,21 +172,34 @@ function StorePaymentDisplayProfile({ storeId, storeName }: { storeId: string; s
   }, [data])
 
   const loadPreview = useCallback(async (currentForm: typeof form) => {
+    const brandValid = validateProfileField("Public Brand Name", currentForm.publicBrandName)
+    const prefixValid = validateProfileField("Descriptor Prefix", currentForm.descriptorPrefix)
+    
+    if (!brandValid.valid || !prefixValid.valid) {
+      setPreviewName("Invalid input detected")
+      return
+    }
+
     setPreviewLoading(true)
     try {
       const res = await fetch("/api/merchant/stores/display-profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...currentForm, realItemName: "Sample Product Order" }),
+        body: JSON.stringify({ storeId, ...currentForm, realItemName: "Sample Product Order" }),
       })
-      const { previewName } = await res.json()
-      setPreviewName(previewName)
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        setPreviewName(errData.error || "Preview unavailable")
+        return
+      }
+      const data = await res.json()
+      setPreviewName(data.previewName || "Preview unavailable")
     } catch {
       setPreviewName("Error loading preview")
     } finally {
       setPreviewLoading(false)
     }
-  }, [])
+  }, [storeId])
 
   // Debounced preview load
   useEffect(() => {
@@ -199,6 +213,13 @@ function StorePaymentDisplayProfile({ storeId, storeName }: { storeId: string; s
     setSaving(true)
     setError("")
     setSuccess("")
+    
+    const brandValid = validateProfileField("Public Brand Name", form.publicBrandName)
+    const prefixValid = validateProfileField("Descriptor Prefix", form.descriptorPrefix)
+    
+    if (!brandValid.valid) { setError(brandValid.error!); setSaving(false); return; }
+    if (!prefixValid.valid) { setError(prefixValid.error!); setSaving(false); return; }
+
     try {
       const res = await fetch("/api/merchant/stores/display-profile", {
         method: "PATCH",
@@ -260,7 +281,7 @@ function StorePaymentDisplayProfile({ storeId, storeName }: { storeId: string; s
             <option value="BRAND_SEMANTIC">Brand + Semantic Order</option>
             <option value="SEMANTIC_ORDER">Semantic Order Only</option>
             <option value="REAL_SANITIZED">Sanitized Real Product Name</option>
-            <option value="LEGACY_GENERIC">Legacy Generic</option>
+            <option value="LEGACY_GENERIC">Deprecated: Legacy Generic</option>
           </select>
         </div>
 

@@ -3,7 +3,10 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-config"
 import { getSql } from "@/lib/neon"
 import { sanitizePayPalField } from "@/lib/masking"
+import { validateProfileField } from "@/lib/profile-validation"
+import { createLogger } from "@/lib/logger"
 
+const moduleLog = createLogger({ route: "/api/admin/descriptor-templates" })
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user || session.user.role !== "SUPER_ADMIN") {
@@ -53,8 +56,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 })
   }
 
-  const safeText = sanitizePayPalField(descriptorText)
-  if (!safeText) return NextResponse.json({ error: "Invalid descriptor" }, { status: 400 })
+  const textValidation = validateProfileField("Descriptor Text", descriptorText, true)
+  if (!textValidation.valid) {
+    moduleLog.warn("payment_display_profile.validation_failed", "Validation failed", { field: "Descriptor Text", reason: textValidation.error, route: "/api/admin/descriptor-templates" })
+    return NextResponse.json({ error: textValidation.error }, { status: 400 })
+  }
+
+  const safeText = textValidation.value!
 
   const sql = getSql()
   try {

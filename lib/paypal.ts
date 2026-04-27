@@ -143,6 +143,7 @@ export interface CreateOrderParams {
   merchantAccId?: string       // optional — used to seed brand name selection
   proxyUrl?:     string        // optional — HTTP/HTTPS/SOCKS5 proxy for this account
   intent?:       "CAPTURE" | "AUTHORIZE"  // default: CAPTURE
+  skipRandomization?: boolean  // Phase 3: skip behavioral randomization for profile-driven items
 }
 
 export class PayPalApiError extends Error {
@@ -322,14 +323,41 @@ function buildOrderPayload(p: CreateOrderParams) {
   const safeDescription = sanitizePayPalField(maskDescription(p.customId))
 
   // ── Behavioral Randomization ────────────────────────────────────────────
-  // Applies amount jitter, category rotation, and item splitting.
-  // The returned items sum EXACTLY to p.amount — the total never changes.
-  const randomized = randomizePayload(
-    p.amount,
-    p.currencyCode,
-    p.items,
-    p.customId // transaction ID seeds the randomization
-  )
+  // Phase 3: when skipRandomization is true (profile-driven SINGLE_SEMANTIC_ITEM
+  // or REAL_CART_ITEMS), items are passed through without splitting/jitter.
+  // LEGACY_RANDOM_SPLIT still uses the old randomizePayload path.
+  let finalItems: { name: string; quantity: string; unitAmount: { currencyCode: string; value: string }; category?: string }[]
+  let itemTotal: string
+  let timeJitterMs = 0
+
+  if (p.skipRandomization) {
+    // Profile-driven: pass items through as-is (already built by buildPayPalLineItemsForProfile)
+    finalItems = p.items.map(item => ({
+      name:       item.name,
+      quantity:   item.quantity,
+      unitAmount: item.unitAmount,
+      category:   "PHYSICAL_GOODS" as const,
+    }))
+    // item_total = sum of all items
+    const totalCents = finalItems.reduce(
+      (s, it) => s + Math.round(parseFloat(it.unitAmount.value) * 100) * parseInt(it.quantity, 10),
+      0
+    )
+    itemTotal = (totalCents / 100).toFixed(2)
+    timeJitterMs = 0 // No time jitter for clean profile-driven orders
+  } else {
+    // Legacy: applies amount jitter, category rotation, and item splitting.
+    // The returned items sum EXACTLY to p.amount — the total never changes.
+    const randomized = randomizePayload(
+      p.amount,
+      p.currencyCode,
+      p.items,
+      p.customId // transaction ID seeds the randomization
+    )
+    finalItems = randomized.items
+    itemTotal = randomized.itemTotal
+    timeJitterMs = randomized.timeJitterMs
+  }
 
   return {
     intent: p.intent ?? "CAPTURE",
@@ -343,18 +371,18 @@ function buildOrderPayload(p: CreateOrderParams) {
           breakdown: {
             item_total: {
               currency_code: p.currencyCode,
-              value:         randomized.itemTotal,
+              value:         itemTotal,
             },
           },
         },
-        items: randomized.items.map((item) => ({
+        items: finalItems.map((item) => ({
           name:     sanitizePayPalField(item.name),
           quantity: item.quantity,
           unit_amount: {
             currency_code: item.unitAmount.currencyCode,
             value:         item.unitAmount.value,
           },
-          category: item.category,
+          category: item.category || "PHYSICAL_GOODS",
         })),
       },
     ],
@@ -367,7 +395,7 @@ function buildOrderPayload(p: CreateOrderParams) {
       landing_page:        "LOGIN",
     },
     // Expose time jitter to the caller for pre-API delay
-    __timeJitterMs: randomized.timeJitterMs,
+    __timeJitterMs: timeJitterMs,
   }
 }
 

@@ -47,7 +47,7 @@ import {
 import { sendTelegramMessage } from "@/lib/telegram"
 import { recordPayPalError, filterOpenCircuits } from "@/lib/circuit-breaker"
 import { maskItemName, buildShieldUrls } from "@/lib/masking"
-import { resolvePaymentDisplayProfile, buildPaymentDisplayName } from "@/lib/payment-display-profiles"
+import { resolvePaymentDisplayProfile, buildPaymentDisplayName, buildPayPalLineItemsForProfile } from "@/lib/payment-display-profiles"
 import {
   buildPopupBridgeUrl,
   getCheckoutPreferences,
@@ -467,8 +467,8 @@ export async function POST(req: NextRequest) {
 
     // ── Step 8. Mask item name + build shield URLs ───────────────────────────
     
-    // PAYMENT_DISPLAY_PROFILE_MODE integration (Phase 2A)
-    const profileMode = process.env.PAYMENT_DISPLAY_PROFILE_MODE || "shadow"
+    // PAYMENT_DISPLAY_PROFILE_MODE integration (Phase 2A + Phase 3)
+    const profileMode = (process.env.PAYMENT_DISPLAY_PROFILE_MODE || "shadow") as "shadow" | "enforce"
     
     const profile = await resolvePaymentDisplayProfile({
       tenantId,
@@ -481,16 +481,20 @@ export async function POST(req: NextRequest) {
       ? maskItemName(realName, account.fake_product_name)
       : maskItemName(realName)
 
-    const profileDisplayName = buildPaymentDisplayName({
+    // Phase 3: Build profile-driven line items
+    const lineItemResult = buildPayPalLineItemsForProfile({
       profile,
-      realItemName: itemName,
-      seed: transactionId,
-      legacyMasker
+      originalItems: [{
+        name:     itemName,
+        quantity: "1",
+        unitAmount: { currencyCode: currency, value: amountStr },
+      }],
+      checkoutTotal: amountStr,
+      currency,
+      transactionId,
+      mode: profileMode,
+      legacyMasker,
     })
-
-    const maskedName = profileMode === "enforce" 
-      ? profileDisplayName 
-      : legacyMasker(itemName)
 
     txLog.info("payment_display_profile.resolved",
       `Payment Display Profile resolved source=${profile.source} mode=${profileMode}`,
@@ -506,6 +510,38 @@ export async function POST(req: NextRequest) {
         mode: profileMode,
       }
     )
+
+    // Phase 3: Structured log for line item build result
+    txLog.info("payment_display_profile.line_items_built",
+      `Line items built: policy=${lineItemResult.lineItemPolicy} mode=${profileMode} invariant=${lineItemResult.amountInvariantPassed}`,
+      {
+        mode: profileMode,
+        profileId: profile.profileId,
+        source: profile.source,
+        industryVertical: profile.industryVertical,
+        displayMode: profile.displayMode,
+        lineItemPolicy: lineItemResult.lineItemPolicy,
+        legacyItemCount: lineItemResult.legacyItems.length,
+        profileItemCount: lineItemResult.profileItems.length,
+        selectedItemCount: lineItemResult.selectedItems.length,
+        amountInvariantPassed: lineItemResult.amountInvariantPassed,
+        skipRandomization: lineItemResult.skipRandomization,
+      }
+    )
+
+    // Log invariant failure as a warning (non-blocking — fallback already applied)
+    if (!lineItemResult.amountInvariantPassed) {
+      txLog.warn("payment_display_profile.line_item_invariant_failed",
+        `Amount invariant failed for policy=${lineItemResult.lineItemPolicy} — fell back to SINGLE_SEMANTIC_ITEM`,
+        {
+          storeId,
+          tenantId,
+          merchantAccountId: account.id,
+          lineItemPolicy: lineItemResult.lineItemPolicy,
+          profileId: profile.profileId,
+        }
+      )
+    }
 
     const executeToken = generateExecuteToken(transactionId)
     const { returnUrl, cancelUrl } = buildShieldUrls(
@@ -595,18 +631,13 @@ export async function POST(req: NextRequest) {
         amount:        amountStr,
         currencyCode:  currency,
         intent,
-        items: [
-          {
-            name:       maskedName,
-            quantity:   "1",
-            unitAmount: { currencyCode: currency, value: amountStr },
-          },
-        ],
+        items: lineItemResult.selectedItems,
         returnUrl,
         cancelUrl,
         customId:      transactionId,
         merchantAccId: account.id,
         proxyUrl,
+        skipRandomization: lineItemResult.skipRandomization,
       })
     } catch (paypalError) {
       await client.query("ROLLBACK")
