@@ -322,6 +322,14 @@ export async function POST(req: NextRequest) {
     intent,
   })
 
+  // ── Pre-resolve Payment Display Profile to guide account selection (Phase 4)
+  const preliminaryProfile = await resolvePaymentDisplayProfile({
+    tenantId,
+    storeId,
+    storeName: store.name,
+  })
+  const preferredProfileId = preliminaryProfile.profileId
+
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   //  ATOMIC TRANSACTION
   //  All state-mutating operations are wrapped in a single BEGIN / COMMIT.
@@ -356,6 +364,7 @@ export async function POST(req: NextRequest) {
               ma.current_volume, ma.priority, ma.status,
               ma.warmup_started_at,
               ma.item_masking, ma.fake_product_name,
+              ma.display_profile_id,
               COALESCE(ho.cnt, 0)::TEXT AS recent_order_count
        FROM   merchant_accounts ma
        LEFT JOIN (
@@ -397,8 +406,36 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // ── Phase 4: Payment Display Profile Consistency Filter ────────────────
+    let matchedAccounts = eligible
+    let usedProfileMatchedAccounts = false
+    let fallbackReason = "no_profile_requested"
+    let matchingAccountCount = 0
+
+    if (preferredProfileId) {
+      const matched = eligible.filter(a => a.display_profile_id === preferredProfileId)
+      matchingAccountCount = matched.length
+      if (matched.length > 0) {
+        matchedAccounts = matched
+        usedProfileMatchedAccounts = true
+        fallbackReason = "none"
+      } else {
+        fallbackReason = "no_matched_accounts_available"
+      }
+      
+      log.info("payment_display_profile.account_filter", "Account filtered by profile preference", {
+        tenantId,
+        storeId,
+        resolvedProfileId: preferredProfileId,
+        eligibleAccountCount: eligible.length,
+        matchingAccountCount,
+        usedProfileMatchedAccounts,
+        fallbackReason,
+      })
+    }
+
     // ── Circuit breaker filter (shadow/enforce) ──────────────────────────────
-    const circuitFiltered = await filterOpenCircuits(eligible, storeId)
+    const circuitFiltered = await filterOpenCircuits(matchedAccounts, storeId)
 
     const candidate = await selectByStrategy(circuitFiltered, tenantId, getSql())
 
@@ -412,7 +449,8 @@ export async function POST(req: NextRequest) {
               daily_limit, soft_limit, daily_limit_override,
               current_volume, priority, status,
               warmup_started_at,
-              item_masking, fake_product_name
+              item_masking, fake_product_name,
+              display_profile_id
        FROM   merchant_accounts
        WHERE  id = $1
        FOR UPDATE`,
@@ -544,8 +582,45 @@ export async function POST(req: NextRequest) {
     }
 
     const executeToken = generateExecuteToken(transactionId)
+    
+    // ── Phase 4: Shield domain consistency ──────────────────────────────────
+    let finalShieldDomain = account.shield_domain
+    let shieldProfileMatched = false
+    let shieldFallbackUsed = true
+    let shieldDomainId: string | undefined
+
+    if (preferredProfileId) {
+      const sdRows = await client.query<{ id: string, domain: string }>(
+        `SELECT id, domain 
+         FROM shield_domains 
+         WHERE tenant_id = $1 
+           AND display_profile_id = $2 
+           AND is_active = true 
+           AND health_ok = true 
+         ORDER BY created_at DESC 
+         LIMIT 1`,
+        [tenantId, preferredProfileId]
+      )
+      if (sdRows.rows.length > 0) {
+        finalShieldDomain = sdRows.rows[0].domain
+        shieldDomainId = sdRows.rows[0].id
+        shieldProfileMatched = true
+        shieldFallbackUsed = false
+      }
+    }
+
+    txLog.info("payment_display_profile.shield_domain_selected", "Shield domain selected for transaction", {
+      tenantId,
+      storeId,
+      resolvedProfileId: preferredProfileId,
+      shieldDomainId,
+      profileMatched: shieldProfileMatched,
+      fallbackUsed: shieldFallbackUsed,
+      targetHost: finalShieldDomain,
+    })
+
     const { returnUrl, cancelUrl } = buildShieldUrls(
-      account.shield_domain,
+      finalShieldDomain,
       transactionId,
       executeToken
     )
@@ -647,7 +722,7 @@ export async function POST(req: NextRequest) {
         lineItemPolicy: lineItemResult.lineItemPolicy,
         selectedItemCount: lineItemResult.selectedItems.length,
         skipRandomization: lineItemResult.skipRandomization,
-        selectedItemsTotalCents,
+        selectedTotalCents,
         checkoutTotalCents,
         amountMatch: selectedTotalCents === checkoutTotalCents,
         firstSelectedItemLooksLegacy: firstItemLooksLegacy,

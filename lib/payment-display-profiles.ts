@@ -54,7 +54,7 @@ export interface ResolvedPaymentDisplayProfile {
   lineItemPolicy: LineItemPolicy
   publicBrandName: string | null
   descriptorPrefix: string | null
-  source: "store_default" | "store_profile" | "tenant_default" | "generated_fallback"
+  source: "merchant_account" | "store_default" | "store_profile" | "tenant_default" | "generated_fallback"
   descriptorPool: string[]
 }
 
@@ -175,30 +175,45 @@ export async function resolvePaymentDisplayProfile(params: {
   merchantAccountId?: string
   storeName?: string
 }): Promise<ResolvedPaymentDisplayProfile> {
-  const { tenantId, storeId } = params
+  const { tenantId, storeId, merchantAccountId } = params
   
   const sql = getSql()
 
-  // 1. Check if store has explicit default_display_profile_id
-  const storeRows = await sql`
-    SELECT default_display_profile_id 
-    FROM stores 
-    WHERE id = ${storeId}
-  `
-  let profileId = storeRows[0]?.default_display_profile_id
-
   let profileRow = null
+  let source: ResolvedPaymentDisplayProfile["source"] = "generated_fallback"
 
-  if (profileId) {
-    const rows = await sql`
-      SELECT id, industry_vertical, display_mode, line_item_policy, public_brand_name, descriptor_prefix
-      FROM payment_display_profiles
-      WHERE id = ${profileId} AND is_active = true
+  // 1. If merchantAccountId provided, check its display_profile_id
+  if (merchantAccountId && tenantId) {
+    const maRows = await sql`
+      SELECT pdp.id, pdp.industry_vertical, pdp.display_mode, pdp.line_item_policy, pdp.public_brand_name, pdp.descriptor_prefix
+      FROM merchant_accounts ma
+      JOIN payment_display_profiles pdp ON ma.display_profile_id = pdp.id
+      WHERE ma.id = ${merchantAccountId} 
+        AND ma.tenant_id = ${tenantId}
+        AND pdp.tenant_id = ${tenantId}
+        AND pdp.is_active = true
     `
-    profileRow = rows[0]
+    if (maRows.length > 0) {
+      profileRow = maRows[0]
+      source = "merchant_account" as any
+    }
   }
 
-  // 2. If not found, check if store has an active is_default profile
+  // 2. Check if store has explicit default_display_profile_id
+  if (!profileRow) {
+    const storeRows = await sql`
+      SELECT pdp.id, pdp.industry_vertical, pdp.display_mode, pdp.line_item_policy, pdp.public_brand_name, pdp.descriptor_prefix
+      FROM stores s
+      JOIN payment_display_profiles pdp ON s.default_display_profile_id = pdp.id
+      WHERE s.id = ${storeId} AND pdp.is_active = true
+    `
+    if (storeRows.length > 0) {
+      profileRow = storeRows[0]
+      source = "store_default"
+    }
+  }
+
+  // 3. If not found, check if store has an active is_default profile
   if (!profileRow) {
     const rows = await sql`
       SELECT id, industry_vertical, display_mode, line_item_policy, public_brand_name, descriptor_prefix
@@ -207,11 +222,28 @@ export async function resolvePaymentDisplayProfile(params: {
       ORDER BY created_at DESC
       LIMIT 1
     `
-    profileRow = rows[0]
-    if (profileRow) profileId = profileRow.id
+    if (rows.length > 0) {
+      profileRow = rows[0]
+      source = "store_profile" as any
+    }
   }
 
-  // 3. If not found and tenantId exists, check tenant default profile
+  // 4. Else newest active store profile
+  if (!profileRow) {
+    const rows = await sql`
+      SELECT id, industry_vertical, display_mode, line_item_policy, public_brand_name, descriptor_prefix
+      FROM payment_display_profiles
+      WHERE store_id = ${storeId} AND is_active = true
+      ORDER BY created_at DESC
+      LIMIT 1
+    `
+    if (rows.length > 0) {
+      profileRow = rows[0]
+      source = "store_profile" as any
+    }
+  }
+
+  // 5. If not found and tenantId exists, check tenant default profile
   if (!profileRow && tenantId) {
     const rows = await sql`
       SELECT id, industry_vertical, display_mode, line_item_policy, public_brand_name, descriptor_prefix
@@ -220,8 +252,10 @@ export async function resolvePaymentDisplayProfile(params: {
       ORDER BY created_at DESC
       LIMIT 1
     `
-    profileRow = rows[0]
-    if (profileRow) profileId = profileRow.id
+    if (rows.length > 0) {
+      profileRow = rows[0]
+      source = "tenant_default"
+    }
   }
 
   // If a profile was found in DB
@@ -234,7 +268,7 @@ export async function resolvePaymentDisplayProfile(params: {
       lineItemPolicy: profileRow.line_item_policy as LineItemPolicy,
       publicBrandName: profileRow.public_brand_name,
       descriptorPrefix: profileRow.descriptor_prefix,
-      source: profileId === storeRows[0]?.default_display_profile_id ? "store_default" : (profileRow.store_id ? "store_profile" : "tenant_default"),
+      source: source,
       descriptorPool: INDUSTRY_DESCRIPTOR_POOLS[iv] || INDUSTRY_DESCRIPTOR_POOLS.generic_ecommerce,
     }
   }

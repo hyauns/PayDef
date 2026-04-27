@@ -88,6 +88,9 @@ export async function PATCH(
   if (typeof body.shieldDomain === "string") {
     updates.shield_domain = body.shieldDomain.trim() || null
   }
+  if (typeof body.displayProfileId === "string") {
+    updates.display_profile_id = body.displayProfileId.trim() || null
+  }
   if (typeof body.proxyUrl === "string") {
     const proxy = body.proxyUrl.trim()
     if (proxy && !proxy.startsWith("http://") && !proxy.startsWith("https://") && !proxy.startsWith("socks")) {

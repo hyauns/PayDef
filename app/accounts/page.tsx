@@ -55,6 +55,7 @@ interface Merchant {
   clientSecret: string
   proxyUrl: string
   shieldDomain: string
+  displayProfileId: string | null
   domainType: DomainType
   status: Status
   priority: number // 1–5
@@ -76,6 +77,7 @@ interface MerchantApiRow {
   clientId: string
   proxyUrl?: string | null
   shieldDomain?: string | null
+  displayProfileId?: string | null
   status: string
   isLimited?: boolean | null
   priority?: number | null
@@ -97,6 +99,11 @@ interface ShieldDomainApiRow {
   vercel?: {
     bridgeOk?: boolean | null
   } | null
+}
+
+interface PaymentDisplayProfile {
+  id: string
+  profile_name: string
 }
 
 // ─── Platform shield domains provided by Gateway Central ─────────────────────
@@ -281,11 +288,12 @@ function MaskedField({ value, label }: { value: string; label: string }) {
 interface SlideOverProps {
   merchant: Merchant | null
   verifiedPlatformDomains: string[]
+  displayProfiles: PaymentDisplayProfile[]
   onClose: () => void
   onSave: (updated: Merchant) => void
 }
 
-function SlideOver({ merchant, verifiedPlatformDomains, onClose, onSave }: SlideOverProps) {
+function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose, onSave }: SlideOverProps) {
   const [draft, setDraft] = useState<Merchant | null>(merchant)
   const fallbackPlatformDomain = verifiedPlatformDomains[0] ?? ""
 
@@ -454,6 +462,27 @@ function SlideOver({ merchant, verifiedPlatformDomains, onClose, onSave }: Slide
                 {draft.shieldDomain}
               </a>
             )}
+          </div>
+
+          {/* Payment Display Profile */}
+          <div className="space-y-3 border border-border rounded-lg p-4 bg-background">
+            <div className="flex items-center gap-2">
+              <Package className="w-3.5 h-3.5 text-cyan-400" />
+              <p className="text-xs font-mono font-semibold text-foreground">Payment Display Profile</p>
+            </div>
+            <p className="text-[11px] font-mono text-muted-foreground">
+              Select a preferred display profile to route transactions through this account when the store uses this profile.
+            </p>
+            <select
+              value={draft.displayProfileId || ""}
+              onChange={(e) => update({ displayProfileId: e.target.value || null })}
+              className="w-full bg-card border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors appearance-none"
+            >
+              <option value="">None (Use fallback accounts)</option>
+              {displayProfiles.map((p) => (
+                <option key={p.id} value={p.id}>{p.profile_name}</option>
+              ))}
+            </select>
           </div>
 
           {/* PayPal Credentials */}
@@ -755,10 +784,12 @@ function SlideOver({ merchant, verifiedPlatformDomains, onClose, onSave }: Slide
 
 function AddMerchantModal({
   verifiedPlatformDomains,
+  displayProfiles,
   onClose,
   onAdd,
 }: {
   verifiedPlatformDomains: string[]
+  displayProfiles: PaymentDisplayProfile[]
   onClose: () => void
   onAdd: (m: Merchant) => void
 }) {
@@ -772,6 +803,7 @@ function AddMerchantModal({
     status: "Warm-up" as Status,
     domainType: (fallbackPlatformDomain ? "platform" : "custom") as DomainType,
     shieldDomain: fallbackPlatformDomain,
+    displayProfileId: "",
     softLimit: 4000,
     hardLimit: 5000,
     itemMasking: false,
@@ -844,8 +876,9 @@ function AddMerchantModal({
           email: form.email,
           clientId: form.clientId,
           clientSecret: form.clientSecret,
+          displayProfileId: form.displayProfileId || undefined,
           proxyUrl: form.proxyUrl || undefined,
-          shieldDomain: form.shieldDomain || undefined,
+          shieldDomain: form.domainType === "platform" ? form.shieldDomain : form.shieldDomain,
           status: statusMap[form.status] || "WARMING_UP",
           softLimit: form.softLimit,
           hardLimit: form.hardLimit,
@@ -866,6 +899,7 @@ function AddMerchantModal({
         clientSecret: "(encrypted)",
         proxyUrl: acct.proxyUrl ?? "",
         shieldDomain: acct.shieldDomain ?? form.shieldDomain ?? "",
+        displayProfileId: acct.displayProfileId ?? form.displayProfileId ?? null,
         domainType: verifiedPlatformDomains.includes(acct.shieldDomain ?? "") ? "platform" : "custom",
         status: form.status,
         priority: acct.priority ?? 1,
@@ -1063,6 +1097,22 @@ function AddMerchantModal({
               )}
             </div>
 
+            {/* Payment Display Profile */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Payment Display Profile</label>
+              <select
+                value={form.displayProfileId}
+                onChange={(e) => update({ displayProfileId: e.target.value })}
+                className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 appearance-none"
+              >
+                <option value="">None (Use fallback accounts)</option>
+                {displayProfiles.map((p) => (
+                  <option key={p.id} value={p.id}>{p.profile_name}</option>
+                ))}
+              </select>
+              <p className="text-[10px] font-mono text-muted-foreground">Select a preferred profile to route matching store traffic to this account.</p>
+            </div>
+
             {/* Volume limits */}
             <div className="grid grid-cols-2 gap-3">
               {[
@@ -1193,6 +1243,7 @@ function mapApiToMerchant(a: MerchantApiRow, platformDomains: string[]): Merchan
     clientSecret: "(encrypted)",
     proxyUrl: a.proxyUrl ?? "",
     shieldDomain,
+    displayProfileId: a.displayProfileId ?? null,
     domainType: platformDomains.includes(shieldDomain) ? "platform" : "custom",
     status: mapDbStatus(a.status, a.isLimited ?? undefined),
     priority: a.priority ?? 1,
@@ -1216,6 +1267,16 @@ export default function AccountsPage() {
   const [selected, setSelected] = useState<Merchant | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [filterStatus, setFilterStatus] = useState<Status | "All">("All")
+  const [displayProfiles, setDisplayProfiles] = useState<PaymentDisplayProfile[]>([])
+
+  const fetchProfiles = useCallback(() => {
+    fetch("/api/merchant/display-profiles")
+      .then(r => r.json())
+      .then(data => {
+        setDisplayProfiles(data.profiles ?? [])
+      })
+      .catch(() => {})
+  }, [])
 
   // Fetch real data from API
   const fetchAccounts = useCallback(() => {
@@ -1240,6 +1301,7 @@ export default function AccountsPage() {
 
   useEffect(() => { fetchShieldDomains() }, [fetchShieldDomains])
   useEffect(() => { fetchAccounts() }, [fetchAccounts])
+  useEffect(() => { fetchProfiles() }, [fetchProfiles])
 
   // Auto-refresh every 10 seconds
   useEffect(() => {
@@ -1269,6 +1331,7 @@ export default function AccountsPage() {
           email: updated.email,
           clientId: updated.clientId,
           shieldDomain: updated.shieldDomain,
+          displayProfileId: updated.displayProfileId || null,
           proxyUrl: updated.proxyUrl,
           status: mapUiStatus(updated.status),
           priority: updated.priority,
@@ -1566,6 +1629,7 @@ export default function AccountsPage() {
       <SlideOver
         merchant={selected}
         verifiedPlatformDomains={verifiedPlatformDomains}
+        displayProfiles={displayProfiles}
         onClose={() => setSelected(null)}
         onSave={handleSave}
       />
@@ -1574,6 +1638,7 @@ export default function AccountsPage() {
       {showAdd && (
         <AddMerchantModal
           verifiedPlatformDomains={verifiedPlatformDomains}
+          displayProfiles={displayProfiles}
           onClose={() => setShowAdd(false)}
           onAdd={handleAdd}
         />

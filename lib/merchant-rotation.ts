@@ -73,6 +73,7 @@ export interface MerchantAccountRow {
   warmup_started_at:    string | null
   item_masking:         boolean
   fake_product_name:    string
+  display_profile_id:   string | null
   // Hourly smoothing (joined from subquery)
   recent_order_count?:  string   // COUNT comes back as string from pg
 }
@@ -440,8 +441,12 @@ export async function selectByStrategy(
 export interface RotationOptions {
   /** The tenant whose merchant pool we're selecting from. */
   tenantId: string
+  /** The store making the transaction. */
+  storeId?: string
   /** The requested transaction amount in the base currency. */
   requestedAmount: number
+  /** Preferred Payment Display Profile ID to match against merchant_accounts. */
+  preferredProfileId?: string | null
   /** Neon tagged-template SQL function. */
   sql: NeonQueryFunction<false, false>
 }
@@ -462,7 +467,7 @@ export interface RotationOptions {
  * @throws {MerchantRotationError} 403 when no accounts qualify
  */
 export async function selectMerchant(opts: RotationOptions): Promise<SelectedMerchant> {
-  const { tenantId, requestedAmount, sql } = opts
+  const { tenantId, storeId, requestedAmount, preferredProfileId, sql } = opts
 
   // ── Step 1: Fetch eligible accounts with hourly order counts ────────────
   const accounts = (await sql`
@@ -473,6 +478,7 @@ export async function selectMerchant(opts: RotationOptions): Promise<SelectedMer
       ma.current_volume, ma.priority, ma.status,
       ma.warmup_started_at,
       ma.item_masking, ma.fake_product_name,
+      ma.display_profile_id,
       COALESCE(ho.cnt, 0)::TEXT AS recent_order_count
     FROM merchant_accounts ma
     LEFT JOIN (
@@ -498,11 +504,39 @@ export async function selectMerchant(opts: RotationOptions): Promise<SelectedMer
 
   if (eligible.length === 0) {
     throw new MerchantRotationError(
-      "System Overloaded — all payment accounts have reached their daily processing limit.",
+      "Volume Limits Reached — all active accounts are maxed out for today.",
       403
     )
   }
 
+  // ── Step 3.5: Payment Display Profile Consistency (Phase 4) ─────────────
+  let usedProfileMatchedAccounts = false
+  let fallbackReason = "no_profile_requested"
+  let matchingAccountCount = 0
+
+  if (preferredProfileId) {
+    const matched = eligible.filter(a => a.display_profile_id === preferredProfileId)
+    matchingAccountCount = matched.length
+    if (matched.length > 0) {
+      eligible = matched
+      usedProfileMatchedAccounts = true
+      fallbackReason = "none"
+    } else {
+      fallbackReason = "no_matched_accounts_available"
+    }
+    
+    // Log the filtering event safely without exposing secrets
+    console.info(JSON.stringify({
+      event: "payment_display_profile.account_filter",
+      tenantId,
+      storeId,
+      resolvedProfileId: preferredProfileId,
+      eligibleAccountCount: eligible.length + (usedProfileMatchedAccounts ? 0 : matchingAccountCount), // Original eligible count
+      matchingAccountCount,
+      usedProfileMatchedAccounts,
+      fallbackReason,
+    }))
+  }
   // ── Step 4: Hourly smoothing — de-prioritise high-velocity accounts ────
   eligible = applyHourlySmoothing(eligible)
 
