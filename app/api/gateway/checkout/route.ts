@@ -81,6 +81,7 @@ interface CheckoutBody {
 
 interface StoreRow {
   id:            string
+  name:          string
   tenant_id:     string
   api_key_hash:  string
   is_active:     boolean
