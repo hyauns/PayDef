@@ -803,7 +803,7 @@ export async function POST(req: NextRequest) {
         amount,                    // $5
         currency,                  // $6  — original_currency
         itemName,                  // $7  — original_item_name (unmasked, for audit)
-        maskedName,                // $8  — masked_item_name
+        lineItemResult.selectedItems[0]?.name ?? "Unknown",  // $8  — masked_item_name
         paypalOrder.id,            // $9  — paypal_order_id
         customerEmail ?? null,     // $10 — customer_email
         buyerIp       ?? null,     // $11 — buyer_ip + ip_address
