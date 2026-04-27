@@ -623,6 +623,68 @@ export async function POST(req: NextRequest) {
       }
     )
 
+    // ── Phase 3: Handoff diagnostic — log what we're about to send ──────────
+    const LEGACY_DESCRIPTOR_POOL = new Set([
+      "Technical Support", "Service Extension", "Business Consultation",
+      "Professional Services", "Support Package", "Account Maintenance",
+      "Platform Services", "Service Subscription", "Enterprise Solution",
+      "Managed Services", "IT Consultation", "System Integration",
+      "Cloud Services", "Infrastructure Support", "Compliance Review",
+      "Advisory Services",
+    ])
+    const selectedTotalCents = lineItemResult.selectedItems.reduce(
+      (s, it) => s + Math.round(parseFloat(it.unitAmount.value) * 100) * parseInt(it.quantity, 10), 0
+    )
+    const checkoutTotalCents = Math.round(parseFloat(amountStr) * 100)
+    const firstItemName = lineItemResult.selectedItems[0]?.name ?? ""
+    const firstItemLooksLegacy = LEGACY_DESCRIPTOR_POOL.has(firstItemName)
+    const firstItemLooksProfile = !firstItemLooksLegacy && firstItemName.length > 0
+
+    txLog.info("payment_display_profile.create_order_handoff",
+      `Handoff: mode=${profileMode} policy=${lineItemResult.lineItemPolicy} items=${lineItemResult.selectedItems.length} skip=${lineItemResult.skipRandomization} legacy=${firstItemLooksLegacy} profile=${firstItemLooksProfile}`,
+      {
+        mode: profileMode,
+        lineItemPolicy: lineItemResult.lineItemPolicy,
+        selectedItemCount: lineItemResult.selectedItems.length,
+        skipRandomization: lineItemResult.skipRandomization,
+        selectedItemsTotalCents,
+        checkoutTotalCents,
+        amountMatch: selectedTotalCents === checkoutTotalCents,
+        firstSelectedItemLooksLegacy: firstItemLooksLegacy,
+        firstSelectedItemLooksProfile: firstItemLooksProfile,
+      }
+    )
+
+    // ── Phase 3: Hard preflight assertion for enforce + SINGLE_SEMANTIC_ITEM ──
+    // Prevents sending wrong legacy payload to PayPal in enforce mode.
+    if (profileMode === "enforce" && lineItemResult.lineItemPolicy === "SINGLE_SEMANTIC_ITEM") {
+      const itemCount = lineItemResult.selectedItems.length
+      const anyLegacy = lineItemResult.selectedItems.some(it => LEGACY_DESCRIPTOR_POOL.has(it.name))
+      const totalMatch = selectedTotalCents === checkoutTotalCents
+
+      if (itemCount !== 1 || anyLegacy || !totalMatch || !lineItemResult.skipRandomization) {
+        txLog.error("payment_display_profile.paypal_payload_mismatch",
+          `PREFLIGHT ASSERTION FAILED: enforce+SINGLE_SEMANTIC_ITEM but items=${itemCount} legacy=${anyLegacy} totalMatch=${totalMatch} skipRand=${lineItemResult.skipRandomization}`,
+          {
+            storeId,
+            tenantId,
+            merchantAccountId: account.id,
+            mode: profileMode,
+            lineItemPolicy: lineItemResult.lineItemPolicy,
+            itemCount,
+            anyLegacy,
+            totalMatch,
+            skipRandomization: lineItemResult.skipRandomization,
+          }
+        )
+        await client.query("ROLLBACK")
+        return NextResponse.json(
+          { error: "Payment processing error. Please try again." },
+          { status: 500 }
+        )
+      }
+    }
+
     let paypalOrder
     try {
       paypalOrder = await createPayPalOrder({

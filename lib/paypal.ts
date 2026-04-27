@@ -317,7 +317,7 @@ async function getAccessToken(
  * This defence-in-depth approach ensures that even a coding mistake
  * upstream cannot leak sensitive data to PayPal.
  */
-function buildOrderPayload(p: CreateOrderParams) {
+export function buildOrderPayload(p: CreateOrderParams) {
   // Final-pass sanitisation on all string fields going to PayPal
   const safeBrand       = sanitizePayPalField(maskBrandName(p.merchantAccId))
   const safeDescription = sanitizePayPalField(maskDescription(p.customId))
@@ -417,6 +417,30 @@ export async function createPayPalOrder(p: CreateOrderParams): Promise<PayPalOrd
 
   const proxyOpts = createFetchOptions(p.proxyUrl)
   const ua = getUserAgent(p.clientId)
+
+  // ── Phase 3: Preflight diagnostic — final payload state before PayPal ────
+  const payloadItems = cleanPayload.purchase_units?.[0]?.items ?? []
+  const LEGACY_NAMES = new Set([
+    "Technical Support", "Service Extension", "Business Consultation",
+    "Professional Services", "Support Package", "Account Maintenance",
+    "Platform Services", "Service Subscription", "Enterprise Solution",
+    "Managed Services", "IT Consultation", "System Integration",
+    "Cloud Services", "Infrastructure Support", "Compliance Review",
+    "Advisory Services",
+  ])
+  const containsLegacy = payloadItems.some((it: any) => LEGACY_NAMES.has(it.name))
+  const containsProfile = payloadItems.some((it: any) => !LEGACY_NAMES.has(it.name) && it.name?.length > 0)
+  console.info(JSON.stringify({
+    event: "paypal.create_order_payload_preflight",
+    transactionId: p.customId,
+    skipRandomization: !!p.skipRandomization,
+    itemCount: payloadItems.length,
+    amountTotal: cleanPayload.purchase_units?.[0]?.amount?.value,
+    itemTotal: cleanPayload.purchase_units?.[0]?.amount?.breakdown?.item_total?.value,
+    containsLegacyDescriptor: containsLegacy,
+    containsProfileDescriptor: containsProfile,
+    timeJitterMs: __timeJitterMs,
+  }))
 
   const res = await fetch(`${PAYPAL_BASE}/v2/checkout/orders`, {
     method:  "POST",
