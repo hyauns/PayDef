@@ -497,7 +497,7 @@ export async function POST(req: NextRequest) {
       : maskItemName(realName)
 
     // Phase 3: Build profile-driven line items
-    const lineItemResult = buildPayPalLineItemsForProfile({
+    let lineItemResult = buildPayPalLineItemsForProfile({
       profile,
       originalItems: [{
         name:     itemName,
@@ -718,6 +718,82 @@ export async function POST(req: NextRequest) {
             bundleId: bundleResult.bundle?.id,
             warnings: bundleResult.warnings,
           })
+      }
+
+      // ── Phase 5F: Identity Bundle Enforce ──────────────────────────────────
+      if (bundleResult.mode === "enforce") {
+        txLog.info("payment_identity_bundle.enforce_start", "Starting Identity Bundle enforce evaluation", {
+          tenantId,
+          storeId: store.id,
+          merchantAccountId: account.id,
+          bundleId: bundleResult.bundle?.id,
+        })
+
+        const candidate = bundleResult.candidateDescriptor
+
+        if (candidate && bundleResult.bundle && bundleResult.selectedItem) {
+          txLog.info("payment_identity_bundle.enforce_candidate_built", "Identity Bundle candidate descriptor ready for validation", {
+            tenantId, storeId: store.id, bundleId: bundleResult.bundle.id, selectedItemId: bundleResult.selectedItem.id,
+            candidateDescriptor: candidate, candidateLength: candidate.length
+          })
+        }
+
+        if (bundleResult.reason === "disabled_by_mode") {
+           txLog.info("payment_identity_bundle.enforce_fallback", "Resolver disabled by mode", {
+             tenantId, storeId: store.id, fallbackReason: "mode_not_enforce"
+           })
+        } else if (!bundleResult.bundle) {
+           txLog.info("payment_identity_bundle.enforce_fallback", "No bundle assigned to merchant/store", {
+             tenantId, storeId: store.id, fallbackReason: "no_bundle"
+           })
+        } else if (!bundleResult.selectedItem) {
+           txLog.info("payment_identity_bundle.enforce_fallback", "Bundle has no active selected item", {
+             tenantId, storeId: store.id, bundleId: bundleResult.bundle.id, fallbackReason: "no_selected_item"
+           })
+        } else if (!candidate) {
+           txLog.warn("payment_identity_bundle.enforce_fallback", "Missing candidate descriptor", {
+             tenantId, storeId: store.id, bundleId: bundleResult.bundle.id, fallbackReason: "missing_candidate_descriptor"
+           })
+        } else if (candidate.length > 127) {
+           txLog.warn("payment_identity_bundle.enforce_fallback", `Candidate descriptor too long (${candidate.length} > 127)`, {
+             tenantId, storeId: store.id, bundleId: bundleResult.bundle.id, candidateLength: candidate.length, fallbackReason: "descriptor_too_long"
+           })
+        } else {
+           // Enforce is VALID: mutate lineItemResult to use the candidate descriptor
+           lineItemResult = {
+             ...lineItemResult,
+             selectedItems: [{
+               name: candidate,
+               quantity: "1",
+               unitAmount: { currencyCode: currency, value: amountStr }
+             }],
+             lineItemPolicy: "SINGLE_SEMANTIC_ITEM",
+             skipRandomization: true
+           }
+
+           const checkoutTotalCents = Math.round(parseFloat(amountStr) * 100)
+           txLog.info("payment_identity_bundle.enforce_preflight", "Identity bundle enforce preflight checks", {
+             tenantId, storeId: store.id, bundleId: bundleResult.bundle.id,
+             amountInvariantPassed: true,
+             selectedItemCount: 1,
+             selectedTotalCents: checkoutTotalCents,
+             checkoutTotalCents: checkoutTotalCents
+           })
+
+           txLog.info("payment_identity_bundle.enforce_applied", "Identity bundle enforced on PayPal payload", {
+             tenantId,
+             storeId: store.id,
+             merchantAccountId: account.id,
+             shieldDomainId,
+             bundleId: bundleResult.bundle.id,
+             selectedItemId: bundleResult.selectedItem.id,
+             mode: bundleResult.mode,
+             candidateDescriptor: candidate,
+             candidateLength: candidate.length,
+             amountInvariantPassed: true,
+             selectedItemCount: 1,
+           })
+        }
       }
     } catch (bundleResolverErr) {
       // Shadow resolver failure must NEVER block checkout

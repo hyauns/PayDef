@@ -184,10 +184,19 @@ export async function resolvePaymentIdentityBundleForCheckout(
 
       // Build candidate descriptor
       if (selectedItem) {
-        const prefix = bundle.public_brand_name
-        candidateDescriptor = prefix
-          ? sanitizePayPalField(`${prefix} - ${selectedItem.descriptor_name}`)
-          : sanitizePayPalField(selectedItem.descriptor_name)
+        const prefix = bundle.public_brand_name?.trim()
+        let baseDescriptor = selectedItem.descriptor_name.trim()
+
+        // Prevent duplicate brand prefix (e.g. "Brand - Brand - Item")
+        if (prefix && baseDescriptor.toLowerCase().startsWith(prefix.toLowerCase())) {
+          baseDescriptor = baseDescriptor.slice(prefix.length).replace(/^[-\s]+/, "")
+        }
+
+        const rawCandidate = prefix ? `${prefix} - ${baseDescriptor}` : baseDescriptor
+        
+        // Do not silently truncate to 127 here. Pass a large length (1000) so the 
+        // checkout enforce preflight can catch length violations and log a clear fallback.
+        candidateDescriptor = sanitizePayPalField(rawCandidate, 1000)
       }
     }
 
