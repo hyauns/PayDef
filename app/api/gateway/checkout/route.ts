@@ -54,6 +54,7 @@ import {
   resolveCheckoutFlow,
 } from "@/lib/checkout-flow"
 import { decrypt, isEncrypted } from "@/lib/encryption"
+import { resolvePaymentIdentityBundleForCheckout } from "@/lib/payment-identity-bundle-resolver"
 import {
   type MerchantAccountRow,
   filterEligibleAccounts,
@@ -613,6 +614,95 @@ export async function POST(req: NextRequest) {
         returnUrlHasEt: returnUrl.includes("et=")
       }
     )
+
+    // ── Phase 5D: Payment Identity Bundle shadow resolver ────────────────────
+    // Runs in shadow mode only — resolves which bundle WOULD be selected.
+    // Never mutates payload. Never blocks checkout on failure.
+    try {
+      const bundleMode = (process.env.PAYMENT_IDENTITY_BUNDLE_MODE || "shadow") as "shadow" | "enforce" | "disabled"
+
+      txLog.info("payment_identity_bundle.resolve_start",
+        `Identity bundle resolve: mode=${bundleMode} account=${account.id}`, {
+          tenantId,
+          storeId: store.id,
+          merchantAccountId: account.id,
+          shieldDomainId,
+          checkoutAmount: amount,
+          mode: bundleMode,
+        })
+
+      const bundleResult = await resolvePaymentIdentityBundleForCheckout({
+        tenantId,
+        storeId: store.id,
+        merchantAccountId: account.id,
+        shieldDomainId: shieldDomainId ?? null,
+        checkoutAmount: amount,
+        mode: bundleMode,
+      })
+
+      txLog.info("payment_identity_bundle.resolve_result",
+        `Identity bundle result: bundle=${bundleResult.bundle?.id ?? "none"} item=${bundleResult.selectedItem?.id ?? "none"} reason=${bundleResult.reason}`, {
+          tenantId,
+          storeId: store.id,
+          merchantAccountId: account.id,
+          shieldDomainId,
+          bundleId: bundleResult.bundle?.id,
+          selectedItemId: bundleResult.selectedItem?.id,
+          reason: bundleResult.reason,
+          mode: bundleResult.mode,
+          assignmentMatch: bundleResult.assignmentMatch,
+          warnings: bundleResult.warnings,
+          checkoutAmount: amount,
+        })
+
+      if (bundleResult.selectedItem) {
+        txLog.info("payment_identity_bundle.item_selected",
+          `Bundle item: descriptor="${bundleResult.candidateDescriptor}" type=${bundleResult.selectedItem.product_type}`, {
+            tenantId,
+            storeId: store.id,
+            merchantAccountId: account.id,
+            bundleId: bundleResult.bundle?.id,
+            selectedItemId: bundleResult.selectedItem.id,
+            candidateDescriptor: bundleResult.candidateDescriptor,
+            productType: bundleResult.selectedItem.product_type,
+            descriptorName: bundleResult.selectedItem.descriptor_name,
+          })
+      }
+
+      // Shadow comparison: what the bundle would produce vs current profile output
+      const currentProfileItemName = lineItemResult.selectedItems[0]?.name ?? "(none)"
+      txLog.info("payment_identity_bundle.shadow_comparison",
+        `Shadow: current="${currentProfileItemName}" candidate="${bundleResult.candidateDescriptor ?? "(none)"}" match=${currentProfileItemName === bundleResult.candidateDescriptor}`, {
+          tenantId,
+          storeId: store.id,
+          merchantAccountId: account.id,
+          bundleId: bundleResult.bundle?.id,
+          currentProfileItemName,
+          candidateDescriptor: bundleResult.candidateDescriptor,
+          descriptorsMatch: currentProfileItemName === bundleResult.candidateDescriptor,
+          mode: bundleResult.mode,
+        })
+
+      if (bundleResult.warnings.length > 0) {
+        txLog.warn("payment_identity_bundle.resolve_warning",
+          `Bundle warnings: ${bundleResult.warnings.join("; ")}`, {
+            tenantId,
+            storeId: store.id,
+            merchantAccountId: account.id,
+            bundleId: bundleResult.bundle?.id,
+            warnings: bundleResult.warnings,
+          })
+      }
+    } catch (bundleResolverErr) {
+      // Shadow resolver failure must NEVER block checkout
+      txLog.warn("payment_identity_bundle.resolve_warning",
+        `Identity bundle shadow resolver failed — checkout continues unaffected`, {
+          tenantId,
+          storeId: store.id,
+          merchantAccountId: account.id,
+          error: bundleResolverErr,
+        })
+    }
 
     // ── Step 9. Create PayPal order ──────────────────────────────────────────
     // The PayPal API call lives inside the transaction intentionally:
