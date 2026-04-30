@@ -586,6 +586,23 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── Phase 5E: Resolve shieldDomainId from fallback host ─────────────────
+    // When profile-based selection fails (display_profile_id not set on domain),
+    // look up the shield_domains.id by hostname so the identity bundle resolver
+    // can confirm the shield domain assignment.
+    if (!shieldDomainId && finalShieldDomain) {
+      const fallbackIdRows = await client.query<{ id: string }>(
+        `SELECT id FROM shield_domains
+         WHERE domain = $1 AND is_active = true AND health_ok = true
+         ORDER BY (tenant_id = $2) DESC NULLS LAST, created_at DESC
+         LIMIT 1`,
+        [finalShieldDomain, tenantId]
+      )
+      if (fallbackIdRows.rows.length > 0) {
+        shieldDomainId = fallbackIdRows.rows[0].id
+      }
+    }
+
     txLog.info("payment_display_profile.shield_domain_selected", "Shield domain selected for transaction", {
       tenantId,
       storeId: store.id,
@@ -593,6 +610,7 @@ export async function POST(req: NextRequest) {
       shieldDomainId,
       profileMatched: shieldProfileMatched,
       fallbackUsed: shieldFallbackUsed,
+      fallbackIdResolved: !shieldProfileMatched && !!shieldDomainId,
       targetHost: finalShieldDomain,
     })
 
