@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { MoreHorizontal, Pause, Play, RefreshCw, Loader2 } from "lucide-react"
+import { SectionCard } from "./SectionCard"
+import { DataTableShell } from "./DataTableShell"
+import { StatusBadge } from "./StatusBadge"
 
 type Status = "Active" | "Limited" | "Paused" | "Warm-up" | "Suspended"
 
@@ -31,14 +34,6 @@ interface MerchantApiRow {
   isLimited?: boolean | null
 }
 
-const statusConfig: Record<Status, { label: string; dot: string; text: string; bg: string }> = {
-  Active: { label: "Active", dot: "bg-emerald-400", text: "text-emerald-400", bg: "bg-emerald-400/10" },
-  Limited: { label: "Limited", dot: "bg-amber-400", text: "text-amber-400", bg: "bg-amber-400/10" },
-  Paused: { label: "Paused", dot: "bg-zinc-500", text: "text-zinc-400", bg: "bg-zinc-500/10" },
-  "Warm-up": { label: "Warm-up", dot: "bg-sky-400", text: "text-sky-400", bg: "bg-sky-400/10" },
-  Suspended: { label: "Suspended", dot: "bg-red-500", text: "text-red-400", bg: "bg-red-500/10" },
-}
-
 function mapDbStatus(dbStatus: string, isLimited?: boolean): Status {
   if (isLimited) return "Limited"
   switch (dbStatus) {
@@ -52,20 +47,29 @@ function mapDbStatus(dbStatus: string, isLimited?: boolean): Status {
 
 function VolumeBar({ current, soft, limit }: { current: number; soft: number; limit: number }) {
   const pct = Math.min((current / limit) * 100, 100)
-  const color = pct > 90 ? "bg-red-500" : pct > 70 ? "bg-amber-400" : "bg-cyan-400"
+  const isZero = current === 0
+  const color = pct > 90 ? "bg-red-500" : pct > 70 ? "bg-amber-400" : "bg-emerald-400"
+  
   return (
-    <div className="flex items-center gap-2 min-w-0">
-      <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden relative">
+    <div className="flex items-center gap-4 min-w-0 group-hover:opacity-100 opacity-90 transition-opacity">
+      <div className="w-24 h-2 bg-[#343947] group-hover:bg-[#3a4050] transition-colors rounded-full overflow-hidden relative flex-shrink-0">
         {/* soft limit marker */}
         <div
           className="absolute top-0 bottom-0 w-px bg-amber-400/50 z-10"
           style={{ left: `${Math.min((soft / limit) * 100, 100)}%` }}
         />
-        <div className={`h-full rounded-full ${color} transition-all`} style={{ width: `${pct}%` }} />
+        {isZero ? (
+          <div className="absolute inset-y-0 left-0 bg-[#475569] w-1" />
+        ) : (
+          <div className={`h-full rounded-full ${color} transition-all`} style={{ width: `${pct}%` }} />
+        )}
       </div>
-      <span className="font-mono text-xs text-muted-foreground whitespace-nowrap">
-        ${current.toLocaleString()} / ${limit.toLocaleString()}
-      </span>
+      <div className="font-mono text-xs whitespace-nowrap flex items-center gap-1.5">
+        <span className="font-bold text-[#e7edf8]">${current.toLocaleString()}</span>
+        <span className="text-[#6b7280]">/</span>
+        <span className="font-medium text-[#97a3b6]">${limit.toLocaleString()}</span>
+        {isZero && <span className="ml-2 text-[10px] text-[#6b7280] uppercase tracking-wider bg-[#2a2d39] group-hover:bg-[#1f222c] px-1.5 py-0.5 rounded transition-colors">0% Used</span>}
+      </div>
     </div>
   )
 }
@@ -133,106 +137,99 @@ export function MerchantAccounts() {
   }, [fetchMerchants])
 
   return (
-    <div className="bg-card border border-border rounded-lg overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <div>
-          <h2 className="text-sm font-semibold text-foreground">Merchant Accounts</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">PayPal account rotator — {merchants.length} accounts configured</p>
-        </div>
+    <SectionCard
+      title="Merchant Accounts"
+      description={`PayPal account rotator — ${merchants.length} accounts configured`}
+      noPadding
+      action={
         <button
           onClick={handleSync}
           disabled={syncing}
-          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors border border-border rounded-md px-2.5 py-1.5 disabled:opacity-50"
+          className="flex items-center gap-1.5 text-xs font-semibold text-[#97a3b6] hover:text-[#e7edf8] transition-colors border border-[#343947] bg-[#222530] rounded-md px-3 py-1.5 disabled:opacity-50"
         >
           {syncing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
           {syncing ? "Syncing..." : "Sync"}
         </button>
-      </div>
-
+      }
+    >
       {loading ? (
-        <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground">
+        <div className="flex items-center justify-center py-12 gap-2 text-[#97a3b6]">
           <Loader2 className="w-4 h-4 animate-spin" />
-          <span className="text-xs font-mono">Loading accounts...</span>
+          <span className="text-sm font-semibold">Loading accounts...</span>
         </div>
       ) : merchants.length === 0 ? (
         <div className="py-12 text-center">
-          <p className="font-mono text-sm text-muted-foreground">No merchant accounts configured yet.</p>
+          <p className="font-mono text-sm text-[#97aac1]">No merchant accounts configured yet.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <DataTableShell>
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border">
+              <tr className="border-b border-[#343947] bg-[#1f222c]">
                 {["Account", "PayPal Email", "Shield Domain", "Daily Volume", "Tx Count", "Status", ""].map((h) => (
-                  <th key={h} className="px-4 py-2.5 text-left text-xs font-mono text-muted-foreground uppercase tracking-wider whitespace-nowrap">
+                  <th key={h} className="px-5 py-4 text-left text-xs font-bold text-[#97a3b6] uppercase tracking-wider whitespace-nowrap">
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {merchants.map((m, i) => {
-                const cfg = statusConfig[m.status]
-                return (
-                  <tr
-                    key={m.id}
-                    className={`border-b border-border/50 hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? "" : "bg-secondary/10"}`}
-                  >
-                    <td className="px-4 py-3">
-                      <span className="font-mono text-xs text-cyan-400">{m.name}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="font-mono text-xs text-foreground">{m.email}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="font-mono text-xs text-muted-foreground">{m.shieldDomain}</span>
-                    </td>
-                    <td className="px-4 py-3 min-w-[220px]">
-                      <VolumeBar current={m.currentVolume} soft={m.softLimit} limit={m.dailyLimit} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="font-mono text-xs text-foreground">{m.txCount}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center gap-1.5 text-xs font-mono px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.text}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${m.status === "Active" ? "animate-pulse" : ""}`} />
-                        {cfg.label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 relative">
-                      <button
-                        onClick={() => setOpenMenu(openMenu === m.id ? null : m.id)}
-                        className="p-1 rounded hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
-                      >
-                        <MoreHorizontal className="w-4 h-4" />
-                      </button>
-                      {openMenu === m.id && (
-                        <div className="absolute right-2 top-8 z-10 bg-popover border border-border rounded-md shadow-xl text-xs font-mono min-w-[140px]">
-                          {m.status !== "Paused" ? (
-                            <button
-                              onClick={() => toggleStatus(m.id, "pause")}
-                              className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-secondary text-amber-400 transition-colors"
-                            >
-                              <Pause className="w-3 h-3" /> Pause Account
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => toggleStatus(m.id, "resume")}
-                              className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-secondary text-emerald-400 transition-colors"
-                            >
-                              <Play className="w-3 h-3" /> Resume Account
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
+              {merchants.map((m, i) => (
+                <tr
+                  key={m.id}
+                  className={`group border-b border-[#343947] hover:bg-[#2a2d39] transition-colors ${i % 2 === 0 ? "bg-[#222530]" : "bg-[#20232d]"}`}
+                >
+                  <td className="px-5 py-3">
+                    <span className="font-mono text-xs text-cyan-400">{m.name}</span>
+                  </td>
+                  <td className="px-5 py-4">
+                    <span className="font-mono text-sm font-semibold text-[#e7edf8]">{m.email}</span>
+                  </td>
+                  <td className="px-5 py-4">
+                    <span className="font-mono text-sm font-medium text-[#97a3b6]">{m.shieldDomain}</span>
+                  </td>
+                  <td className="px-5 py-4 min-w-[220px]">
+                    <VolumeBar current={m.currentVolume} soft={m.softLimit} limit={m.dailyLimit} />
+                  </td>
+                  <td className="px-5 py-4">
+                    <span className="font-mono text-sm font-semibold text-[#e7edf8]">{m.txCount}</span>
+                  </td>
+                  <td className="px-5 py-3">
+                    <StatusBadge status={m.status} />
+                  </td>
+                  <td className="px-5 py-4 relative text-right">
+                    <button
+                      onClick={() => setOpenMenu(openMenu === m.id ? null : m.id)}
+                      className="p-1.5 rounded-lg hover:bg-[#2a2d39] transition-colors text-[#97a3b6] hover:text-[#e7edf8]"
+                    >
+                      <MoreHorizontal className="w-5 h-5" />
+                    </button>
+                    {openMenu === m.id && (
+                      <div className="absolute right-6 top-8 z-10 bg-[#222530] border border-[#343947] rounded-md shadow-xl text-xs font-semibold min-w-[140px]">
+                        {m.status !== "Paused" ? (
+                          <button
+                            onClick={() => toggleStatus(m.id, "pause")}
+                            className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-[#2a2d39] text-amber-400 transition-colors"
+                          >
+                            <Pause className="w-3 h-3" /> Pause Account
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => toggleStatus(m.id, "resume")}
+                            className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-[#2a2d39] text-emerald-400 transition-colors"
+                          >
+                            <Play className="w-3 h-3" /> Resume Account
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
-        </div>
+        </DataTableShell>
       )}
-    </div>
+    </SectionCard>
   )
 }

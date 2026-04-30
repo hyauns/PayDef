@@ -5,8 +5,8 @@ import { Toaster } from 'sonner'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Gateway Central Dashboard',
-  description: 'Universal Payment Gateway Controller — multi-store management',
+  title: 'PayDef — Payment Gateway Protection for Ecommerce Teams',
+  description: 'Protect checkout continuity, manage merchant accounts, improve payment display clarity, recover failed webhooks, and strengthen dispute readiness from one secure payment operations dashboard.',
   generator: 'v0.app',
   icons: {
     icon: [

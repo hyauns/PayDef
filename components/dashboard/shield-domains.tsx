@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Shield, Wifi, WifiOff, AlertTriangle, RefreshCw, ExternalLink, Loader2 } from "lucide-react"
+import { SectionCard } from "./SectionCard"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -152,19 +153,13 @@ export function ShieldDomains() {
   const downCnt     = domains.filter(d => d.status === "Down").length
 
   return (
-    <div className="bg-card border border-border rounded-lg overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <div className="flex items-center gap-2">
-          <Shield className="w-3.5 h-3.5 text-cyan-400" />
-          <div>
-            <h2 className="text-sm font-semibold text-foreground">Shield Domain Health</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {loading ? "Loading…" : `${healthyCnt} of ${domains.length} domains operational`}
-            </p>
-          </div>
-        </div>
+    <SectionCard
+      title="Shield Domain Health"
+      description={loading ? "Loading…" : `${healthyCnt} of ${domains.length} domains operational`}
+      noPadding
+      action={
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-3 text-xs font-mono">
+          <div className="flex items-center gap-4 text-xs font-bold text-[#97a3b6]">
             <span className="flex items-center gap-1.5 text-emerald-400">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />{healthyCnt} Healthy
             </span>
@@ -176,18 +171,18 @@ export function ShieldDomains() {
             </span>
           </div>
         </div>
-      </div>
-
+      }
+    >
       {loading ? (
         <div className="p-8 flex items-center justify-center">
-          <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
+          <Loader2 className="w-5 h-5 text-[#6b7280] animate-spin" />
         </div>
       ) : domains.length === 0 ? (
-        <div className="py-12 text-center text-xs font-mono text-muted-foreground">
+        <div className="py-12 text-center text-sm font-semibold text-[#97a3b6]">
           No shield domains configured
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 p-5">
           {domains.map((d) => {
             const cfg = statusConfig[d.status]
             const Icon = cfg.icon
@@ -195,59 +190,61 @@ export function ShieldDomains() {
             return (
               <div
                 key={d.id}
-                className={`border ${cfg.border} ${cfg.bg} rounded-lg p-3 flex flex-col gap-2`}
+                className={`bg-[#2a2d39] border ${cfg.border} rounded-lg p-5 flex flex-col gap-3 transition-colors hover:bg-[#343947] shadow-sm`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
-                    <Icon className={`w-4 h-4 shrink-0 ${cfg.iconColor}`} />
+                    <div className={`p-2 rounded-lg ${cfg.bg}`}>
+                      <Icon className={`w-4 h-4 shrink-0 ${cfg.iconColor}`} />
+                    </div>
                     <div className="min-w-0">
-                      <p className="font-mono text-sm text-foreground truncate font-medium">{d.domain}</p>
+                      <p className="font-mono text-sm text-[#e7edf8] truncate font-bold">{d.domain}</p>
                       {d.tenantName && (
-                        <p className="font-mono text-xs text-muted-foreground">{d.tenantName}</p>
+                        <p className="font-mono text-xs font-semibold text-[#97a3b6]">{d.tenantName}</p>
                       )}
                     </div>
                   </div>
-                  <span className={`shrink-0 inline-flex items-center gap-1 text-xs font-mono px-1.5 py-0.5 rounded ${cfg.labelBg} ${cfg.labelColor}`}>
+                  <span className={`shrink-0 inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wide font-mono px-2 py-0.5 rounded-full ${cfg.labelBg} ${cfg.labelColor}`}>
                     <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${d.status === "Healthy" ? "animate-pulse" : ""}`} />
                     {cfg.label}
                   </span>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 text-xs font-mono">
+                <div className="grid grid-cols-3 gap-2 text-xs font-mono mt-1">
                   <div>
-                    <p className="text-muted-foreground uppercase tracking-wider text-[10px]">Latency</p>
-                    <p className={`font-semibold ${d.latency ? (d.latency > 200 ? "text-amber-400" : "text-emerald-400") : "text-muted-foreground"}`}>
+                    <p className="text-[#97a3b6] uppercase tracking-wider text-[10px] mb-0.5">Latency</p>
+                    <p className={`font-semibold ${d.latency ? (d.latency > 200 ? "text-amber-400" : "text-emerald-400") : "text-[#97a3b6]"}`}>
                       {d.latency ? `${d.latency}ms` : "—"}
                     </p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground uppercase tracking-wider text-[10px]">SSL</p>
+                    <p className="text-[#97a3b6] uppercase tracking-wider text-[10px] mb-0.5">SSL</p>
                     <p className={d.ssl ? "text-emerald-400 font-semibold" : "text-red-400 font-semibold"}>
                       {d.latency !== null ? (d.ssl ? "Valid" : "Invalid") : "—"}
                     </p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground uppercase tracking-wider text-[10px]">Checked</p>
-                    <p className="text-foreground">{d.lastChecked}</p>
+                    <p className="text-[#97a3b6] uppercase tracking-wider text-[10px] mb-0.5">Checked</p>
+                    <p className="text-[#e7edf8]">{d.lastChecked}</p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 mt-auto pt-1">
+                <div className="flex items-center gap-2 mt-auto pt-4 border-t border-[#343947]">
                   <button
                     onClick={() => testConnectivity(d.id)}
                     disabled={isTest}
-                    className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground hover:text-foreground border border-border hover:border-foreground/20 rounded px-2 py-1 transition-colors disabled:opacity-50 flex-1 justify-center"
+                    className="flex items-center gap-1.5 text-xs font-semibold text-[#97a3b6] hover:text-[#e7edf8] border border-[#343947] hover:border-[#404656] bg-[#222530] hover:bg-[#3a4050] rounded-md px-3 py-1.5 transition-colors disabled:opacity-50 flex-1 justify-center"
                   >
-                    <RefreshCw className={`w-3 h-3 ${isTest ? "animate-spin" : ""}`} />
+                    <RefreshCw className={`w-3.5 h-3.5 ${isTest ? "animate-spin" : ""}`} />
                     {isTest ? "Testing..." : "Test Connectivity"}
                   </button>
                   <a
                     href={`https://${d.domain}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-muted-foreground hover:text-foreground transition-colors p-1 border border-border rounded"
+                    className="text-[#97a3b6] hover:text-[#e7edf8] hover:bg-[#3a4050] bg-[#222530] transition-colors p-2 border border-[#343947] rounded-md"
                   >
-                    <ExternalLink className="w-3 h-3" />
+                    <ExternalLink className="w-3.5 h-3.5" />
                   </a>
                 </div>
               </div>
@@ -255,6 +252,6 @@ export function ShieldDomains() {
           })}
         </div>
       )}
-    </div>
+    </SectionCard>
   )
 }

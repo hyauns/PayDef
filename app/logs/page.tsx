@@ -14,7 +14,10 @@ import {
   RefreshCw,
   Loader2,
 } from "lucide-react"
-import { DashboardHeader } from "@/components/dashboard/header"
+import { DashboardShell } from "@/components/dashboard/DashboardShell"
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader"
+import { DataTableShell } from "@/components/dashboard/DataTableShell"
+import { StatusBadge } from "@/components/dashboard/StatusBadge"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -68,13 +71,6 @@ function fmtTs(iso: string) {
   })
 }
 
-const LEVEL_STYLES: Record<LogLevel, { text: string; bg: string; border: string; dot: string }> = {
-  success: { text: "text-emerald-400", bg: "bg-emerald-400/10", border: "border-emerald-400/20", dot: "bg-emerald-400" },
-  error:   { text: "text-red-400",     bg: "bg-red-400/10",     border: "border-red-400/20",     dot: "bg-red-400" },
-  warning: { text: "text-amber-400",   bg: "bg-amber-400/10",   border: "border-amber-400/20",   dot: "bg-amber-400" },
-  info:    { text: "text-cyan-400",    bg: "bg-cyan-400/10",    border: "border-cyan-400/20",    dot: "bg-cyan-400" },
-}
-
 function LevelIcon({ level }: { level: LogLevel }) {
   if (level === "success") return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
   if (level === "error")   return <XCircle      className="w-3.5 h-3.5 text-red-400 shrink-0" />
@@ -87,11 +83,11 @@ function LevelIcon({ level }: { level: LogLevel }) {
 function SkeletonRow() {
   return (
     <div className="grid grid-cols-[24px_160px_80px_1fr_140px] gap-3 px-4 py-2.5 items-center animate-pulse">
-      <div className="w-3.5 h-3.5 bg-secondary rounded-full" />
-      <div className="h-3 w-28 bg-secondary rounded" />
-      <div className="h-3 w-14 bg-secondary rounded" />
-      <div className="h-3 w-44 bg-secondary rounded" />
-      <div className="h-3 w-24 bg-secondary rounded" />
+      <div className="w-3.5 h-3.5 bg-[#2a2d39] rounded-full" />
+      <div className="h-3 w-28 bg-[#2a2d39] rounded" />
+      <div className="h-3 w-14 bg-[#2a2d39] rounded" />
+      <div className="h-3 w-44 bg-[#2a2d39] rounded" />
+      <div className="h-3 w-24 bg-[#2a2d39] rounded" />
     </div>
   )
 }
@@ -129,8 +125,6 @@ export default function LogsPage() {
   const totalPages  = pagination?.totalPages ?? 1
   const totalCount  = pagination?.total ?? 0
 
-  // Count by level (from the current page — for quick visual indicators)
-  // We'll show total count from API
   const handleReset = () => {
     setSearch("")
     setLevel("all")
@@ -162,31 +156,31 @@ export default function LogsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background font-mono">
-      <DashboardHeader />
-      <main className="px-4 md:px-6 py-5 space-y-5 max-w-[1600px] mx-auto">
+    <DashboardShell>
+      <div className="w-full px-6 md:px-8 py-8 space-y-6">
 
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-semibold text-foreground">System Logs</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Real-time gateway event log
+        <DashboardPageHeader
+          eyebrow="System Audit"
+          title="Gateway Event Logs"
+          description="Real-time timeline of transaction routing, api events, and system errors."
+          action={
+            <div className="flex items-center gap-3">
               {isValidating && !isLoading && (
-                <span className="inline-flex items-center gap-1 ml-2 text-cyan-400">
+                <span className="inline-flex items-center gap-1 text-cyan-400 text-xs">
                   <Loader2 className="w-3 h-3 animate-spin" /> updating
                 </span>
               )}
-            </p>
-          </div>
-          <button
-            onClick={handleExportCsv}
-            className="flex items-center gap-2 px-3 py-1.5 bg-card border border-border rounded-md text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Download className="w-3.5 h-3.5" />
-            Export CSV
-          </button>
-        </div>
+              <button
+                onClick={handleExportCsv}
+                className="flex items-center gap-2 px-3 py-1.5 bg-[#222530] border border-[#343947] rounded-md text-xs font-bold text-[#97a3b6] hover:text-[#e7edf8] hover:bg-[#2a2d39] transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Export CSV
+              </button>
+            </div>
+          }
+        />
 
         {/* Error state */}
         {error && (
@@ -194,7 +188,7 @@ export default function LogsPage() {
             <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
             <div className="text-xs font-mono">
               <span className="text-red-400 font-semibold">Failed to load logs.</span>
-              <span className="text-muted-foreground"> Auto-retry in 5 seconds.</span>
+              <span className="text-[#97aac1]"> Auto-retry in 5 seconds.</span>
             </div>
           </div>
         )}
@@ -202,20 +196,20 @@ export default function LogsPage() {
         {/* Summary chips */}
         <div className="flex flex-wrap gap-2">
           {([
-            { key: "all",     label: "All",      cls: "border-border text-muted-foreground" },
-            { key: "success", label: "Success",   cls: "border-emerald-400/30 text-emerald-400" },
-            { key: "error",   label: "Errors",    cls: "border-red-400/30 text-red-400" },
-            { key: "warning", label: "Warnings",  cls: "border-amber-400/30 text-amber-400" },
-            { key: "info",    label: "Info",       cls: "border-cyan-400/30 text-cyan-400" },
+            { key: "all",     label: "All",      cls: "border-[#343947] text-[#97a3b6]", dot: "bg-[#97a3b6]" },
+            { key: "success", label: "Success",   cls: "border-emerald-400/30 text-emerald-400", dot: "bg-emerald-400" },
+            { key: "error",   label: "Errors",    cls: "border-red-400/30 text-red-400", dot: "bg-red-400" },
+            { key: "warning", label: "Warnings",  cls: "border-amber-400/30 text-amber-400", dot: "bg-amber-400" },
+            { key: "info",    label: "Info",       cls: "border-cyan-400/30 text-cyan-400", dot: "bg-cyan-400" },
           ] as const).map(chip => (
             <button
               key={chip.key}
               onClick={() => { setLevel(chip.key as LogLevel | "all"); setPage(1) }}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-mono transition-all
-                ${levelFilter === chip.key ? "bg-secondary" : "bg-transparent hover:bg-secondary/50"}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-bold transition-all
+                ${levelFilter === chip.key ? "bg-[#343947]" : "bg-transparent hover:bg-[#222530]"}
                 ${chip.cls}`}
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${LEVEL_STYLES[chip.key as LogLevel]?.dot ?? "bg-muted-foreground"}`} />
+              <span className={`w-1.5 h-1.5 rounded-full ${chip.dot}`} />
               {chip.label}
             </button>
           ))}
@@ -224,29 +218,29 @@ export default function LogsPage() {
         {/* Search + filters */}
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#97a3b6] pointer-events-none" />
             <input
               type="text"
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(1) }}
               placeholder="Search actions, metadata..."
-              className="w-full bg-card border border-border rounded-md pl-9 pr-3 py-2 text-xs font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+              className="w-full bg-[#222530] border border-[#343947] rounded-md pl-9 pr-3 py-2 text-sm font-semibold text-[#e7edf8] placeholder:text-[#97a3b6] focus:outline-none focus:border-[#404656] transition-colors"
             />
           </div>
           <div className="relative">
             <select
               value={accountFilter}
               onChange={e => { setAccount(e.target.value); setPage(1) }}
-              className="appearance-none bg-card border border-border rounded-md pl-3 pr-8 py-2 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 cursor-pointer"
+              className="appearance-none bg-[#222530] border border-[#343947] rounded-md pl-3 pr-8 py-2 text-sm font-semibold text-[#e7edf8] focus:outline-none focus:border-[#404656] cursor-pointer"
             >
               <option value="all">All Accounts</option>
               {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#97a3b6] pointer-events-none" />
           </div>
           <button
             onClick={handleReset}
-            className="flex items-center gap-1.5 px-3 py-2 bg-card border border-border rounded-md text-xs text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 bg-[#222530] border border-[#343947] hover:bg-[#2a2d39] rounded-md text-sm font-bold text-[#97a3b6] hover:text-[#e7edf8] transition-colors"
           >
             <RefreshCw className="w-3 h-3" />
             Reset
@@ -254,9 +248,11 @@ export default function LogsPage() {
         </div>
 
         {/* Log table */}
-        <div className="bg-card border border-border rounded-lg overflow-hidden">
+        <DataTableShell>
+          <div className="bg-[#222530] border border-[#343947] border-b-[3px] border-b-[#2a2e3b] rounded-xl overflow-hidden shadow-[0_8px_24px_rgba(0,0,0,0.2)] relative">
+          <div className="absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-transparent via-[#343947] to-transparent opacity-50" />
           {/* Table header */}
-          <div className="grid grid-cols-[24px_160px_80px_1fr_140px] gap-3 px-4 py-2.5 border-b border-border bg-secondary/30 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+          <div className="grid grid-cols-[24px_160px_80px_1fr_140px] gap-3 px-4 py-4 border-b border-[#343947] bg-[#1f222c] text-xs font-bold text-[#97a3b6] uppercase tracking-wider">
             <span />
             <span>Timestamp</span>
             <span>Level</span>
@@ -266,44 +262,53 @@ export default function LogsPage() {
 
           {/* Loading skeleton */}
           {isLoading ? (
-            <div className="divide-y divide-border">
+            <div className="divide-y divide-[#343947]">
               {Array.from({ length: 10 }).map((_, i) => <SkeletonRow key={i} />)}
             </div>
           ) : logs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-[#97a3b6]">
               <Filter className="w-8 h-8 opacity-30" />
-              <p className="text-sm font-mono">No logs match the current filters</p>
+              <p className="text-sm font-semibold">No logs match the current filters</p>
             </div>
           ) : (
-            <div className="divide-y divide-border">
+            <div className="divide-y divide-[#343947]">
               {logs.map(log => {
-                const st = LEVEL_STYLES[log.level] ?? LEVEL_STYLES.info
                 const isOpen = expanded === log.id
                 const meta = log.metadata as Record<string, unknown>
+                
+                let variant: "success" | "warning" | "error" | "neutral" = "neutral"
+                if (log.level === "success") variant = "success"
+                if (log.level === "warning") variant = "warning"
+                if (log.level === "error") variant = "error"
+                if (log.level === "info") variant = "neutral"
+
+                const bgClass = log.level === "error" ? "bg-red-400/5" : log.level === "warning" ? "bg-amber-400/5" : "bg-[#222530]"
+                const borderClass = log.level === "error" ? "border-red-400/20" : log.level === "warning" ? "border-amber-400/20" : "border-[#343947]"
+
                 return (
-                  <div key={log.id}>
+                  <div key={log.id} className="hover:bg-[#2a2d39] transition-colors">
                     <button
                       onClick={() => setExpanded(isOpen ? null : log.id)}
-                      className="w-full grid grid-cols-[24px_160px_80px_1fr_140px] gap-3 px-4 py-2.5 items-center text-left hover:bg-secondary/30 transition-colors"
+                      className="w-full grid grid-cols-[24px_160px_80px_1fr_140px] gap-3 px-4 py-4 items-center text-left"
                     >
                       <LevelIcon level={log.level} />
-                      <span className="text-[11px] font-mono text-muted-foreground truncate">{fmtTs(log.createdAt)}</span>
-                      <span className={`text-[10px] font-mono font-semibold uppercase tracking-wider ${st.text}`}>
-                        {log.level}
-                      </span>
-                      <span className="text-xs font-mono text-foreground truncate">{log.action}</span>
-                      <span className="text-[11px] font-mono text-muted-foreground truncate">{log.accountName ?? "—"}</span>
+                      <span className="text-xs font-semibold text-[#97a3b6] truncate">{fmtTs(log.createdAt)}</span>
+                      <div className="flex items-center">
+                        <StatusBadge status={log.level} />
+                      </div>
+                      <span className="text-sm font-bold text-[#e7edf8] truncate">{log.action}</span>
+                      <span className="text-sm font-semibold text-[#97a3b6] truncate">{log.accountName ?? "—"}</span>
                     </button>
                     {isOpen && (
-                      <div className={`mx-4 mb-2 px-3 py-3 rounded-lg border text-xs font-mono space-y-1.5 ${st.bg} ${st.border}`}>
-                        <p className={`font-semibold ${st.text}`}>{log.action}</p>
-                        <p className="text-muted-foreground">{log.status} — {String(meta.detail ?? meta.message ?? "No additional details")}</p>
-                        <div className="flex flex-wrap gap-x-6 gap-y-1 text-[11px] text-muted-foreground pt-1">
-                          {log.storeName && <span>Store: <span className="text-foreground">{log.storeName}</span></span>}
-                          {log.tenantName && <span>Tenant: <span className="text-foreground">{log.tenantName}</span></span>}
-                          {meta.amount !== undefined && <span>Amount: <span className="text-foreground">${Number(meta.amount).toFixed(2)}</span></span>}
-                          {meta.txId ? <span>Tx ID: <span className="text-foreground">{String(meta.txId)}</span></span> : null}
-                          <span>Time: <span className="text-foreground">{fmtTs(log.createdAt)}</span></span>
+                      <div className={`mx-4 mb-3 mt-1 px-4 py-3 rounded-lg border text-xs font-mono space-y-1.5 ${bgClass} ${borderClass}`}>
+                        <p className={`font-semibold text-[#e7edf8]`}>{log.action}</p>
+                        <p className="text-[#97a3b6]">{log.status} — {String(meta.detail ?? meta.message ?? "No additional details")}</p>
+                        <div className="flex flex-wrap gap-x-6 gap-y-2 text-[11px] text-[#97a3b6] pt-2 border-t border-[#343947] mt-2">
+                          {log.storeName && <span>Store: <span className="text-[#e7edf8]">{log.storeName}</span></span>}
+                          {log.tenantName && <span>Tenant: <span className="text-[#e7edf8]">{log.tenantName}</span></span>}
+                          {meta.amount !== undefined && <span>Amount: <span className="text-[#e7edf8]">${Number(meta.amount).toFixed(2)}</span></span>}
+                          {meta.txId ? <span>Tx ID: <span className="text-[#e7edf8]">{String(meta.txId)}</span></span> : null}
+                          <span>Time: <span className="text-[#e7edf8]">{fmtTs(log.createdAt)}</span></span>
                         </div>
                       </div>
                     )}
@@ -315,31 +320,32 @@ export default function LogsPage() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
-              <span className="text-[11px] font-mono text-muted-foreground">
+            <div className="flex items-center justify-between px-6 py-4 border-t border-[#343947] bg-[#222530]">
+              <span className="text-xs font-bold text-[#97a3b6]">
                 {totalCount} results &bull; page {page} of {totalPages}
               </span>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-2">
                 <button
                   onClick={() => setPage(p => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="px-2.5 py-1 text-xs font-mono bg-background border border-border rounded-md disabled:opacity-40 hover:bg-secondary transition-colors"
+                  className="px-4 py-2 text-xs font-bold bg-[#2a2d39] border border-[#343947] rounded-md disabled:opacity-40 hover:bg-[#343947] text-[#e7edf8] transition-colors"
                 >
                   Prev
                 </button>
                 <button
                   onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  className="px-2.5 py-1 text-xs font-mono bg-background border border-border rounded-md disabled:opacity-40 hover:bg-secondary transition-colors"
+                  className="px-4 py-2 text-xs font-bold bg-[#2a2d39] border border-[#343947] rounded-md disabled:opacity-40 hover:bg-[#343947] text-[#e7edf8] transition-colors"
                 >
                   Next
                 </button>
               </div>
             </div>
           )}
-        </div>
+          </div>
+        </DataTableShell>
 
-      </main>
-    </div>
+      </div>
+    </DashboardShell>
   )
 }

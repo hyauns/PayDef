@@ -22,12 +22,14 @@ import {
   Loader2,
   XCircle,
 } from "lucide-react"
-import { DashboardHeader } from "@/components/dashboard/header"
+import { DashboardShell } from "@/components/dashboard/DashboardShell"
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader"
+import { GridBackground } from "@/components/ui/grid-background"
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const CARD = "bg-card border border-border rounded-lg"
-const LABEL = "text-[10px] font-mono text-muted-foreground uppercase tracking-wider"
+const CARD = "bg-[#151821] border border-[#343947] rounded-lg"
+const LABEL = "text-xs font-mono text-[#97a3b6] uppercase tracking-wider"
 
 const fetcher = (url: string) => fetch(url).then(r => {
   if (!r.ok) throw new Error(`HTTP ${r.status}`)
@@ -45,13 +47,14 @@ function fmtTs(iso: string) {
 // ─── Stat card ────────────────────────────────────────────────────────────────
 
 function StatCard({
-  icon, label, value, sub, accent = "text-foreground",
+  icon, label, value, sub, accent = "text-[#e7edf8]",
 }: { icon: React.ReactNode; label: string; value: string; sub?: string; accent?: string }) {
   return (
-    <div className={`${CARD} p-4 flex flex-col gap-2`}>
-      <div className="flex items-center gap-2 text-muted-foreground">{icon}<span className={LABEL}>{label}</span></div>
-      <p className={`text-2xl font-mono font-bold ${accent}`}>{value}</p>
-      {sub && <p className="text-[11px] font-mono text-muted-foreground">{sub}</p>}
+    <div className={`${CARD} p-4 flex flex-col gap-2 relative overflow-hidden`} data-ui-version="grid-background-v1">
+      <GridBackground />
+      <div className="relative z-10 flex items-center gap-2 text-[#97a3b6]">{icon}<span className={LABEL}>{label}</span></div>
+      <p className={`relative z-10 text-2xl font-mono font-bold ${accent}`}>{value}</p>
+      {sub && <p className="relative z-10 text-sm font-mono text-[#97a3b6]">{sub}</p>}
     </div>
   )
 }
@@ -65,15 +68,15 @@ function ActionRow({
     <button
       onClick={onClick}
       disabled={loading}
-      className={`w-full flex items-center gap-4 px-4 py-3 text-left transition-colors rounded-lg hover:bg-secondary/50
+      className={`w-full flex items-center gap-4 px-4 py-3 text-left transition-colors rounded-lg hover:bg-[#2a2d39]/50
         ${danger ? "border border-red-500/20 hover:border-red-500/40" : ""} ${loading ? "opacity-50 cursor-wait" : ""}`}
     >
-      <span className={`shrink-0 ${danger ? "text-red-400" : "text-muted-foreground"}`}>{icon}</span>
+      <span className={`shrink-0 ${danger ? "text-red-400" : "text-[#97a3b6]"}`}>{icon}</span>
       <div className="flex-1 min-w-0">
-        <p className={`text-xs font-mono font-semibold ${danger ? "text-red-400" : "text-foreground"}`}>{label}</p>
-        <p className="text-[10px] font-mono text-muted-foreground truncate">{desc}</p>
+        <p className={`text-xs font-mono font-semibold ${danger ? "text-red-400" : "text-[#e7edf8]"}`}>{label}</p>
+        <p className="text-xs font-mono text-[#97a3b6] truncate">{desc}</p>
       </div>
-      {loading ? <Loader2 className="w-3.5 h-3.5 text-muted-foreground animate-spin shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+      {loading ? <Loader2 className="w-3.5 h-3.5 text-[#97a3b6] animate-spin shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-[#97a3b6] shrink-0" />}
     </button>
   )
 }
@@ -85,19 +88,19 @@ function ConfirmModal({
 }: { title: string; message: string; onConfirm: () => void; onCancel: () => void; loading?: boolean }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-card border border-border rounded-xl shadow-2xl max-w-sm w-full mx-4 p-6 space-y-4">
+      <div className="bg-[#151821] border border-[#343947] rounded-xl shadow-2xl max-w-sm w-full mx-4 p-6 space-y-4">
         <div className="flex items-start gap-3">
           <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-semibold font-mono text-foreground">{title}</p>
-            <p className="text-xs font-mono text-muted-foreground mt-1">{message}</p>
+            <p className="text-sm font-semibold font-mono text-[#e7edf8]">{title}</p>
+            <p className="text-xs font-mono text-[#97a3b6] mt-1">{message}</p>
           </div>
         </div>
         <div className="flex items-center justify-end gap-2 pt-2">
           <button
             onClick={onCancel}
             disabled={loading}
-            className="px-4 py-1.5 text-xs font-mono bg-secondary border border-border rounded-md text-foreground hover:bg-secondary/80 transition-colors disabled:opacity-50"
+            className="px-4 py-1.5 text-xs font-mono bg-[#2a2d39] border border-[#343947] rounded-md text-[#e7edf8] hover:bg-[#2a2d39]/80 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
@@ -118,7 +121,7 @@ function ConfirmModal({
 // ─── Audit entry icon ─────────────────────────────────────────────────────────
 
 function AuditIcon({ action }: { action: string }) {
-  if (action.includes("LOGIN")) return <Users className="w-3 h-3 text-cyan-400 shrink-0" />
+  if (action.includes("LOGIN")) return <Users className="w-3 h-3 text-[#FFD600] shrink-0" />
   if (action.includes("KEY"))   return <Lock className="w-3 h-3 text-amber-400 shrink-0" />
   if (action.includes("REVOK")) return <XCircle className="w-3 h-3 text-red-400 shrink-0" />
   if (action.includes("TENANT"))return <Store className="w-3 h-3 text-emerald-400 shrink-0" />
@@ -315,8 +318,7 @@ export default function SuperAdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background font-mono">
-      <DashboardHeader />
+    <DashboardShell data-ui-version="super-admin-overview-boron-v1">
 
       {confirm && (
         <ConfirmModal
@@ -328,51 +330,50 @@ export default function SuperAdminPage() {
         />
       )}
 
-      <main className="px-4 md:px-6 py-5 max-w-[1200px] mx-auto space-y-5">
+      <main className="w-full px-6 md:px-8 py-8 space-y-6">
 
         {/* Page header */}
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center">
-            <ShieldAlert className="w-5 h-5 text-red-400" />
-          </div>
-          <div>
-            <h1 className="text-lg font-semibold text-foreground">Super Admin</h1>
-            <p className="text-xs text-muted-foreground">Root-level gateway controls — all actions are logged</p>
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            {controls.maintenanceMode && (
-              <div className="flex items-center gap-1.5 text-[11px] font-mono text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2.5 py-1 rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                Maintenance Active
+        <DashboardPageHeader
+          title="Admin Overview"
+          description="Monitor platform-wide tenants, stores, merchant accounts, domains, payment activity, and operational health."
+          eyebrow="SUPER ADMIN"
+          action={
+            <div className="flex items-center gap-2">
+              {controls.maintenanceMode && (
+                <div className="flex items-center gap-1.5 text-xs font-mono text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2.5 py-1 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                  Maintenance Active
+                </div>
+              )}
+              <div className="flex items-center gap-1.5 text-xs font-mono text-red-400 bg-red-400/10 border border-red-400/20 px-2.5 py-1 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                Restricted Access
               </div>
-            )}
-            <div className="flex items-center gap-1.5 text-[11px] font-mono text-red-400 bg-red-400/10 border border-red-400/20 px-2.5 py-1 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-              Restricted Access
             </div>
-          </div>
-        </div>
+          }
+        />
 
         {/* System Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard icon={<Users className="w-3.5 h-3.5" />}    label="Total Merchants"  value={stats ? String(stats.totalAccounts) : "—"}  sub={stats ? `${stats.totalTenants} tenant${stats.totalTenants !== 1 ? "s" : ""}` : "Loading..."}     accent="text-cyan-400"    />
+          <StatCard icon={<Users className="w-3.5 h-3.5" />}    label="Total Merchants"  value={stats ? String(stats.totalAccounts) : "—"}  sub={stats ? `${stats.totalTenants} tenant${stats.totalTenants !== 1 ? "s" : ""}` : "Loading..."}     accent="text-[#FFD600]"    />
           <StatCard icon={<Store className="w-3.5 h-3.5" />}    label="Client Stores"    value={stats ? String(stats.totalStores) : "—"}    sub="All operational"         accent="text-emerald-400" />
-          <StatCard icon={<Globe className="w-3.5 h-3.5" />}    label="Shield Domains"   value={domainCount ? String(domainCount.total) : "—"} sub={domainCount ? `${domainCount.active} active in rotation` : "Loading..."}    accent="text-foreground"  />
-          <StatCard icon={<Database className="w-3.5 h-3.5" />} label="Total Volume"     value={stats ? `$${stats.totalVolume.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : "—"} sub={stats ? `${stats.totalTransactions} transactions` : "Loading..."}        accent="text-foreground"  />
+          <StatCard icon={<Globe className="w-3.5 h-3.5" />}    label="Shield Domains"   value={domainCount ? String(domainCount.total) : "—"} sub={domainCount ? `${domainCount.active} active in rotation` : "Loading..."}    accent="text-[#e7edf8]"  />
+          <StatCard icon={<Database className="w-3.5 h-3.5" />} label="Total Volume"     value={stats ? `$${stats.totalVolume.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : "—"} sub={stats ? `${stats.totalTransactions} transactions` : "Loading..."}        accent="text-[#e7edf8]"  />
         </div>
 
         {/* Two-column layout */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
           {/* Gateway controls */}
-          <div className={`${CARD} overflow-hidden`}>
-            <div className="px-5 py-3 border-b border-border flex items-center gap-2">
-              <Server className="w-3.5 h-3.5 text-muted-foreground" />
-              <p className="text-sm font-semibold text-foreground">Gateway Controls</p>
+          <div className={`${CARD} overflow-hidden relative`} data-ui-version="grid-background-v1">
+            <GridBackground />
+            <div className="relative z-10 px-5 py-3 border-b border-[#343947] flex items-center gap-2 bg-[#1f222c]/80 backdrop-blur-sm">
+              <Server className="w-3.5 h-3.5 text-[#97a3b6]" />
+              <p className="text-sm font-semibold text-[#e7edf8]">Gateway Controls</p>
             </div>
 
             {/* Toggles */}
-            <div className="px-5 py-4 space-y-3 border-b border-border">
+            <div className="relative z-10 px-5 py-4 space-y-3 border-b border-[#343947]">
               {[
                 {
                   key: "rotationEnabled" as const,
@@ -389,12 +390,12 @@ export default function SuperAdminPage() {
               ].map(item => (
                 <div key={item.key} className="flex items-center justify-between gap-3">
                   <div>
-                    <p className={`text-xs font-mono font-semibold ${item.danger ? "text-amber-400" : "text-foreground"}`}>{item.label}</p>
-                    <p className="text-[10px] font-mono text-muted-foreground">{item.desc}</p>
+                    <p className={`text-xs font-mono font-semibold ${item.danger ? "text-amber-400" : "text-[#e7edf8]"}`}>{item.label}</p>
+                    <p className="text-xs font-mono text-[#97a3b6]">{item.desc}</p>
                   </div>
                   <button
                     onClick={() => toggleControl(item.key)}
-                    className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${controls[item.key] ? (item.danger ? "bg-amber-500" : "bg-cyan-500") : "bg-secondary border border-border"}`}
+                    className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${controls[item.key] ? (item.danger ? "bg-amber-500" : "bg-[#FFD600]") : "bg-[#2a2d39] border border-[#343947]"}`}
                   >
                     <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${controls[item.key] ? "left-[22px]" : "left-0.5"}`} />
                   </button>
@@ -460,24 +461,25 @@ export default function SuperAdminPage() {
           {/* Right column: API key + active sessions */}
           <div className="space-y-5">
             {/* API Key */}
-            <div className={`${CARD} overflow-hidden`}>
-              <div className="px-5 py-3 border-b border-border flex items-center gap-2">
-                <Lock className="w-3.5 h-3.5 text-muted-foreground" />
-                <p className="text-sm font-semibold text-foreground">Gateway API Key</p>
+            <div className={`${CARD} overflow-hidden relative`} data-ui-version="grid-background-v1">
+              <GridBackground />
+              <div className="relative z-10 px-5 py-3 border-b border-[#343947] flex items-center gap-2 bg-[#1f222c]/80 backdrop-blur-sm">
+                <Lock className="w-3.5 h-3.5 text-[#97a3b6]" />
+                <p className="text-sm font-semibold text-[#e7edf8]">Gateway API Key</p>
               </div>
-              <div className="px-5 py-4 space-y-3">
+              <div className="relative z-10 px-5 py-4 space-y-3">
                 <div className="relative">
                   <input
                     type={showApiKey ? "text" : "password"}
                     readOnly
                     value={maskedKey}
-                    className="w-full bg-background border border-border rounded-md pl-3 pr-20 py-2 text-xs font-mono text-foreground focus:outline-none cursor-default"
+                    className="w-full bg-[#1a1d24] border border-[#343947] rounded-md pl-3 pr-20 py-2 text-xs font-mono text-[#e7edf8] focus:outline-none cursor-default"
                   />
                   <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                     {newKeyRevealed && (
                       <button
                         onClick={handleCopyKey}
-                        className="text-muted-foreground hover:text-foreground transition-colors p-1"
+                        className="text-[#97a3b6] hover:text-[#e7edf8] transition-colors p-1"
                         title="Copy to clipboard"
                       >
                         <Copy className="w-3.5 h-3.5" />
@@ -485,14 +487,14 @@ export default function SuperAdminPage() {
                     )}
                     <button
                       onClick={() => setShowApiKey(p => !p)}
-                      className="text-muted-foreground hover:text-foreground transition-colors p-1"
+                      className="text-[#97a3b6] hover:text-[#e7edf8] transition-colors p-1"
                     >
                       {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                     </button>
                   </div>
                 </div>
                 {newKeyRevealed && (
-                  <div className="flex items-start gap-2 text-[11px] font-mono text-amber-400 bg-amber-400/5 border border-amber-400/20 rounded-md px-3 py-2">
+                  <div className="flex items-start gap-2 text-sm font-mono text-amber-400 bg-amber-400/5 border border-amber-400/20 rounded-md px-3 py-2">
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                     <span>New key generated. Copy it now — it will not be shown again after you leave this page.</span>
                   </div>
@@ -509,15 +511,16 @@ export default function SuperAdminPage() {
             </div>
 
             {/* Active Sessions */}
-            <div className={`${CARD} overflow-hidden`}>
-              <div className="px-5 py-3 border-b border-border flex items-center gap-2">
-                <Users className="w-3.5 h-3.5 text-muted-foreground" />
-                <p className="text-sm font-semibold text-foreground">Active Sessions</p>
-                <span className="ml-auto text-[10px] font-mono text-muted-foreground">{sessions.length} active</span>
+            <div className={`${CARD} overflow-hidden relative`}>
+              <GridBackground />
+              <div className="relative z-10 px-5 py-3 border-b border-[#343947] flex items-center gap-2">
+                <Users className="w-3.5 h-3.5 text-[#97a3b6]" />
+                <p className="text-sm font-semibold text-[#e7edf8]">Active Sessions</p>
+                <span className="ml-auto text-xs font-mono text-[#97a3b6]">{sessions.length} active</span>
               </div>
-              <div className="divide-y divide-border">
+              <div className="relative z-10 divide-y divide-[#343947]">
                 {sessions.length === 0 ? (
-                  <div className="px-5 py-6 text-center text-xs font-mono text-muted-foreground">
+                  <div className="px-5 py-6 text-center text-xs font-mono text-[#97a3b6]">
                     No active sessions in the last 8 hours
                   </div>
                 ) : (
@@ -525,27 +528,27 @@ export default function SuperAdminPage() {
                     <div key={s.id} className="px-5 py-3 flex items-start justify-between gap-3">
                       <div className="space-y-0.5">
                         <div className="flex items-center gap-2">
-                          <p className="text-xs font-mono text-foreground">{s.email}</p>
+                          <p className="text-xs font-mono text-[#e7edf8]">{s.email}</p>
                           {s.isCurrent && (
-                            <span className="text-[9px] font-mono font-semibold uppercase tracking-wider text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded-full">
+                            <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded-full">
                               Current
                             </span>
                           )}
-                          <span className={`text-[9px] font-mono font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full border ${
+                          <span className={`text-[10px] font-mono font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full border ${
                             s.role === "SUPER_ADMIN"
                               ? "text-red-400 bg-red-400/10 border-red-400/20"
-                              : "text-cyan-400 bg-cyan-400/10 border-cyan-400/20"
+                              : "text-[#FFD600] bg-[#FFD600]/10 border-[#FFD600]/20"
                           }`}>
                             {s.role}
                           </span>
                         </div>
-                        <p className="text-[10px] font-mono text-muted-foreground">IP {s.ip} &bull; Since {fmtTs(s.since)}</p>
+                        <p className="text-xs font-mono text-[#97a3b6]">IP {s.ip} &bull; Since {fmtTs(s.since)}</p>
                       </div>
                       {!s.isCurrent && s.jti && (
                         <button
                           onClick={() => handleRevokeSession(s)}
                           disabled={actionLoading === `revoke-${s.id}`}
-                          className="text-[10px] font-mono text-red-400 border border-red-400/20 hover:bg-red-400/10 rounded-md px-2 py-1 transition-colors shrink-0 disabled:opacity-50 flex items-center gap-1"
+                          className="text-xs font-mono text-red-400 border border-red-400/20 hover:bg-red-400/10 rounded-md px-2 py-1 transition-colors shrink-0 disabled:opacity-50 flex items-center gap-1"
                         >
                           {actionLoading === `revoke-${s.id}` && <Loader2 className="w-2.5 h-2.5 animate-spin" />}
                           Revoke
@@ -560,15 +563,16 @@ export default function SuperAdminPage() {
         </div>
 
         {/* Audit Log */}
-        <div className={`${CARD} overflow-hidden`}>
-          <div className="px-5 py-3 border-b border-border flex items-center gap-2">
-            <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
-            <p className="text-sm font-semibold text-foreground">Audit Log</p>
-            <span className="ml-auto text-[10px] font-mono text-muted-foreground">Last {auditEntries.length} entries &bull; auto-refresh</span>
+        <div className={`${CARD} overflow-hidden relative`} data-ui-version="grid-background-v1">
+          <GridBackground />
+          <div className="relative z-10 px-5 py-3 border-b border-[#343947] flex items-center justify-between bg-[#1f222c]/80 backdrop-blur-sm">
+            <Terminal className="w-3.5 h-3.5 text-[#97a3b6]" />
+            <p className="text-sm font-semibold text-[#e7edf8]">Audit Log</p>
+            <span className="ml-auto text-xs font-mono text-[#97a3b6]">Last {auditEntries.length} entries &bull; auto-refresh</span>
           </div>
-          <div className="divide-y divide-border">
+          <div className="relative z-10 divide-y divide-[#343947]">
             {auditEntries.length === 0 ? (
-              <div className="px-5 py-8 text-center text-xs font-mono text-muted-foreground">
+              <div className="px-5 py-8 text-center text-xs font-mono text-[#97a3b6]">
                 No admin activity recorded yet
               </div>
             ) : (
@@ -576,10 +580,10 @@ export default function SuperAdminPage() {
                 <div key={entry.id} className="grid grid-cols-[1fr_160px_120px] gap-3 px-5 py-2.5 items-center">
                   <div className="flex items-center gap-2 min-w-0">
                     <AuditIcon action={entry.action} />
-                    <span className="text-xs font-mono text-foreground truncate">{entry.detail}</span>
+                    <span className="text-xs font-mono text-[#e7edf8] truncate">{entry.detail}</span>
                   </div>
-                  <span className="text-[10px] font-mono text-muted-foreground truncate">{entry.admin}</span>
-                  <span className="text-[10px] font-mono text-muted-foreground text-right">{fmtTs(entry.createdAt)}</span>
+                  <span className="text-xs font-mono text-[#97a3b6] truncate">{entry.admin}</span>
+                  <span className="text-xs font-mono text-[#97a3b6] text-right">{fmtTs(entry.createdAt)}</span>
                 </div>
               ))
             )}
@@ -588,8 +592,7 @@ export default function SuperAdminPage() {
 
       </main>
 
-      {/* Toast notification */}
       {toast && <ToastNotification toast={toast} onDismiss={() => setToast(null)} />}
-    </div>
+    </DashboardShell>
   )
 }

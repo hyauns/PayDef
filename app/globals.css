@@ -1,4 +1,6 @@
 @import 'tailwindcss';
+@source "../components";
+@source "../app";
 @import 'tw-animate-css';
 
 @keyframes pulse-badge {
@@ -184,4 +186,23 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Landing Page Specific Overrides */
+:root {
+  --landing-yellow: #FFD600;
+  --landing-orange: #FF6B35;
+  --landing-bg: #0A0A0A;
+  --landing-card: #111111;
+  --landing-text-light: #F5F5F0;
+  --landing-text-muted: #888888;
+  --landing-border: #2D2D2D;
+}
+
+@utility font-grotesk {
+  font-family: var(--font-space-grotesk), "Space Grotesk", sans-serif;
+}
+
+@utility font-ibm-mono {
+  font-family: var(--font-ibm-plex-mono), "IBM Plex Mono", monospace;
 }

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import useSWR from "swr"
 import { BarChart2, Clock, List, CheckCircle2, Info, Loader2 } from "lucide-react"
+import { SectionCard } from "./SectionCard"
 
 type RotationMode = "volume" | "time" | "sequential"
 
@@ -150,31 +151,29 @@ export function RotationLogic() {
   }
 
   return (
-    <div className="bg-card border border-border rounded-lg overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <div>
-          <h2 className="text-sm font-semibold text-foreground">Rotation Logic</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">Configure how traffic is routed across PayPal accounts</p>
-        </div>
+    <SectionCard
+      title="Rotation Logic"
+      description="Configure how traffic is routed across PayPal accounts"
+      action={
         <button
           onClick={() => setShowInfo(!showInfo)}
-          className="text-muted-foreground hover:text-foreground transition-colors p-1"
+          className="text-[#97a3b6] hover:text-[#e7edf8] transition-colors p-1"
           title="Mode info"
         >
-          <Info className="w-4 h-4" />
+          <Info className="w-5 h-5" />
         </button>
-      </div>
-
-      <div className="p-4 space-y-4">
+      }
+    >
+      <div className="space-y-4">
         {/* Loading skeleton */}
         {isLoading ? (
           <div className="animate-pulse space-y-3">
             <div className="grid grid-cols-3 gap-2">
               {[1, 2, 3].map(i => (
-                <div key={i} className="h-20 bg-secondary rounded-lg" />
+                <div key={i} className="h-20 bg-[#2a2d39] rounded-lg" />
               ))}
             </div>
-            <div className="h-8 w-48 bg-secondary rounded" />
+            <div className="h-8 w-48 bg-[#2a2d39] rounded" />
           </div>
         ) : (
           <>
@@ -190,20 +189,20 @@ export function RotationLogic() {
                     className={`relative flex flex-col items-start gap-2 p-3 rounded-lg border text-left transition-all ${
                       isActive
                         ? `${mode.border} ${mode.bg}`
-                        : "border-border hover:border-border/80 hover:bg-secondary/30"
+                        : "border-[#343947] hover:border-[#404656] hover:bg-[#2a2d39]"
                     }`}
                   >
                     {isActive && (
                       <CheckCircle2 className={`w-3.5 h-3.5 absolute top-2 right-2 ${mode.color}`} />
                     )}
-                    <div className={`w-7 h-7 rounded-md flex items-center justify-center ${isActive ? mode.bg : "bg-secondary"}`}>
-                      <Icon className={`w-4 h-4 ${isActive ? mode.color : "text-muted-foreground"}`} />
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isActive ? mode.bg : "bg-[#2a2d39]"}`}>
+                      <Icon className={`w-4 h-4 ${isActive ? mode.color : "text-[#6b7280]"}`} />
                     </div>
                     <div>
-                      <p className={`text-sm font-semibold ${isActive ? mode.color : "text-foreground"}`}>
+                      <p className={`text-sm font-bold ${isActive ? mode.color : "text-[#e7edf8]"}`}>
                         {mode.label}
                       </p>
-                      <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">
+                      <p className="text-xs font-semibold text-[#97a3b6] leading-relaxed mt-0.5">
                         {mode.description}
                       </p>
                     </div>
@@ -214,8 +213,8 @@ export function RotationLogic() {
 
             {/* Info panel */}
             {showInfo && (
-              <div className={`text-xs font-mono text-muted-foreground ${activeMode.bg} border ${activeMode.border} rounded-md p-3 leading-relaxed`}>
-                <span className={`font-semibold ${activeMode.color}`}>{activeMode.label}: </span>
+              <div className={`text-sm font-medium text-[#e7edf8] ${activeMode.bg} border ${activeMode.border} rounded-md p-3 leading-relaxed`}>
+                <span className={`font-bold ${activeMode.color}`}>{activeMode.label}: </span>
                 {activeMode.detail}
               </div>
             )}
@@ -223,16 +222,16 @@ export function RotationLogic() {
             {/* Time interval sub-option */}
             {active === "time" && (
               <div className="space-y-2">
-                <p className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Rotation Interval</p>
+                <p className="text-xs font-bold text-[#97a3b6] uppercase tracking-wider">Rotation Interval</p>
                 <div className="flex flex-wrap gap-2">
                   {timeIntervals.map((interval) => (
                     <button
                       key={interval.label}
                       onClick={() => setTimeInterval(interval.label)}
-                      className={`text-xs font-mono px-3 py-1.5 rounded-md border transition-colors ${
+                      className={`text-xs font-semibold px-3 py-1.5 rounded-md border transition-colors ${
                         timeInterval === interval.label
                           ? "border-violet-400/40 bg-violet-400/10 text-violet-400"
-                          : "border-border text-muted-foreground hover:text-foreground hover:border-border/80"
+                          : "border-[#343947] bg-[#2a2d39] text-[#97a3b6] hover:text-[#e7edf8] hover:border-[#404656]"
                       }`}
                     >
                       {interval.label}
@@ -250,10 +249,10 @@ export function RotationLogic() {
             )}
 
             {/* Status bar */}
-            <div className="flex items-center justify-between pt-1 border-t border-border">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-mono text-muted-foreground">Active strategy:</span>
-                <span className={`text-xs font-mono font-semibold ${activeMode.color}`}>
+            <div className="flex items-center justify-between pt-1 border-t border-[#343947]">
+              <div className="flex items-center gap-2 mt-3">
+                <span className="text-sm font-medium text-[#97a3b6]">Active strategy:</span>
+                <span className={`text-sm font-bold ${activeMode.color}`}>
                   {activeMode.label}
                   {active === "time" ? ` (every ${timeInterval})` : ""}
                 </span>
@@ -261,12 +260,12 @@ export function RotationLogic() {
               <button
                 onClick={handleApply}
                 disabled={saving}
-                className={`text-xs font-mono rounded-md px-3 py-1.5 transition-all flex items-center gap-1.5 ${
+                className={`mt-3 text-sm font-semibold rounded-md px-3 py-1.5 transition-all flex items-center gap-1.5 ${
                   saved
                     ? "bg-emerald-400/10 text-emerald-400 border border-emerald-400/30"
                     : saving
-                    ? "bg-cyan-400/50 text-background border border-transparent cursor-wait"
-                    : "bg-cyan-400/10 text-cyan-400 border border-cyan-400/30 hover:bg-cyan-400/20"
+                    ? "bg-[#FFD600]/50 text-[#1f222c] border border-transparent cursor-wait"
+                    : "bg-[#FFD600] text-[#1f222c] border border-transparent hover:bg-[#FFD600]/90 shadow-sm"
                 }`}
               >
                 {saved ? (
@@ -281,6 +280,6 @@ export function RotationLogic() {
           </>
         )}
       </div>
-    </div>
+    </SectionCard>
   )
 }

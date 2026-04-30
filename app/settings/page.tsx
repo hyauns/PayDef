@@ -26,15 +26,16 @@ import {
 import { validateProfileField } from "@/lib/profile-validation"
 import { SuperAdminDisplayProfiles } from "@/components/dashboard/SuperAdminDisplayProfiles"
 import { SuperAdminDescriptorTemplates } from "@/components/dashboard/SuperAdminDescriptorTemplates"
-import { DashboardHeader } from "@/components/dashboard/header"
+import { DashboardShell } from "@/components/dashboard/DashboardShell"
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader"
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const SECTION_CLASSES = "bg-card border border-border rounded-lg divide-y divide-border"
-const LABEL = "text-[10px] font-mono text-muted-foreground uppercase tracking-wider"
-const INPUT = "w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
-const SECTION_HEADER = "px-5 py-3 flex items-center gap-2.5"
-const SECTION_BODY = "px-5 py-5 space-y-5"
+const SECTION_CLASSES = "bg-[#222530] border border-[#343947] border-b-[3px] border-b-[#2a2e3b] shadow-[0_8px_24px_rgba(0,0,0,0.2)] rounded-xl overflow-hidden relative flex flex-col mb-8"
+const LABEL = "text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3] mb-1 block"
+const INPUT = "w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2.5 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+const SECTION_HEADER = "px-6 py-5 border-b border-[#343947] bg-[#1f222c] flex items-center gap-3 relative"
+const SECTION_BODY = "p-6 space-y-6 bg-[#222530]"
 const CHECKOUT_FLOW_OPTIONS = [
   {
     value: "REDIRECT",
@@ -64,7 +65,7 @@ function Toggle({ enabled, onToggle, disabled }: { enabled: boolean; onToggle: (
       disabled={disabled}
       className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${
         disabled ? "opacity-50 cursor-not-allowed" : ""
-      } ${enabled ? "bg-cyan-500" : "bg-secondary border border-border"}`}
+      } ${enabled ? "bg-[#FFD600]" : "bg-[#1a1d24] border border-[#343947]"}`}
     >
       <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${enabled ? "left-[22px]" : "left-0.5"}`} />
     </button>
@@ -118,7 +119,7 @@ function Toast({ type, message, onDismiss }: { type: "success" | "error"; messag
   }, [onDismiss])
 
   return (
-    <div className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs font-mono border ${
+    <div className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium border ${
       type === "success"
         ? "bg-emerald-400/10 text-emerald-400 border-emerald-400/30"
         : "bg-red-400/10 text-red-400 border-red-400/30"
@@ -241,24 +242,24 @@ function StorePaymentDisplayProfile({ storeId, storeName }: { storeId: string; s
   }
 
   if (isLoading) {
-    return <div className="py-5 flex justify-center"><Loader2 className="w-4 h-4 text-cyan-400 animate-spin" /></div>
+    return <div className="py-5 flex justify-center"><Loader2 className="w-4 h-4 text-[#FFD600] animate-spin" /></div>
   }
 
   return (
-    <div className="space-y-4 pt-4 mt-4 border-t border-border">
+    <div className="space-y-4 pt-6 mt-6 border-t border-[#343947]">
       <div className="flex items-center gap-2">
-        <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Payment Display Profile</label>
-        {saving && <Loader2 className="w-3 h-3 text-cyan-400 animate-spin" />}
+        <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Payment Display Profile</label>
+        {saving && <Loader2 className="w-3 h-3 text-[#FFD600] animate-spin" />}
       </div>
       
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Industry Vertical */}
-        <div className="space-y-1.5">
-          <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Industry Vertical</label>
+        <div className="space-y-2.5">
+          <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Industry Vertical</label>
           <select 
             value={form.industryVertical} 
             onChange={(e) => update({ industryVertical: e.target.value })}
-            className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+            className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2.5 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
           >
             <option value="automotive_tires">Automotive / Tires</option>
             <option value="electronics">Electronics</option>
@@ -271,12 +272,12 @@ function StorePaymentDisplayProfile({ storeId, storeName }: { storeId: string; s
         </div>
 
         {/* Display Mode */}
-        <div className="space-y-1.5">
-          <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Display Mode</label>
+        <div className="space-y-2.5">
+          <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Display Mode</label>
           <select 
             value={form.displayMode} 
             onChange={(e) => update({ displayMode: e.target.value })}
-            className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+            className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2.5 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
           >
             <option value="BRAND_SEMANTIC">Brand + Semantic Order</option>
             <option value="SEMANTIC_ORDER">Semantic Order Only</option>
@@ -286,34 +287,34 @@ function StorePaymentDisplayProfile({ storeId, storeName }: { storeId: string; s
         </div>
 
         {/* Public Brand Name */}
-        <div className="space-y-1.5">
-          <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Public Brand Name</label>
+        <div className="space-y-2.5">
+          <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Public Brand Name</label>
           <input 
             value={form.publicBrandName} 
             onChange={(e) => update({ publicBrandName: e.target.value })}
             placeholder="e.g. TireVix"
-            className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+            className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2.5 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
           />
         </div>
 
         {/* Descriptor Prefix */}
-        <div className="space-y-1.5">
-          <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Descriptor Prefix</label>
+        <div className="space-y-2.5">
+          <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Descriptor Prefix</label>
           <input 
             value={form.descriptorPrefix} 
             onChange={(e) => update({ descriptorPrefix: e.target.value })}
             placeholder="e.g. TireVix Auto"
-            className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+            className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2.5 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
           />
         </div>
 
         {/* Line Item Policy */}
-        <div className="space-y-1.5 sm:col-span-2">
-          <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Line Item Policy</label>
+        <div className="space-y-2.5 sm:col-span-2">
+          <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Line Item Policy</label>
           <select 
             value={form.lineItemPolicy} 
             onChange={(e) => update({ lineItemPolicy: e.target.value })}
-            className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+            className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2.5 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
           >
             <option value="SINGLE_SEMANTIC_ITEM">Single Order Summary</option>
             <option value="REAL_CART_ITEMS">Real Cart Items</option>
@@ -324,37 +325,37 @@ function StorePaymentDisplayProfile({ storeId, storeName }: { storeId: string; s
 
       {/* Warnings */}
       {form.displayMode === "LEGACY_GENERIC" && form.industryVertical !== "generic_ecommerce" && (
-        <div className="bg-amber-400/10 border border-amber-400/20 text-amber-400 text-[11px] font-mono px-3 py-2 rounded-md">
+        <div className="bg-[#4a3908]/50 border border-[#ca8a04]/50 text-[#facc15] text-[11px] font-mono px-4 py-3 rounded-md border-l-[3px] border-l-[#ca8a04]">
           Generic service descriptors may confuse buyers. Recommended: Brand + Semantic Order.
         </div>
       )}
       {form.lineItemPolicy === "LEGACY_RANDOM_SPLIT" && (
-        <div className="bg-amber-400/10 border border-amber-400/20 text-amber-400 text-[11px] font-mono px-3 py-2 rounded-md">
+        <div className="bg-[#4a3908]/50 border border-[#ca8a04]/50 text-[#facc15] text-[11px] font-mono px-4 py-3 rounded-md border-l-[3px] border-l-[#ca8a04]">
           This may create multiple PayPal line items that do not match the buyer&apos;s cart. Recommended: Single Order Summary.
         </div>
       )}
 
       {/* Live Preview Box */}
-      <div className="bg-secondary/30 border border-border rounded-md p-3 space-y-2 mt-2">
-        <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Live Preview</p>
-        <div className="flex flex-col gap-1 text-[11px] font-mono text-foreground">
-          <p>Buyer may see: <span className="text-cyan-400 font-semibold">{previewLoading ? "Loading..." : previewName}</span></p>
-          <p className="text-muted-foreground mt-1">Your store receipt will still show the real product details.</p>
+      <div className="bg-[#1f222c] border border-[#343947] rounded-md p-5 space-y-3 mt-4 shadow-inner">
+        <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Live Preview</p>
+        <div className="flex flex-col gap-1.5 text-[12px] font-mono text-[#e7edf8]">
+          <p>Buyer may see: <span className="text-[#FFD600] font-bold text-sm bg-[#151821] px-2 py-1 rounded">{previewLoading ? "Loading..." : previewName}</span></p>
+          <p className="text-[#6b7280] mt-2 text-[10px]">Your store receipt will still show the real product details.</p>
         </div>
       </div>
 
-      <div className="flex items-center gap-3 pt-2">
+      <div className="flex items-center gap-4 pt-4">
         <button
           onClick={handleSave}
           disabled={saving}
-          className={`text-xs font-mono px-4 py-2 rounded-md transition-colors ${
-            saving ? "bg-cyan-400/50 text-background" : "border border-cyan-400 text-cyan-400 hover:bg-cyan-400/10"
+          className={`text-sm font-semibold px-6 py-2.5 rounded-md transition-colors ${
+            saving ? "bg-[#FFD600]/50 text-black cursor-not-allowed" : "bg-[#FFD600] text-black hover:bg-[#e6c100]"
           }`}
         >
           {saving ? "Saving..." : "Save Profile"}
         </button>
-        {success && <span className="text-[11px] font-mono text-emerald-400 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> {success}</span>}
-        {error && <span className="text-[11px] font-mono text-red-400 flex items-center gap-1"><XCircle className="w-3 h-3" /> {error}</span>}
+        {success && <span className="text-sm font-medium text-emerald-400 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> {success}</span>}
+        {error && <span className="text-sm font-medium text-red-400 flex items-center gap-1"><XCircle className="w-3 h-3" /> {error}</span>}
       </div>
     </div>
   )
@@ -746,18 +747,17 @@ export default function SettingsPage() {
   // ─── MERCHANT VIEW ──────────────────────────────────────────────────────────
   if (!isSuperAdmin) {
     return (
-      <div className="min-h-screen bg-background font-mono">
-        <DashboardHeader />
-        <main className="px-4 md:px-6 py-5 max-w-3xl mx-auto space-y-5">
+      <DashboardShell>
+        <main className="px-4 md:px-8 py-8 w-full max-w-7xl mx-auto space-y-8">
 
-          {/* Page header */}
-          <div>
-            <h1 className="text-lg font-semibold text-foreground">Settings</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">Manage your stores, notifications, and account security</p>
-          </div>
+          <DashboardPageHeader 
+            eyebrow="CONFIGURATION"
+            title="Settings"
+            description="Manage your stores, notifications, and account security"
+          />
 
           {/* Personalized badge */}
-          <div className="flex items-center gap-2 text-[11px] font-mono text-emerald-400 bg-emerald-400/5 border border-emerald-400/20 rounded-md px-3 py-2">
+          <div className="flex items-center gap-2 text-sm font-medium text-emerald-400 bg-emerald-400/5 border border-emerald-400/20 rounded-md px-3 py-2">
             <Shield className="w-3.5 h-3.5 shrink-0" />
             Personalized Security & Alerts — your configuration is isolated to your tenant
           </div>
@@ -768,7 +768,7 @@ export default function SettingsPage() {
               <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
               <div className="text-xs font-mono">
                 <span className="text-red-400 font-semibold">Save failed: </span>
-                <span className="text-muted-foreground">{saveError}</span>
+                <span className="text-[#97a3b6]">{saveError}</span>
               </div>
             </div>
           )}
@@ -777,16 +777,16 @@ export default function SettingsPage() {
           {storesLoading ? (
             <div className="space-y-4">
               {[1, 2].map(i => (
-                <div key={i} className="bg-card border border-border rounded-lg p-5 animate-pulse space-y-4">
-                  <div className="h-5 w-40 bg-secondary rounded" />
-                  <div className="h-4 w-64 bg-secondary rounded" />
-                  <div className="h-4 w-48 bg-secondary rounded" />
+                <div key={i} className="bg-[#222530] border border-[#343947] rounded-lg p-5 animate-pulse space-y-4">
+                  <div className="h-5 w-40 bg-[#2a2d39] rounded" />
+                  <div className="h-4 w-64 bg-[#2a2d39] rounded" />
+                  <div className="h-4 w-48 bg-[#2a2d39] rounded" />
                 </div>
               ))}
             </div>
           ) : stores.length === 0 ? (
             <div className={SECTION_CLASSES}>
-              <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
+              <div className="flex flex-col items-center justify-center py-16 gap-3 text-[#97a3b6]">
                 <Store className="w-8 h-8 opacity-30" />
                 <p className="text-sm font-mono">No stores configured yet</p>
                 <p className="text-xs font-mono">Create a store from the Stores page to get started</p>
@@ -796,12 +796,12 @@ export default function SettingsPage() {
             stores.map(store => (
               <div key={store.id} className={SECTION_CLASSES}>
                 <div className={SECTION_HEADER}>
-                  <div className="w-6 h-6 rounded bg-cyan-400/10 border border-cyan-400/20 flex items-center justify-center">
-                    <Store className="w-3.5 h-3.5 text-cyan-400" />
+                  <div className="w-6 h-6 rounded bg-[#FFD600]/10 border border-[#FFD600]/20 flex items-center justify-center">
+                    <Store className="w-3.5 h-3.5 text-[#FFD600]" />
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-semibold text-foreground">{store.name}</p>
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-sm font-semibold text-[#e7edf8]">{store.name}</p>
+                    <p className="text-sm leading-6 text-[#aab4c5]">
                       {store.isActive ? (
                         <span className="text-emerald-400">● Active</span>
                       ) : (
@@ -811,17 +811,17 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 <div className={SECTION_BODY}>
-                  <div className="space-y-1.5">
+                  <div className="space-y-2.5">
                     <label className={LABEL}>API Key Hash</label>
-                    <div className="flex items-center gap-2 bg-background border border-border rounded-md px-3 py-2">
-                      <Key className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                      <code className="text-xs font-mono text-muted-foreground break-all">{store.apiKeyHash.substring(0, 32)}...</code>
+                    <div className="flex items-center gap-2 bg-[#151821] border border-[#343947] rounded-md px-3 py-2">
+                      <Key className="w-3.5 h-3.5 text-[#97a3b6] shrink-0" />
+                      <code className="text-xs font-mono text-[#97a3b6] break-all">{store.apiKeyHash.substring(0, 32)}...</code>
                     </div>
-                    <p className="text-[10px] font-mono text-muted-foreground">
+                    <p className="text-sm leading-6 text-[#aab4c5]">
                       Your API key was shown once at creation. Contact admin if you need it regenerated.
                     </p>
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-2.5">
                     <label className={LABEL}>Webhook URL</label>
                     <input
                       type="url"
@@ -830,21 +830,21 @@ export default function SettingsPage() {
                       className={`${INPUT} cursor-default`}
                       placeholder="Not configured"
                     />
-                    <p className="text-[10px] font-mono text-muted-foreground">
+                    <p className="text-sm leading-6 text-[#aab4c5]">
                       Gateway sends IPN notifications to this URL. Update via the Stores page.
                     </p>
                   </div>
 
                   {/* Capture Mode Toggle */}
-                  <div className="flex items-start justify-between gap-4 pt-2 border-t border-border">
+                  <div className="flex items-start justify-between gap-4 pt-2 border-t border-[#343947]">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <label className={LABEL}>Manual Capture (Delayed)</label>
                         {captureSaving === store.id && (
-                          <Loader2 className="w-3 h-3 text-cyan-400 animate-spin" />
+                          <Loader2 className="w-3 h-3 text-[#FFD600] animate-spin" />
                         )}
                       </div>
-                      <p className="text-[10px] font-mono text-muted-foreground max-w-md">
+                      <p className="text-sm leading-6 text-[#aab4c5] max-w-md">
                         If enabled, payments will be Authorized only. You must manually capture them from the Transaction Log within 7 days.
                       </p>
                     </div>
@@ -855,11 +855,11 @@ export default function SettingsPage() {
                     />
                   </div>
 
-                  <div className="space-y-3 pt-2 border-t border-border">
+                  <div className="space-y-3 pt-2 border-t border-[#343947]">
                     <div className="flex items-center gap-2">
                       <label className={LABEL}>Checkout Experience</label>
                       {checkoutFlowSaving === store.id && (
-                        <Loader2 className="w-3 h-3 text-cyan-400 animate-spin" />
+                        <Loader2 className="w-3 h-3 text-[#FFD600] animate-spin" />
                       )}
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -868,15 +868,15 @@ export default function SettingsPage() {
                         disabled={checkoutFlowSaving === store.id}
                         className={`text-left p-3 rounded-lg border transition-all disabled:opacity-60 ${
                           !store.checkoutFlowOverride
-                            ? "border-cyan-400/40 bg-cyan-400/5 text-foreground"
-                            : "border-border bg-background text-muted-foreground hover:border-border/80 hover:text-foreground"
+                            ? "border-[#FFD600]/40 bg-[#FFD600]/5 text-[#e7edf8]"
+                            : "border-[#343947] bg-[#151821] text-[#97a3b6] hover:border-[#343947]/80 hover:text-[#e7edf8]"
                         }`}
                       >
                         <div className="flex items-center gap-2 mb-1">
-                          <span className={`w-2 h-2 rounded-full border-2 flex-shrink-0 ${!store.checkoutFlowOverride ? "border-cyan-400 bg-cyan-400" : "border-muted-foreground"}`} />
-                          <span className="text-xs font-mono font-semibold">Use Platform Default</span>
+                          <span className={`w-3 h-3 rounded-full border-2 flex-shrink-0 ${!store.checkoutFlowOverride ? "border-[#FFD600] bg-[#FFD600]" : "border-[#343947]"}`} />
+                          <span className="text-base font-semibold text-[#e7edf8]">Use Platform Default</span>
                         </div>
-                        <p className="text-[10px] font-mono leading-relaxed pl-4">
+                        <p className="text-sm text-[#aab4c5] leading-6 pl-4">
                           Currently using {store.checkoutFlow === "POPUP_BRIDGE" ? "Popup + Shield Bridge" : "Classic Redirect"}.
                         </p>
                       </button>
@@ -887,15 +887,15 @@ export default function SettingsPage() {
                           disabled={checkoutFlowSaving === store.id}
                           className={`text-left p-3 rounded-lg border transition-all disabled:opacity-60 ${
                             store.checkoutFlowOverride && store.checkoutFlow === option.value
-                              ? "border-cyan-400/40 bg-cyan-400/5 text-foreground"
-                              : "border-border bg-background text-muted-foreground hover:border-border/80 hover:text-foreground"
+                              ? "border-[#FFD600]/40 bg-[#FFD600]/5 text-[#e7edf8]"
+                              : "border-[#343947] bg-[#151821] text-[#97a3b6] hover:border-[#343947]/80 hover:text-[#e7edf8]"
                           }`}
                         >
                           <div className="flex items-center gap-2 mb-1">
-                            <span className={`w-2 h-2 rounded-full border-2 flex-shrink-0 ${store.checkoutFlowOverride && store.checkoutFlow === option.value ? "border-cyan-400 bg-cyan-400" : "border-muted-foreground"}`} />
-                            <span className="text-xs font-mono font-semibold">{option.label}</span>
+                            <span className={`w-3 h-3 rounded-full border-2 flex-shrink-0 ${store.checkoutFlowOverride && store.checkoutFlow === option.value ? "border-[#FFD600] bg-[#FFD600]" : "border-[#343947]"}`} />
+                            <span className="text-base font-semibold text-[#e7edf8]">{option.label}</span>
                           </div>
-                          <p className="text-[10px] font-mono leading-relaxed pl-4">{option.desc}</p>
+                          <p className="text-sm text-[#aab4c5] leading-6 pl-4">{option.desc}</p>
                         </button>
                       ))}
                     </div>
@@ -914,26 +914,26 @@ export default function SettingsPage() {
                 <Bell className="w-3.5 h-3.5 text-amber-400" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-foreground">Notifications</p>
-                <p className="text-[11px] text-muted-foreground">Receive Telegram alerts for every successful payment</p>
+                <p className="text-sm font-semibold text-[#e7edf8]">Notifications</p>
+                <p className="text-sm leading-6 text-[#aab4c5]">Receive Telegram alerts for every successful payment</p>
               </div>
             </div>
             <div className={SECTION_BODY}>
               <div className="flex items-start gap-3 bg-amber-400/5 border border-amber-400/20 rounded-md px-3 py-2.5">
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-                <p className="text-[11px] font-mono text-muted-foreground">
+                <p className="text-sm leading-6 text-[#aab4c5]">
                   Create a bot via <span className="text-amber-400">@BotFather</span> on Telegram, add it to your group, and paste the credentials below.
                 </p>
               </div>
               {merchantTgLoading ? (
                 <div className="space-y-3 animate-pulse">
-                  <div className="h-4 w-48 bg-secondary rounded" />
-                  <div className="h-9 w-full bg-secondary rounded" />
+                  <div className="h-4 w-48 bg-[#2a2d39] rounded" />
+                  <div className="h-9 w-full bg-[#2a2d39] rounded" />
                 </div>
               ) : (
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    <div className="space-y-1.5">
+                    <div className="space-y-2.5">
                       <label className={LABEL}>Telegram Bot Token</label>
                       <input
                         type="password"
@@ -944,7 +944,7 @@ export default function SettingsPage() {
                         autoComplete="off"
                       />
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-2.5">
                       <label className={LABEL}>Chat ID</label>
                       <input
                         value={settings.chatId}
@@ -962,8 +962,8 @@ export default function SettingsPage() {
                         saved
                           ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
                           : saving
-                          ? "bg-cyan-400/50 text-background cursor-wait"
-                          : "bg-cyan-400 text-background hover:bg-cyan-300"
+                          ? "bg-[#FFD600]/50 text-[#151821] cursor-wait"
+                          : "bg-[#FFD600] text-[#151821] hover:bg-[#e6c100]"
                       }`}
                     >
                       {saved ? <CheckCircle2 className="w-3 h-3" /> : saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
@@ -972,7 +972,7 @@ export default function SettingsPage() {
                     <button
                       onClick={handleMerchantTelegramTest}
                       disabled={telegramTesting}
-                      className="flex items-center gap-2 text-xs font-mono text-cyan-400 border border-cyan-400/30 hover:bg-cyan-400/10 rounded-md px-3 py-1.5 transition-colors disabled:opacity-50"
+                      className="flex items-center gap-2 text-xs font-mono text-[#FFD600] border border-[#FFD600]/30 hover:bg-[#FFD600]/10 rounded-md px-3 py-1.5 transition-colors disabled:opacity-50"
                     >
                       {telegramTesting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
                       {telegramTesting ? "Sending..." : "Send Test Alert"}
@@ -983,7 +983,7 @@ export default function SettingsPage() {
                   </div>
                 </>
               )}
-              <div className="flex items-center gap-2 text-[10px] font-mono text-muted-foreground bg-secondary/50 rounded-md px-3 py-2">
+              <div className="flex items-center gap-2 text-sm leading-6 text-[#aab4c5] bg-[#2a2d39]/50 rounded-md px-3 py-2">
                 <Bell className="w-3 h-3 text-amber-400 shrink-0" />
                 You&#39;ll receive: 💰 Success! Received $X from [Store]. Account: [PP-ID].
               </div>
@@ -997,13 +997,13 @@ export default function SettingsPage() {
                 <Lock className="w-3.5 h-3.5 text-violet-400" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-foreground">Change Password</p>
-                <p className="text-[11px] text-muted-foreground">Update your dashboard login password</p>
+                <p className="text-sm font-semibold text-[#e7edf8]">Change Password</p>
+                <p className="text-sm leading-6 text-[#aab4c5]">Update your dashboard login password</p>
               </div>
             </div>
             <div className={SECTION_BODY}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div className="space-y-1.5">
+                <div className="space-y-2.5">
                   <label className={LABEL}>Current Password</label>
                   <div className="relative">
                     <input
@@ -1016,13 +1016,13 @@ export default function SettingsPage() {
                     />
                     <button
                       onClick={() => setShowPassword(p => !p)}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#97a3b6] hover:text-[#e7edf8] transition-colors"
                     >
                       {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                     </button>
                   </div>
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-2.5">
                   <label className={LABEL}>New Password</label>
                   <div className="relative">
                     <input
@@ -1035,7 +1035,7 @@ export default function SettingsPage() {
                     />
                     <button
                       onClick={() => setShowNewPassword(p => !p)}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#97a3b6] hover:text-[#e7edf8] transition-colors"
                     >
                       {showNewPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                     </button>
@@ -1043,7 +1043,7 @@ export default function SettingsPage() {
                 </div>
               </div>
               {settings.newPassword && settings.newPassword.length < 12 && (
-                <div className="flex items-center gap-2 text-[11px] font-mono text-red-400">
+                <div className="flex items-center gap-2 text-sm font-medium text-red-400">
                   <AlertTriangle className="w-3 h-3" />
                   Password must be at least 12 characters
                 </div>
@@ -1061,7 +1061,7 @@ export default function SettingsPage() {
                   <Toast type={pwToast.type} message={pwToast.message} onDismiss={() => setPwToast(null)} />
                 )}
               </div>
-              <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground bg-secondary/50 rounded-md px-3 py-2">
+              <div className="flex items-center gap-2 text-sm leading-6 text-[#aab4c5] bg-[#2a2d39]/50 rounded-md px-3 py-2">
                 <Lock className="w-3 h-3 text-emerald-400 shrink-0" />
                 Passwords are hashed with bcrypt (12 rounds) and never stored in plain text
               </div>
@@ -1075,23 +1075,23 @@ export default function SettingsPage() {
                 <Mail className="w-3.5 h-3.5 text-sky-400" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-foreground">Change Email</p>
-                <p className="text-[11px] text-muted-foreground">Update your login email — requires OTP verification</p>
+                <p className="text-sm font-semibold text-[#e7edf8]">Change Email</p>
+                <p className="text-sm leading-6 text-[#aab4c5]">Update your login email — requires OTP verification</p>
               </div>
             </div>
             <div className={SECTION_BODY}>
               {emailStep === "idle" && (
                 <>
-                  <div className="space-y-1.5">
+                  <div className="space-y-2.5">
                     <label className={LABEL}>Current Email</label>
                     <input
                       type="email"
                       value={session?.user?.email ?? ""}
                       readOnly
-                      className={`${INPUT} cursor-default text-muted-foreground`}
+                      className={`${INPUT} cursor-default text-[#97a3b6]`}
                     />
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-2.5">
                     <label className={LABEL}>New Email Address</label>
                     <input
                       type="email"
@@ -1114,7 +1114,7 @@ export default function SettingsPage() {
                       <Toast type={emailToast.type} message={emailToast.message} onDismiss={() => setEmailToast(null)} />
                     )}
                   </div>
-                  <div className="flex items-center gap-2 text-[10px] font-mono text-muted-foreground bg-secondary/50 rounded-md px-3 py-2">
+                  <div className="flex items-center gap-2 text-sm leading-6 text-[#aab4c5] bg-[#2a2d39]/50 rounded-md px-3 py-2">
                     <Shield className="w-3 h-3 text-sky-400 shrink-0" />
                     A 6-digit code will be sent to your <strong>current</strong> email for verification. Code expires in 10 minutes.
                   </div>
@@ -1125,11 +1125,11 @@ export default function SettingsPage() {
                 <>
                   <div className="bg-sky-400/5 border border-sky-400/20 rounded-md px-4 py-3 space-y-2">
                     <p className="text-xs font-mono text-sky-400 font-semibold">Enter Verification Code</p>
-                    <p className="text-[11px] font-mono text-muted-foreground">
+                    <p className="text-sm leading-6 text-[#aab4c5]">
                       A 6-digit code has been sent to your current email. Enter it below to confirm the change.
                     </p>
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-2.5">
                     <label className={LABEL}>6-Digit Code</label>
                     <input
                       type="text"
@@ -1145,14 +1145,14 @@ export default function SettingsPage() {
                     <button
                       onClick={handleEmailVerify}
                       disabled={emailChanging || emailCode.length !== 6}
-                      className="flex items-center gap-2 px-3 py-1.5 text-xs font-mono rounded-md bg-sky-400 text-background hover:bg-sky-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="flex items-center gap-2 px-3 py-1.5 text-xs font-mono rounded-md bg-sky-400 text-[#151821] hover:bg-sky-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {emailChanging ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
                       {emailChanging ? "Verifying..." : "Verify & Update Email"}
                     </button>
                     <button
                       onClick={() => { setEmailStep("idle"); setEmailCode(""); setEmailToast(null) }}
-                      className="px-3 py-1.5 text-xs font-mono text-muted-foreground hover:text-foreground border border-border rounded-md transition-colors"
+                      className="px-3 py-1.5 text-xs font-mono text-[#97a3b6] hover:text-[#e7edf8] border border-[#343947] rounded-md transition-colors"
                     >
                       Cancel
                     </button>
@@ -1166,37 +1166,36 @@ export default function SettingsPage() {
           </div>
 
         </main>
-      </div>
+      </DashboardShell>
     )
   }
 
   // ─── SUPER ADMIN VIEW ───────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-background font-mono">
-      <DashboardHeader />
-      <main className="px-4 md:px-6 py-5 max-w-3xl mx-auto space-y-5">
+    <DashboardShell>
+      <main className="px-4 md:px-8 py-8 w-full max-w-7xl mx-auto space-y-8">
 
-        {/* Page header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-semibold text-foreground">Settings</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">Global gateway configuration and security controls</p>
-          </div>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className={`flex items-center gap-2 px-4 py-2 text-xs font-mono font-semibold rounded-md transition-all ${
-              saved
-                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
-                : saving
-                ? "bg-cyan-400/50 text-background cursor-wait"
-                : "bg-cyan-400 text-background hover:bg-cyan-300"
-            }`}
-          >
-            {saved ? <CheckCircle2 className="w-3.5 h-3.5" /> : saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-            {saved ? "Saved" : saving ? "Saving..." : "Save Changes"}
-          </button>
-        </div>
+        <DashboardPageHeader 
+          eyebrow="CONFIGURATION"
+          title="Settings"
+          description="Global gateway configuration and security controls"
+          action={
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className={`flex items-center gap-2 px-6 py-2.5 text-xs font-mono font-bold rounded-md transition-all ${
+                saved
+                  ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                  : saving
+                  ? "bg-[#FFD600]/50 text-[#151821] cursor-wait"
+                  : "bg-[#FFD600] text-[#151821] hover:bg-[#e6c100]"
+              }`}
+            >
+              {saved ? <CheckCircle2 className="w-3.5 h-3.5" /> : saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              {saved ? "Saved" : saving ? "Saving..." : "Save Changes"}
+            </button>
+          }
+        />
 
         {/* Save error */}
         {saveError && (
@@ -1204,7 +1203,7 @@ export default function SettingsPage() {
             <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
             <div className="text-xs font-mono">
               <span className="text-red-400 font-semibold">Save failed: </span>
-              <span className="text-muted-foreground">{saveError}</span>
+              <span className="text-[#97a3b6]">{saveError}</span>
             </div>
           </div>
         )}
@@ -1213,10 +1212,10 @@ export default function SettingsPage() {
         {settingsLoading && (
           <div className="space-y-5">
             {[1, 2, 3].map(i => (
-              <div key={i} className="bg-card border border-border rounded-lg p-8 animate-pulse space-y-4">
-                <div className="h-5 w-48 bg-secondary rounded" />
-                <div className="h-4 w-full bg-secondary rounded" />
-                <div className="h-4 w-3/4 bg-secondary rounded" />
+              <div key={i} className="bg-[#222530] border border-[#343947] rounded-lg p-8 animate-pulse space-y-4">
+                <div className="h-5 w-48 bg-[#2a2d39] rounded" />
+                <div className="h-4 w-full bg-[#2a2d39] rounded" />
+                <div className="h-4 w-3/4 bg-[#2a2d39] rounded" />
               </div>
             ))}
           </div>
@@ -1230,8 +1229,8 @@ export default function SettingsPage() {
                 <Package className="w-3.5 h-3.5 text-violet-400" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-foreground">Payment Display Profiles</p>
-                <p className="text-[11px] text-muted-foreground">Manage descriptor policies across all tenants and stores</p>
+                <p className="text-sm font-semibold text-[#e7edf8]">Payment Display Profiles</p>
+                <p className="text-sm leading-6 text-[#aab4c5]">Manage descriptor policies across all tenants and stores</p>
               </div>
             </div>
             <div className={SECTION_BODY}>
@@ -1244,12 +1243,12 @@ export default function SettingsPage() {
         {!settingsLoading && (
           <div className={SECTION_CLASSES}>
             <div className={SECTION_HEADER}>
-              <div className="w-6 h-6 rounded bg-cyan-400/10 border border-cyan-400/20 flex items-center justify-center">
-                <Tag className="w-3.5 h-3.5 text-cyan-400" />
+              <div className="w-6 h-6 rounded bg-[#FFD600]/10 border border-[#FFD600]/20 flex items-center justify-center">
+                <Tag className="w-3.5 h-3.5 text-[#FFD600]" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-foreground">Descriptor Templates</p>
-                <p className="text-[11px] text-muted-foreground">Manage global descriptor text pools by industry</p>
+                <p className="text-sm font-semibold text-[#e7edf8]">Descriptor Templates</p>
+                <p className="text-sm leading-6 text-[#aab4c5]">Manage global descriptor text pools by industry</p>
               </div>
             </div>
             <div className={SECTION_BODY}>
@@ -1263,20 +1262,20 @@ export default function SettingsPage() {
           <>
             <div className={SECTION_CLASSES}>
               <div className={SECTION_HEADER}>
-                <div className="w-6 h-6 rounded bg-cyan-400/10 border border-cyan-400/20 flex items-center justify-center">
-                  <Settings className="w-3.5 h-3.5 text-cyan-400" />
+                <div className="w-6 h-6 rounded bg-[#FFD600]/10 border border-[#FFD600]/20 flex items-center justify-center">
+                  <Settings className="w-3.5 h-3.5 text-[#FFD600]" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-foreground">Global Rotation Rules</p>
-                  <p className="text-[11px] text-muted-foreground">Default limits and strategy applied across all accounts</p>
+                  <p className="text-sm font-semibold text-[#e7edf8]">Global Rotation Rules</p>
+                  <p className="text-sm leading-6 text-[#aab4c5]">Default limits and strategy applied across all accounts</p>
                 </div>
               </div>
               <div className={SECTION_BODY}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <div className="space-y-1.5">
+                  <div className="space-y-2.5">
                     <label className={LABEL}>Default Daily Limit (USD)</label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-mono text-muted-foreground">$</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-mono text-[#97a3b6]">$</span>
                       <input
                         type="number"
                         value={settings.defaultDailyLimit}
@@ -1285,9 +1284,9 @@ export default function SettingsPage() {
                         placeholder="5000"
                       />
                     </div>
-                    <p className="text-[10px] text-muted-foreground font-mono">Applied to any account without an explicit adaptive limit</p>
+                    <p className="text-sm leading-6 text-[#aab4c5]">Applied to any account without an explicit adaptive limit</p>
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-2.5">
                     <label className={LABEL}>Alert Threshold (%)</label>
                     <input
                       type="number"
@@ -1298,10 +1297,10 @@ export default function SettingsPage() {
                       className={INPUT}
                       placeholder="90"
                     />
-                    <p className="text-[10px] text-muted-foreground font-mono">Send alert when account reaches this % of its daily limit</p>
+                    <p className="text-sm leading-6 text-[#aab4c5]">Send alert when account reaches this % of its daily limit</p>
                   </div>
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-2.5">
                   <label className={LABEL}>Global Rotation Strategy</label>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     {[
@@ -1314,20 +1313,20 @@ export default function SettingsPage() {
                         onClick={() => update({ rotationStrategy: opt.value })}
                         className={`text-left p-3 rounded-lg border transition-all ${
                           settings.rotationStrategy === opt.value
-                            ? "border-cyan-400/40 bg-cyan-400/5 text-foreground"
-                            : "border-border bg-background text-muted-foreground hover:border-border/80 hover:text-foreground"
+                            ? "border-[#FFD600]/40 bg-[#FFD600]/5 text-[#e7edf8]"
+                            : "border-[#343947] bg-[#151821] text-[#97a3b6] hover:border-[#343947]/80 hover:text-[#e7edf8]"
                         }`}
                       >
                         <div className="flex items-center gap-2 mb-1">
-                          <span className={`w-2 h-2 rounded-full border-2 flex-shrink-0 ${settings.rotationStrategy === opt.value ? "border-cyan-400 bg-cyan-400" : "border-muted-foreground"}`} />
-                          <span className="text-xs font-mono font-semibold">{opt.label}</span>
+                          <span className={`w-3 h-3 rounded-full border-2 flex-shrink-0 ${settings.rotationStrategy === opt.value ? "border-[#FFD600] bg-[#FFD600]" : "border-[#343947]"}`} />
+                          <span className="text-base font-semibold text-[#e7edf8]">{opt.label}</span>
                         </div>
-                        <p className="text-[10px] font-mono leading-relaxed pl-4">{opt.desc}</p>
+                        <p className="text-sm text-[#aab4c5] leading-6 pl-4">{opt.desc}</p>
                       </button>
                     ))}
                   </div>
                 </div>
-                <div className="space-y-1.5 pt-1">
+                <div className="space-y-2.5 pt-1">
                   <label className={LABEL}>Default Checkout Experience</label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {CHECKOUT_FLOW_OPTIONS.map(opt => (
@@ -1336,19 +1335,19 @@ export default function SettingsPage() {
                         onClick={() => update({ checkoutDefaultFlow: opt.value })}
                         className={`text-left p-3 rounded-lg border transition-all ${
                           settings.checkoutDefaultFlow === opt.value
-                            ? "border-cyan-400/40 bg-cyan-400/5 text-foreground"
-                            : "border-border bg-background text-muted-foreground hover:border-border/80 hover:text-foreground"
+                            ? "border-[#FFD600]/40 bg-[#FFD600]/5 text-[#e7edf8]"
+                            : "border-[#343947] bg-[#151821] text-[#97a3b6] hover:border-[#343947]/80 hover:text-[#e7edf8]"
                         }`}
                       >
                         <div className="flex items-center gap-2 mb-1">
-                          <span className={`w-2 h-2 rounded-full border-2 flex-shrink-0 ${settings.checkoutDefaultFlow === opt.value ? "border-cyan-400 bg-cyan-400" : "border-muted-foreground"}`} />
-                          <span className="text-xs font-mono font-semibold">{opt.label}</span>
+                          <span className={`w-3 h-3 rounded-full border-2 flex-shrink-0 ${settings.checkoutDefaultFlow === opt.value ? "border-[#FFD600] bg-[#FFD600]" : "border-[#343947]"}`} />
+                          <span className="text-base font-semibold text-[#e7edf8]">{opt.label}</span>
                         </div>
-                        <p className="text-[10px] font-mono leading-relaxed pl-4">{opt.desc}</p>
+                        <p className="text-sm text-[#aab4c5] leading-6 pl-4">{opt.desc}</p>
                       </button>
                     ))}
                   </div>
-                  <p className="text-[10px] text-muted-foreground font-mono">
+                  <p className="text-sm leading-6 text-[#aab4c5]">
                     New stores inherit this mode until a merchant overrides it at the store level.
                   </p>
                 </div>
@@ -1362,19 +1361,19 @@ export default function SettingsPage() {
                   <Bell className="w-3.5 h-3.5 text-amber-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-foreground">Notifications</p>
-                  <p className="text-[11px] text-muted-foreground">Telegram alerts for completed transactions and daily limit warnings</p>
+                  <p className="text-sm font-semibold text-[#e7edf8]">Notifications</p>
+                  <p className="text-sm leading-6 text-[#aab4c5]">Telegram alerts for completed transactions and daily limit warnings</p>
                 </div>
               </div>
               <div className={SECTION_BODY}>
                 <div className="flex items-start gap-3 bg-amber-400/5 border border-amber-400/20 rounded-md px-3 py-2.5">
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-                  <p className="text-[11px] font-mono text-muted-foreground">
+                  <p className="text-sm leading-6 text-[#aab4c5]">
                     Create a bot via <span className="text-amber-400">@BotFather</span> on Telegram, add it to your admin group, and paste the credentials below.
                   </p>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <div className="space-y-1.5">
+                  <div className="space-y-2.5">
                     <label className={LABEL}>Telegram Bot Token</label>
                     <input
                       type="password"
@@ -1385,7 +1384,7 @@ export default function SettingsPage() {
                       autoComplete="off"
                     />
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-2.5">
                     <label className={LABEL}>Admin Chat ID</label>
                     <input
                       value={settings.chatId}
@@ -1399,7 +1398,7 @@ export default function SettingsPage() {
                   <button
                     onClick={handleTelegramTest}
                     disabled={telegramTesting}
-                    className="flex items-center gap-2 text-xs font-mono text-cyan-400 border border-cyan-400/30 hover:bg-cyan-400/10 rounded-md px-3 py-1.5 transition-colors disabled:opacity-50"
+                    className="flex items-center gap-2 text-xs font-mono text-[#FFD600] border border-[#FFD600]/30 hover:bg-[#FFD600]/10 rounded-md px-3 py-1.5 transition-colors disabled:opacity-50"
                   >
                     {telegramTesting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
                     {telegramTesting ? "Sending..." : "Send Test Alert"}
@@ -1408,7 +1407,7 @@ export default function SettingsPage() {
                     <Toast type={telegramToast.type} message={telegramToast.message} onDismiss={() => setTelegramToast(null)} />
                   )}
                 </div>
-                <div className="flex items-center gap-2 text-[10px] font-mono text-muted-foreground bg-secondary/50 rounded-md px-3 py-2">
+                <div className="flex items-center gap-2 text-sm leading-6 text-[#aab4c5] bg-[#2a2d39]/50 rounded-md px-3 py-2">
                   <Bell className="w-3 h-3 text-amber-400 shrink-0" />
                   Telegram notifications fire on every successful payment capture: 💰 Success! Received $X from [Store]. Account: [PP-ID].
                 </div>
@@ -1422,21 +1421,21 @@ export default function SettingsPage() {
                   <Shield className="w-3.5 h-3.5 text-emerald-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-foreground">Security</p>
-                  <p className="text-[11px] text-muted-foreground">Server-side validation and access controls</p>
+                  <p className="text-sm font-semibold text-[#e7edf8]">Security</p>
+                  <p className="text-sm leading-6 text-[#aab4c5]">Server-side validation and access controls</p>
                 </div>
               </div>
               <div className={SECTION_BODY}>
-                <div className="flex items-center justify-between gap-4 p-3 bg-background border border-border rounded-lg">
+                <div className="flex items-center justify-between gap-4 p-3 bg-[#151821] border border-[#343947] rounded-lg">
                   <div className="space-y-0.5">
-                    <p className="text-sm font-mono font-semibold text-foreground">Server-side Price Re-validation</p>
-                    <p className="text-[11px] font-mono text-muted-foreground">
+                    <p className="text-sm font-mono font-semibold text-[#e7edf8]">Server-side Price Re-validation</p>
+                    <p className="text-sm leading-6 text-[#aab4c5]">
                       Re-confirms the exact charge amount server-side before routing to PayPal. Prevents price manipulation attacks.
                     </p>
                   </div>
                   <Toggle enabled={settings.priceRevalidation} onToggle={() => update({ priceRevalidation: !settings.priceRevalidation })} />
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-2.5">
                   <label className={LABEL}>IP Whitelist</label>
                   <textarea
                     value={settings.ipWhitelist}
@@ -1445,7 +1444,7 @@ export default function SettingsPage() {
                     className={`${INPUT} resize-none leading-relaxed`}
                     placeholder={"203.0.113.10\n198.51.100.42"}
                   />
-                  <p className="text-[10px] font-mono text-muted-foreground">
+                  <p className="text-sm leading-6 text-[#aab4c5]">
                     One IP address per line. Only these IPs may call the Gateway API. Leave empty to allow all (not recommended).
                   </p>
                 </div>
@@ -1459,13 +1458,13 @@ export default function SettingsPage() {
                   <Lock className="w-3.5 h-3.5 text-violet-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-foreground">Change Password</p>
-                  <p className="text-[11px] text-muted-foreground">Update your dashboard login password</p>
+                  <p className="text-sm font-semibold text-[#e7edf8]">Change Password</p>
+                  <p className="text-sm leading-6 text-[#aab4c5]">Update your dashboard login password</p>
                 </div>
               </div>
               <div className={SECTION_BODY}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <div className="space-y-1.5">
+                  <div className="space-y-2.5">
                     <label className={LABEL}>Current Password</label>
                     <div className="relative">
                       <input
@@ -1478,13 +1477,13 @@ export default function SettingsPage() {
                       />
                       <button
                         onClick={() => setShowPassword(p => !p)}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#97a3b6] hover:text-[#e7edf8] transition-colors"
                       >
                         {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                       </button>
                     </div>
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-2.5">
                     <label className={LABEL}>New Password</label>
                     <div className="relative">
                       <input
@@ -1497,7 +1496,7 @@ export default function SettingsPage() {
                       />
                       <button
                         onClick={() => setShowNewPassword(p => !p)}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#97a3b6] hover:text-[#e7edf8] transition-colors"
                       >
                         {showNewPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                       </button>
@@ -1505,7 +1504,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 {settings.newPassword && settings.newPassword.length < 12 && (
-                  <div className="flex items-center gap-2 text-[11px] font-mono text-red-400">
+                  <div className="flex items-center gap-2 text-sm font-medium text-red-400">
                     <AlertTriangle className="w-3 h-3" />
                     Password must be at least 12 characters
                   </div>
@@ -1523,7 +1522,7 @@ export default function SettingsPage() {
                     <Toast type={pwToast.type} message={pwToast.message} onDismiss={() => setPwToast(null)} />
                   )}
                 </div>
-                <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground bg-secondary/50 rounded-md px-3 py-2">
+                <div className="flex items-center gap-2 text-sm leading-6 text-[#aab4c5] bg-[#2a2d39]/50 rounded-md px-3 py-2">
                   <Lock className="w-3 h-3 text-emerald-400 shrink-0" />
                   Passwords are hashed with bcrypt (12 rounds) and never stored in plain text
                 </div>
@@ -1537,23 +1536,23 @@ export default function SettingsPage() {
                   <Mail className="w-3.5 h-3.5 text-sky-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-foreground">Change Email</p>
-                  <p className="text-[11px] text-muted-foreground">Update your login email — requires OTP verification</p>
+                  <p className="text-sm font-semibold text-[#e7edf8]">Change Email</p>
+                  <p className="text-sm leading-6 text-[#aab4c5]">Update your login email — requires OTP verification</p>
                 </div>
               </div>
               <div className={SECTION_BODY}>
                 {emailStep === "idle" && (
                   <>
-                    <div className="space-y-1.5">
+                    <div className="space-y-2.5">
                       <label className={LABEL}>Current Email</label>
                       <input
                         type="email"
                         value={settings.adminEmail}
                         readOnly
-                        className={`${INPUT} cursor-default text-muted-foreground`}
+                        className={`${INPUT} cursor-default text-[#97a3b6]`}
                       />
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-2.5">
                       <label className={LABEL}>New Email Address</label>
                       <input
                         type="email"
@@ -1576,7 +1575,7 @@ export default function SettingsPage() {
                         <Toast type={emailToast.type} message={emailToast.message} onDismiss={() => setEmailToast(null)} />
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-[10px] font-mono text-muted-foreground bg-secondary/50 rounded-md px-3 py-2">
+                    <div className="flex items-center gap-2 text-sm leading-6 text-[#aab4c5] bg-[#2a2d39]/50 rounded-md px-3 py-2">
                       <Shield className="w-3 h-3 text-sky-400 shrink-0" />
                       A 6-digit code will be sent to your <strong>current</strong> email for verification. Code expires in 10 minutes.
                     </div>
@@ -1587,11 +1586,11 @@ export default function SettingsPage() {
                   <>
                     <div className="bg-sky-400/5 border border-sky-400/20 rounded-md px-4 py-3 space-y-2">
                       <p className="text-xs font-mono text-sky-400 font-semibold">Enter Verification Code</p>
-                      <p className="text-[11px] font-mono text-muted-foreground">
+                      <p className="text-sm leading-6 text-[#aab4c5]">
                         A 6-digit code has been sent to your current email. Enter it below to confirm the change.
                       </p>
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-2.5">
                       <label className={LABEL}>6-Digit Code</label>
                       <input
                         type="text"
@@ -1607,14 +1606,14 @@ export default function SettingsPage() {
                       <button
                         onClick={handleEmailVerify}
                         disabled={emailChanging || emailCode.length !== 6}
-                        className="flex items-center gap-2 px-3 py-1.5 text-xs font-mono rounded-md bg-sky-400 text-background hover:bg-sky-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="flex items-center gap-2 px-3 py-1.5 text-xs font-mono rounded-md bg-sky-400 text-[#151821] hover:bg-sky-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         {emailChanging ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
                         {emailChanging ? "Verifying..." : "Verify & Update Email"}
                       </button>
                       <button
                         onClick={() => { setEmailStep("idle"); setEmailCode(""); setEmailToast(null) }}
-                        className="px-3 py-1.5 text-xs font-mono text-muted-foreground hover:text-foreground border border-border rounded-md transition-colors"
+                        className="px-3 py-1.5 text-xs font-mono text-[#97a3b6] hover:text-[#e7edf8] border border-[#343947] rounded-md transition-colors"
                       >
                         Cancel
                       </button>
@@ -1636,8 +1635,8 @@ export default function SettingsPage() {
                   saved
                     ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
                     : saving
-                    ? "bg-cyan-400/50 text-background cursor-wait"
-                    : "bg-cyan-400 text-background hover:bg-cyan-300"
+                    ? "bg-[#FFD600]/50 text-[#151821] cursor-wait"
+                    : "bg-[#FFD600] text-[#151821] hover:bg-[#e6c100]"
                 }`}
               >
                 {saved ? <CheckCircle2 className="w-4 h-4" /> : saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -1648,6 +1647,6 @@ export default function SettingsPage() {
         )}
 
       </main>
-    </div>
+    </DashboardShell>
   )
 }

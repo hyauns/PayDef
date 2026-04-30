@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { ExternalLink, Globe, Shield, ShieldCheck } from "lucide-react"
-import { DashboardHeader } from "@/components/dashboard/header"
+import { DashboardShell } from "@/components/dashboard/DashboardShell"
 
 const BENEFITS = [
   "Keeps popup, success, and cancel traffic on a merchant-controlled domain instead of exposing the gateway hostname in the buyer journey.",
@@ -30,8 +30,7 @@ const STOREFRONT_FACADE_NOTES = [
 
 export default function ShieldDomainDocsPage() {
   return (
-    <div className="min-h-screen bg-background font-mono">
-      <DashboardHeader />
+    <DashboardShell>
       <main className="px-4 md:px-6 py-5 max-w-5xl mx-auto space-y-5">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -121,6 +120,6 @@ export default function ShieldDomainDocsPage() {
           </ul>
         </section>
       </main>
-    </div>
+    </DashboardShell>
   )
 }

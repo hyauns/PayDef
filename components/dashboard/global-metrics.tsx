@@ -1,7 +1,8 @@
 "use client"
 
 import useSWR from "swr"
-import { DollarSign, Shield, Activity, TrendingUp, TrendingDown, Minus } from "lucide-react"
+import { DollarSign, Shield, Activity } from "lucide-react"
+import { StatCard } from "./StatCard"
 
 const fetcher = (url: string) => fetch(url).then(r => {
   if (!r.ok) throw new Error(`HTTP ${r.status}`)
@@ -31,7 +32,6 @@ export function GlobalMetrics() {
   const pctChange = volume?.percentChange ?? 0
   const isPositive = pctChange > 0
   const isNegative = pctChange < 0
-  const TrendIcon = isPositive ? TrendingUp : isNegative ? TrendingDown : Minus
 
   // ── Domains data ────────────────────────────────────────────────────────────
   const domains = data?.domains
@@ -43,16 +43,16 @@ export function GlobalMetrics() {
   // ── Skeleton card ───────────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {[1, 2, 3].map(i => (
-          <div key={i} className="bg-card border border-border rounded-lg p-4 animate-pulse">
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 bg-secondary rounded-md" />
-              <div className="space-y-2 flex-1">
-                <div className="h-3 w-28 bg-secondary rounded" />
-                <div className="h-7 w-32 bg-secondary rounded" />
-                <div className="h-3 w-24 bg-secondary rounded" />
-              </div>
+          <div key={i} className="bg-[#222530] border border-[#343947] border-b-[3px] border-b-[#2a2e3b] rounded-xl p-6 flex flex-col gap-3 animate-pulse shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
+            <div className="flex items-center justify-between">
+              <div className="w-24 h-3 bg-[#2a2d39] rounded" />
+              <div className="w-9 h-9 bg-[#2a2d39] rounded-xl" />
+            </div>
+            <div>
+              <div className="h-8 w-32 bg-[#2a2d39] rounded mb-2" />
+              <div className="h-3 w-40 bg-[#2a2d39] rounded" />
             </div>
           </div>
         ))}
@@ -60,71 +60,30 @@ export function GlobalMetrics() {
     )
   }
 
-  const metrics = [
-    {
-      label: "Total Volume Today",
-      value: formatCurrency(volume?.today ?? 0),
-      sub: pctChange === 0
-        ? "No change from yesterday"
-        : `${isPositive ? "+" : ""}${pctChange}% from yesterday`,
-      subColor: isPositive ? "text-emerald-400" : isNegative ? "text-red-400" : "text-muted-foreground",
-      icon: DollarSign,
-      trendIcon: TrendIcon,
-      iconColor: "text-cyan-400",
-      iconBg: "bg-cyan-400/10",
-      border: "border-cyan-400/20",
-    },
-    {
-      label: "Active Shield Domains",
-      value: `${domains?.active ?? 0} / ${domains?.total ?? 0}`,
-      sub: hasDegraded
-        ? `${domains?.degraded} domain${(domains?.degraded ?? 0) > 1 ? "s" : ""} degraded`
-        : "All domains healthy",
-      subColor: hasDegraded ? "text-amber-400" : "text-emerald-400",
-      icon: Shield,
-      iconColor: "text-emerald-400",
-      iconBg: "bg-emerald-400/10",
-      border: "border-emerald-400/20",
-    },
-    {
-      label: "Transactions Today",
-      value: txCount.toLocaleString(),
-      sub: txCount > 0 ? "Processing normally" : "No transactions yet today",
-      subColor: txCount > 0 ? "text-emerald-400" : "text-muted-foreground",
-      icon: Activity,
-      iconColor: "text-emerald-400",
-      iconBg: "bg-emerald-400/10",
-      border: "border-emerald-400/20",
-    },
-  ]
-
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-      {metrics.map((m) => {
-        const Icon = m.icon
-        return (
-          <div
-            key={m.label}
-            className={`bg-card border ${m.border} rounded-lg p-4 flex items-start gap-4`}
-          >
-            <div className={`${m.iconBg} rounded-md p-2.5 mt-0.5 shrink-0`}>
-              <Icon className={`w-4 h-4 ${m.iconColor}`} />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs text-muted-foreground uppercase tracking-widest font-mono mb-1">
-                {m.label}
-              </p>
-              <p className="text-2xl font-mono font-semibold text-foreground leading-none mb-1">
-                {m.value}
-              </p>
-              <div className="flex items-center gap-1">
-                {m.trendIcon && <m.trendIcon className={`w-3 h-3 ${m.subColor}`} />}
-                <p className={`text-xs font-mono ${m.subColor}`}>{m.sub}</p>
-              </div>
-            </div>
-          </div>
-        )
-      })}
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <StatCard
+        label="Total Volume Today"
+        value={formatCurrency(volume?.today ?? 0)}
+        helper={pctChange === 0 ? "No change from yesterday" : `${Math.abs(pctChange)}% from yesterday`}
+        icon={DollarSign}
+        trend={isPositive ? "up" : isNegative ? "down" : "neutral"}
+        active
+      />
+      <StatCard
+        label="Active Shield Domains"
+        value={`${domains?.active ?? 0} / ${domains?.total ?? 0}`}
+        helper={hasDegraded ? `${domains?.degraded} domain${(domains?.degraded ?? 0) > 1 ? "s" : ""} degraded` : "All domains healthy"}
+        icon={Shield}
+        trend={hasDegraded ? "down" : "up"}
+      />
+      <StatCard
+        label="Transactions Today"
+        value={txCount.toLocaleString()}
+        helper={txCount > 0 ? "Processing normally" : "No transactions yet today"}
+        icon={Activity}
+        trend={txCount > 0 ? "up" : "neutral"}
+      />
     </div>
   )
 }

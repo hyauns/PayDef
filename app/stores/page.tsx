@@ -22,7 +22,9 @@ import {
   Clock,
   Loader2,
 } from "lucide-react"
-import { DashboardHeader } from "@/components/dashboard/header"
+import { DashboardShell } from "@/components/dashboard/DashboardShell"
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader"
+import { GridBackground } from "@/components/ui/grid-background"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -215,7 +217,7 @@ function ToggleSwitch({
       aria-checked={enabled}
       onClick={() => onChange(!enabled)}
       className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 focus:outline-none ${
-        enabled ? "bg-emerald-500" : "bg-secondary border border-border"
+        enabled ? "bg-emerald-500" : "bg-[#2a2d39] border border-[#343947]"
       }`}
     >
       <span
@@ -233,7 +235,7 @@ function StatusBadge({ status }: { status: StoreStatus }) {
   const cfg = statusConfig[status]
   return (
     <span
-      className={`inline-flex items-center gap-1.5 text-[11px] font-mono px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.text} ${cfg.border}`}
+      className={`inline-flex items-center gap-1.5 text-sm font-mono px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.text} ${cfg.border}`}
     >
       <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${status === "Active" ? "animate-pulse" : ""}`} />
       {status}
@@ -274,8 +276,8 @@ function ApiKeyCell({
   }, [regenConfirm, onRegenerate])
 
   return (
-    <div className="flex items-center gap-1.5 min-w-[260px]">
-      <code className="font-mono text-[11px] text-cyan-400 flex-1 truncate max-w-[180px]">
+    <div className="flex items-center gap-1.5 min-w-[300px]">
+      <code className="font-mono text-sm text-[#FFD600] flex-1 truncate max-w-[220px]">
         {hasLiveKey ? (revealed ? apiKey : maskKey(apiKey)) : "Regenerate to reveal a new key"}
       </code>
       <div className="flex items-center gap-0.5 shrink-0">
@@ -283,7 +285,7 @@ function ApiKeyCell({
           onClick={() => hasLiveKey && setRevealed((v) => !v)}
           title={hasLiveKey ? (revealed ? "Hide key" : "Reveal key") : "Stored keys cannot be revealed. Regenerate to view a new key once."}
           disabled={!hasLiveKey}
-          className="p-1 text-muted-foreground hover:text-foreground transition-colors rounded disabled:opacity-40 disabled:cursor-not-allowed"
+          className="p-1 text-[#97a3b6] hover:text-[#e7edf8] transition-colors rounded disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {revealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
         </button>
@@ -291,7 +293,7 @@ function ApiKeyCell({
           onClick={handleCopy}
           title={hasLiveKey ? "Copy key" : "Stored keys cannot be copied. Regenerate to get a new key once."}
           disabled={!hasLiveKey}
-          className="p-1 text-muted-foreground hover:text-foreground transition-colors rounded disabled:opacity-40 disabled:cursor-not-allowed"
+          className="p-1 text-[#97a3b6] hover:text-[#e7edf8] transition-colors rounded disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {copied ? (
             <Check className="w-3.5 h-3.5 text-emerald-400" />
@@ -305,7 +307,7 @@ function ApiKeyCell({
           className={`p-1 transition-colors rounded ${
             regenConfirm
               ? "text-amber-400 hover:text-amber-300"
-              : "text-muted-foreground hover:text-foreground"
+              : "text-[#97a3b6] hover:text-[#e7edf8]"
           }`}
         >
           <RefreshCw className={`w-3.5 h-3.5 ${regenConfirm ? "animate-spin" : ""}`} />
@@ -334,7 +336,7 @@ function WebhookCell({
 
   if (editing) {
     return (
-      <div className="flex items-center gap-1 min-w-[260px]">
+      <div className="flex items-center gap-1 min-w-[300px]">
         <input
           autoFocus
           value={draft}
@@ -343,7 +345,7 @@ function WebhookCell({
             if (e.key === "Enter") commit()
             if (e.key === "Escape") { setDraft(value); setEditing(false) }
           }}
-          className="flex-1 bg-background border border-cyan-400/40 rounded px-2 py-1 text-xs font-mono text-foreground focus:outline-none min-w-0"
+          className="flex-1 bg-[#1a1d24] border border-[#FFD600]/40 rounded px-2 py-1 text-xs font-mono text-[#e7edf8] focus:outline-none min-w-0"
         />
         <button
           onClick={commit}
@@ -353,7 +355,7 @@ function WebhookCell({
         </button>
         <button
           onClick={() => { setDraft(value); setEditing(false) }}
-          className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+          className="p-1 text-[#97a3b6] hover:text-[#e7edf8] transition-colors"
         >
           <X className="w-3.5 h-3.5" />
         </button>
@@ -364,10 +366,10 @@ function WebhookCell({
   return (
     <button
       onClick={() => setEditing(true)}
-      className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground hover:text-foreground transition-colors group min-w-[220px] text-left truncate max-w-[280px]"
+      className="flex items-center gap-1.5 font-mono text-sm text-[#97a3b6] hover:text-[#e7edf8] transition-colors group min-w-[220px] text-left truncate max-w-[280px]"
       title={value}
     >
-      <Webhook className="w-3.5 h-3.5 shrink-0 text-border group-hover:text-cyan-400/60 transition-colors" />
+      <Webhook className="w-3.5 h-3.5 shrink-0 text-[#343947] group-hover:text-[#FFD600]/60 transition-colors" />
       <span className="truncate">{value || "—"}</span>
     </button>
   )
@@ -388,12 +390,12 @@ function IntegrationField({
 }) {
   return (
     <div>
-      <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-1">{label}</p>
+      <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider mb-1">{label}</p>
       <div className="flex items-center gap-2">
-        <code className="font-mono text-xs text-foreground flex-1 truncate">{value}</code>
+        <code className="font-mono text-xs text-[#e7edf8] flex-1 truncate">{value}</code>
         <button
           onClick={() => onCopy(value, copyKey)}
-          className="p-1 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+          className="p-1 text-[#97a3b6] hover:text-[#e7edf8] transition-colors shrink-0"
         >
           {copied === copyKey ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
         </button>
@@ -421,15 +423,15 @@ function IntegrationSummary({
   const checkoutEndpoint = `${gatewayBaseUrl}/api/gateway/checkout`
 
   return (
-    <div className="space-y-3 border border-border rounded-lg p-4 bg-background">
+    <div className="space-y-3 border border-[#343947] rounded-lg p-4 bg-[#1a1d24]">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Integration</p>
-          <p className="text-[11px] font-mono text-muted-foreground mt-1">
+          <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">Integration</p>
+          <p className="text-sm font-mono text-[#97a3b6] mt-1">
             Copy these values into the merchant store. Webhook signing uses HMAC-SHA256.
           </p>
         </div>
-        <span className={`inline-flex items-center gap-1.5 text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+        <span className={`inline-flex items-center gap-1.5 text-xs font-mono px-2 py-0.5 rounded-full border ${
           store.hasWebhookSecret
             ? "bg-emerald-400/10 text-emerald-400 border-emerald-400/20"
             : "bg-amber-400/10 text-amber-400 border-amber-400/20"
@@ -486,31 +488,31 @@ function IntegrationSummary({
       <div className="flex flex-wrap justify-end gap-2">
         <Link
           href="/docs/shield-domain"
-          className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-mono rounded-md border border-border text-foreground hover:bg-secondary transition-colors"
+          className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-mono rounded-md border border-[#343947] text-[#e7edf8] hover:bg-[#2a2d39] transition-colors"
         >
           <ExternalLink className="w-3.5 h-3.5" />
           Shield Domain Guide
         </Link>
         <Link
           href="/docs/api"
-          className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-mono rounded-md border border-cyan-400/30 text-cyan-400 hover:bg-cyan-400/10 transition-colors"
+          className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-mono rounded-md border border-[#FFD600]/30 text-[#FFD600] hover:bg-[#FFD600]/10 transition-colors"
         >
           <ExternalLink className="w-3.5 h-3.5" />
           Open API Docs
         </Link>
       </div>
 
-      <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-secondary/30 px-3 py-2">
+      <div className="flex items-center justify-between gap-3 rounded-md border border-[#343947] bg-[#2a2d39]/30 px-3 py-2">
         <div>
-          <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Webhook Secret</p>
-          <p className="text-[11px] font-mono text-muted-foreground mt-1">
+          <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">Webhook Secret</p>
+          <p className="text-sm font-mono text-[#97a3b6] mt-1">
             Regenerate to reveal a new signing secret once, then copy it into the merchant store.
           </p>
         </div>
         <button
           onClick={() => void onRegenerateWebhookSecret()}
           disabled={webhookBusy}
-          className="flex items-center gap-2 px-3 py-1.5 text-xs font-mono rounded-md border border-cyan-400/30 text-cyan-400 hover:bg-cyan-400/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 px-3 py-1.5 text-xs font-mono rounded-md border border-[#FFD600]/30 text-[#FFD600] hover:bg-[#FFD600]/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {webhookBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
           {store.hasWebhookSecret ? "Regenerate" : "Generate"}
@@ -528,12 +530,12 @@ function IntegrationSummary({
       )}
 
       <div className="space-y-2">
-        <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Webhook Events</p>
+        <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">Webhook Events</p>
         <div className="flex flex-wrap gap-2">
           {STORE_WEBHOOK_EVENTS.map((eventName) => (
             <span
               key={eventName}
-              className="inline-flex items-center rounded-full border border-border bg-secondary/40 px-2 py-1 text-[10px] font-mono text-foreground"
+              className="inline-flex items-center rounded-full border border-[#343947] bg-[#2a2d39]/40 px-2 py-1 text-xs font-mono text-[#e7edf8]"
             >
               {eventName}
             </span>
@@ -630,23 +632,23 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
       />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
-          className="bg-card border border-border rounded-lg w-full max-w-[520px] shadow-2xl flex flex-col"
+          className="bg-[#151821] border border-[#343947] rounded-lg w-full max-w-[800px] w-[92vw] shadow-2xl flex flex-col"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-[#343947]">
             <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 bg-cyan-400/10 border border-cyan-400/30 rounded-md flex items-center justify-center">
-                <StoreIcon className="w-3.5 h-3.5 text-cyan-400" />
+              <div className="w-7 h-7 bg-[#FFD600]/10 border border-[#FFD600]/30 rounded-md flex items-center justify-center">
+                <StoreIcon className="w-3.5 h-3.5 text-[#FFD600]" />
               </div>
               <div>
-                <h2 className="text-sm font-semibold font-mono text-foreground">Create New Store</h2>
-                <p className="text-[11px] font-mono text-muted-foreground">Generate credentials for a new client</p>
+                <h2 className="text-sm font-semibold font-mono text-[#e7edf8]">Create New Store</h2>
+                <p className="text-sm font-mono text-[#97a3b6]">Generate credentials for a new client</p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="p-1.5 text-muted-foreground hover:text-foreground border border-border rounded-md transition-colors"
+              className="p-1.5 text-[#97a3b6] hover:text-[#e7edf8] border border-[#343947] rounded-md transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -656,7 +658,7 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
           <div className="p-5 space-y-4">
             {/* Store Name */}
             <div className="space-y-1.5">
-              <label htmlFor={`${formId}-name`} className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+              <label htmlFor={`${formId}-name`} className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">
                 Store Name
               </label>
               <input
@@ -664,20 +666,20 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Tire Shop Pro"
-                className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+                className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] placeholder:text-[#97a3b6]/40 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
               />
             </div>
 
             {/* Platform */}
             <div className="space-y-1.5">
-              <label htmlFor={`${formId}-platform`} className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+              <label htmlFor={`${formId}-platform`} className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">
                 Platform
               </label>
               <select
                 id={`${formId}-platform`}
                 value={platform}
                 onChange={(e) => setPlatform(e.target.value)}
-                className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+                className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
               >
                 {platforms.map((p) => (
                   <option key={p} value={p}>{p}</option>
@@ -686,41 +688,41 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor={`${formId}-provider`} className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+              <label htmlFor={`${formId}-provider`} className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">
                 Payment Provider
               </label>
               <select
                 id={`${formId}-provider`}
                 value={providerType}
                 onChange={(e) => setProviderType(e.target.value as ProviderType)}
-                className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+                className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
               >
                 {PROVIDER_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </select>
-              <p className="text-[10px] font-mono text-muted-foreground">
+              <p className="text-xs font-mono text-[#97a3b6]">
                 {PROVIDER_OPTIONS.find((option) => option.value === providerType)?.description}
               </p>
             </div>
 
             {/* Webhook URL */}
             <div className="space-y-1.5">
-              <label htmlFor={`${formId}-webhook`} className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                Webhook URL <span className="text-muted-foreground/50">(optional)</span>
+              <label htmlFor={`${formId}-webhook`} className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">
+                Webhook URL <span className="text-[#97a3b6]/50">(optional)</span>
               </label>
               <input
                 id={`${formId}-webhook`}
                 value={webhookUrl}
                 onChange={(e) => setWebhookUrl(e.target.value)}
                 placeholder="https://yourstore.com/webhooks/gateway"
-                className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+                className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] placeholder:text-[#97a3b6]/40 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
               />
             </div>
 
             {/* Credentials info */}
             <div className="space-y-2">
-              <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Credentials</p>
+              <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">Credentials</p>
 
               {error && (
                 <div className="flex items-center gap-2 text-xs font-mono text-red-400 bg-red-400/5 border border-red-400/20 rounded-md px-3 py-2">
@@ -730,15 +732,15 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
               )}
 
               {generated && generated.id !== "(auto-generated)" ? (
-                <div className="bg-background border border-emerald-400/20 rounded-md p-3 space-y-2.5">
+                <div className="bg-[#1a1d24] border border-emerald-400/20 rounded-md p-3 space-y-2.5">
                   {/* Store ID */}
                   <div>
-                    <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-1">Store ID</p>
+                    <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider mb-1">Store ID</p>
                     <div className="flex items-center gap-2">
-                      <code className="font-mono text-xs text-foreground flex-1 truncate">{generated.id}</code>
+                      <code className="font-mono text-xs text-[#e7edf8] flex-1 truncate">{generated.id}</code>
                       <button
                         onClick={() => handleCopy(generated.id, "id")}
-                        className="p-1 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                        className="p-1 text-[#97a3b6] hover:text-[#e7edf8] transition-colors shrink-0"
                       >
                         {copied === "id" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                       </button>
@@ -746,24 +748,24 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
                   </div>
                   {/* API Key */}
                   <div>
-                    <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-1">API Key</p>
+                    <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider mb-1">API Key</p>
                     <div className="flex items-center gap-2">
-                      <code className="font-mono text-xs text-cyan-400 flex-1 truncate">{generated.key}</code>
+                      <code className="font-mono text-xs text-[#FFD600] flex-1 truncate">{generated.key}</code>
                       <button
                         onClick={() => handleCopy(generated.key, "key")}
-                        className="p-1 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                        className="p-1 text-[#97a3b6] hover:text-[#e7edf8] transition-colors shrink-0"
                       >
                         {copied === "key" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                       </button>
                     </div>
                   </div>
                   <div>
-                    <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-1">Webhook Secret</p>
+                    <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider mb-1">Webhook Secret</p>
                     <div className="flex items-center gap-2">
                       <code className="font-mono text-xs text-amber-400 flex-1 truncate">{generated.secret}</code>
                       <button
                         onClick={() => handleCopy(generated.secret, "secret")}
-                        className="p-1 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                        className="p-1 text-[#97a3b6] hover:text-[#e7edf8] transition-colors shrink-0"
                       >
                         {copied === "secret" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                       </button>
@@ -776,14 +778,14 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
                     copied={copied}
                     onCopy={handleCopy}
                   />
-                  <p className="text-[10px] font-mono text-amber-400/80">
+                  <p className="text-xs font-mono text-amber-400/80">
                     ⚠ Copy the API key now — it cannot be retrieved again after you close this modal.
                   </p>
                 </div>
               ) : (
-                <div className="bg-secondary/40 border border-dashed border-border rounded-md px-4 py-5 text-center">
-                  <Key className="w-5 h-5 text-muted-foreground mx-auto mb-2" />
-                  <p className="text-xs font-mono text-muted-foreground">
+                <div className="bg-[#2a2d39]/40 border border-dashed border-[#343947] rounded-md px-4 py-5 text-center">
+                  <Key className="w-5 h-5 text-[#97a3b6] mx-auto mb-2" />
+                  <p className="text-xs font-mono text-[#97a3b6]">
                     Store ID, API Key, and Webhook Secret are generated automatically when you click &quot;Create Store&quot;
                   </p>
                 </div>
@@ -792,17 +794,17 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center gap-3 px-5 py-4 border-t border-border">
+          <div className="flex items-center gap-3 px-5 py-4 border-t border-[#343947]">
             <button
               onClick={onClose}
-              className="flex-1 px-4 py-2 text-xs font-mono text-muted-foreground border border-border rounded-md hover:bg-secondary transition-colors"
+              className="flex-1 px-4 py-2 text-xs font-mono text-[#97a3b6] border border-[#343947] rounded-md hover:bg-[#2a2d39] transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleCreate}
               disabled={!name.trim() || saving || (generated !== null && generated.id !== "(auto-generated)")}
-              className="flex-1 px-4 py-2 text-xs font-mono text-background bg-cyan-400 hover:bg-cyan-300 rounded-md transition-colors font-semibold disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+              className="flex-1 px-4 py-2 text-xs font-mono text-background bg-[#FFD600] hover:bg-[#e6c100] rounded-md transition-colors font-semibold disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
             >
               {saving && <Loader2 className="w-3 h-3 animate-spin" />}
               {generated && generated.id !== "(auto-generated)" ? "Done — Close" : saving ? "Creating..." : "Create Store"}
@@ -892,19 +894,19 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
   return (
     <>
       <div className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" onClick={onClose} />
-      <aside className="fixed right-0 top-0 bottom-0 w-full max-w-[500px] bg-card border-l border-border z-50 flex flex-col shadow-2xl">
+      <aside className="fixed right-0 top-0 bottom-0 w-full max-w-[800px] xl:max-w-[900px] bg-[#222530] bg-[#151821] border-l border-[#343947] z-50 flex flex-col shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#343947] shrink-0">
           <div className="flex items-center gap-3">
-            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+            <ChevronRight className="w-4 h-4 text-[#97a3b6]" />
             <div>
-              <p className="text-[11px] font-mono text-muted-foreground">Editing Store</p>
-              <h2 className="text-sm font-semibold font-mono text-foreground">{draft.name}</h2>
+              <p className="text-sm font-mono text-[#97a3b6]">Editing Store</p>
+              <h2 className="text-sm font-semibold font-mono text-[#e7edf8]">{draft.name}</h2>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-muted-foreground hover:text-foreground border border-border rounded-md transition-colors"
+            className="p-1.5 text-[#97a3b6] hover:text-[#e7edf8] border border-[#343947] rounded-md transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -926,30 +928,30 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
               { label: "Transactions", value: draft.txCount.toLocaleString() },
               { label: "Success Rate", value: `${draft.successRate}%` },
             ].map((s) => (
-              <div key={s.label} className="bg-background border border-border rounded-md px-3 py-2.5 text-center">
-                <p className="font-mono text-sm font-semibold text-foreground">{s.value}</p>
-                <p className="font-mono text-[10px] text-muted-foreground mt-0.5">{s.label}</p>
+              <div key={s.label} className="bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2.5 text-center">
+                <p className="font-mono text-sm font-semibold text-[#e7edf8]">{s.value}</p>
+                <p className="font-mono text-xs text-[#97a3b6] mt-0.5">{s.label}</p>
               </div>
             ))}
           </div>
 
           {/* Store Name */}
           <div className="space-y-1.5">
-            <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Store Name</label>
+            <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">Store Name</label>
             <input
               value={draft.name}
               onChange={(e) => update({ name: e.target.value })}
-              className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+              className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
             />
           </div>
 
           {/* Platform */}
           <div className="space-y-1.5">
-            <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Platform</label>
+            <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">Platform</label>
             <select
               value={draft.platform}
               onChange={(e) => update({ platform: e.target.value })}
-              className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+              className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
             >
               {["Shopify", "WooCommerce", "BigCommerce", "Squarespace", "Custom API", "Magento"].map((p) => (
                 <option key={p} value={p}>{p}</option>
@@ -958,36 +960,36 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Payment Provider</label>
+            <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">Payment Provider</label>
             <select
               value={draft.providerType}
               onChange={(e) => update({ providerType: e.target.value as ProviderType })}
-              className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+              className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
             >
               {PROVIDER_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
-            <p className="text-[10px] font-mono text-muted-foreground">
+            <p className="text-xs font-mono text-[#97a3b6]">
               {PROVIDER_OPTIONS.find((option) => option.value === draft.providerType)?.description}
             </p>
           </div>
 
           {/* Webhook URL */}
           <div className="space-y-1.5">
-            <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Webhook URL</label>
+            <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">Webhook URL</label>
             <div className="flex items-center gap-2">
               <input
                 value={draft.webhookUrl}
                 onChange={(e) => update({ webhookUrl: e.target.value })}
-                className="flex-1 bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+                className="flex-1 bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
               />
               {draft.webhookUrl && (
                 <a
                   href={draft.webhookUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="p-2 text-muted-foreground hover:text-foreground border border-border rounded-md transition-colors shrink-0"
+                  className="p-2 text-[#97a3b6] hover:text-[#e7edf8] border border-[#343947] rounded-md transition-colors shrink-0"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                 </a>
@@ -996,11 +998,11 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Shield Domain</label>
+            <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">Shield Domain</label>
             <select
               value={draft.shieldDomain}
               onChange={(e) => update({ shieldDomain: e.target.value })}
-              className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+              className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
             >
               <option value="">No shield domain assigned</option>
               {selectableShieldDomains.map((domain) => (
@@ -1010,34 +1012,34 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
                 </option>
               ))}
             </select>
-            <p className="text-[10px] font-mono text-muted-foreground">
+            <p className="text-xs font-mono text-[#97a3b6]">
               Only active domains with a healthy popup bridge are offered here.
             </p>
           </div>
 
           <div className="grid grid-cols-1 gap-3">
             <div className="space-y-1.5">
-              <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Success Return URL</label>
+              <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">Success Return URL</label>
               <input
                 value={draft.successReturnUrl}
                 onChange={(e) => update({ successReturnUrl: e.target.value })}
                 placeholder="https://merchant-store.com/checkout/success"
-                className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+                className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
               />
-              <p className="text-[10px] font-mono text-muted-foreground">
+              <p className="text-xs font-mono text-[#97a3b6]">
                 Buyers return here after a confirmed shield-domain success flow.
               </p>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Cancel Return URL</label>
+              <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">Cancel Return URL</label>
               <input
                 value={draft.cancelReturnUrl}
                 onChange={(e) => update({ cancelReturnUrl: e.target.value })}
                 placeholder="https://merchant-store.com/checkout/cancel"
-                className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+                className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
               />
-              <p className="text-[10px] font-mono text-muted-foreground">
+              <p className="text-xs font-mono text-[#97a3b6]">
                 Optional fallback for buyer-canceled or expired checkout returns.
               </p>
             </div>
@@ -1045,17 +1047,17 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
 
           {/* API Key (read-only in panel, managed via table) */}
           <div className="space-y-1.5">
-            <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">API Key</label>
-            <div className="flex items-center gap-2 bg-background border border-border rounded-md px-3 py-2">
-              <code className="flex-1 font-mono text-[11px] text-cyan-400 truncate">{maskKey(draft.apiKey)}</code>
-              <Key className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">API Key</label>
+            <div className="flex items-center gap-2 bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2">
+              <code className="flex-1 font-mono text-sm text-[#FFD600] truncate">{maskKey(draft.apiKey)}</code>
+              <Key className="w-3.5 h-3.5 text-[#97a3b6] shrink-0" />
             </div>
-            <p className="text-[10px] font-mono text-muted-foreground">Use the Regenerate button in the table to rotate this key.</p>
+            <p className="text-xs font-mono text-[#97a3b6]">Use the Regenerate button in the table to rotate this key.</p>
           </div>
 
           {/* Status */}
           <div className="space-y-2">
-            <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Status</label>
+            <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">Status</label>
             <div className="grid grid-cols-3 gap-2">
               {statuses.map((s) => {
                 const c = statusConfig[s]
@@ -1067,7 +1069,7 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
                     className={`flex items-center gap-2 px-3 py-2 rounded-md border text-xs font-mono transition-colors ${
                       active
                         ? `${c.bg} ${c.text} ${c.border}`
-                        : "bg-background border-border text-muted-foreground hover:text-foreground"
+                        : "bg-[#1a1d24] border-[#343947] text-[#97a3b6] hover:text-[#e7edf8]"
                     }`}
                   >
                     <span className={`w-2 h-2 rounded-full ${active ? c.dot : "bg-border"}`} />
@@ -1079,10 +1081,10 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
           </div>
 
           {/* Gateway Access toggle */}
-          <div className="flex items-center justify-between border border-border rounded-md px-4 py-3 bg-background">
+          <div className="flex items-center justify-between border border-[#343947] rounded-md px-4 py-3 bg-[#1a1d24]">
             <div>
-              <p className="text-xs font-mono font-medium text-foreground">Gateway Access</p>
-              <p className="text-[11px] font-mono text-muted-foreground mt-0.5">
+              <p className="text-xs font-mono font-medium text-[#e7edf8]">Gateway Access</p>
+              <p className="text-sm font-mono text-[#97a3b6] mt-0.5">
                 {draft.enabled ? "Store can route payments through the gateway" : "Store is blocked from the gateway"}
               </p>
             </div>
@@ -1090,7 +1092,7 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Checkout Experience</label>
+            <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">Checkout Experience</label>
             <div className="grid grid-cols-1 gap-2">
               {CHECKOUT_FLOW_OPTIONS.map((option) => {
                 const active = draft.checkoutFlow === option.value
@@ -1100,24 +1102,24 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
                     onClick={() => update({ checkoutFlow: option.value, checkoutFlowOverride: true })}
                     className={`text-left p-3 rounded-lg border transition-all ${
                       active
-                        ? "border-cyan-400/40 bg-cyan-400/5 text-foreground"
-                        : "border-border bg-background text-muted-foreground hover:border-border/80 hover:text-foreground"
+                        ? "border-[#FFD600]/40 bg-[#FFD600]/5 text-[#e7edf8]"
+                        : "border-[#343947] bg-[#1a1d24] text-[#97a3b6] hover:border-[#343947]/80 hover:text-[#e7edf8]"
                     }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
-                      <span className={`w-2 h-2 rounded-full border-2 flex-shrink-0 ${active ? "border-cyan-400 bg-cyan-400" : "border-muted-foreground"}`} />
+                      <span className={`w-2 h-2 rounded-full border-2 flex-shrink-0 ${active ? "border-[#FFD600] bg-[#FFD600]" : "border-[#97a3b6]"}`} />
                       <span className="text-xs font-mono font-semibold">{option.label}</span>
                     </div>
-                    <p className="text-[10px] font-mono leading-relaxed pl-4">{option.desc}</p>
+                    <p className="text-xs font-mono leading-relaxed pl-4">{option.desc}</p>
                   </button>
                 )
               })}
             </div>
-            <p className="text-[10px] font-mono text-muted-foreground">
+            <p className="text-xs font-mono text-[#97a3b6]">
               Existing API clients remain compatible because the gateway still returns the classic <code>approvalUrl</code>.
             </p>
             {draft.checkoutFlow === "POPUP_BRIDGE" && !draft.successReturnUrl && !draft.cancelReturnUrl && (
-              <p className="text-[10px] font-mono text-amber-400">
+              <p className="text-xs font-mono text-amber-400">
                 Add at least one return URL to send buyers back to the merchant storefront after shield-domain completion.
               </p>
             )}
@@ -1134,20 +1136,20 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
 
           {/* Metadata */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-background border border-border rounded-md px-3 py-2.5">
-              <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-1">Created</p>
-              <p className="text-xs font-mono text-foreground">{draft.createdAt}</p>
+            <div className="bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2.5">
+              <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider mb-1">Created</p>
+              <p className="text-xs font-mono text-[#e7edf8]">{draft.createdAt}</p>
             </div>
-            <div className="bg-background border border-border rounded-md px-3 py-2.5">
-              <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-1">Last Ping</p>
-              <p className="text-xs font-mono text-foreground">{draft.lastPing}</p>
+            <div className="bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2.5">
+              <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider mb-1">Last Ping</p>
+              <p className="text-xs font-mono text-[#e7edf8]">{draft.lastPing}</p>
             </div>
           </div>
 
           {/* Danger zone */}
           <div className="border border-red-500/20 rounded-lg p-4 space-y-2 bg-red-500/5">
-            <p className="text-[10px] font-mono text-red-400 uppercase tracking-wider font-semibold">Danger Zone</p>
-            <p className="text-[11px] font-mono text-muted-foreground">
+            <p className="text-xs font-mono text-red-400 uppercase tracking-wider font-semibold">Danger Zone</p>
+            <p className="text-sm font-mono text-[#97a3b6]">
               Permanently removes this store and invalidates all API credentials. This cannot be undone.
             </p>
             <button
@@ -1173,17 +1175,17 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
         </div>
 
         {/* Footer */}
-        <div className="flex items-center gap-3 px-5 py-4 border-t border-border shrink-0">
+        <div className="flex items-center gap-3 px-5 py-4 border-t border-[#343947] shrink-0">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-2 text-xs font-mono text-muted-foreground border border-border rounded-md hover:bg-secondary transition-colors"
+            className="flex-1 px-4 py-2 text-xs font-mono text-[#97a3b6] border border-[#343947] rounded-md hover:bg-[#2a2d39] transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex-1 px-4 py-2 text-xs font-mono text-background bg-cyan-400 hover:bg-cyan-300 rounded-md transition-colors font-semibold"
+            className="flex-1 px-4 py-2 text-xs font-mono text-background bg-[#FFD600] hover:bg-[#e6c100] rounded-md transition-colors font-semibold"
           >
             {saving ? "Saving..." : "Save Changes"}
           </button>
@@ -1211,7 +1213,7 @@ function RowMenu({
       <DropdownMenuTrigger asChild>
         <button
           onClick={(e) => e.stopPropagation()}
-          className="p-1.5 text-muted-foreground hover:text-foreground border border-border rounded-md transition-colors data-[state=open]:bg-secondary"
+          className="p-1.5 text-[#97a3b6] hover:text-[#e7edf8] border border-[#343947] rounded-md transition-colors data-[state=open]:bg-[#2a2d39]"
         >
           <MoreHorizontal className="w-3.5 h-3.5" />
         </button>
@@ -1446,26 +1448,24 @@ export default function StoresPage() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-background font-mono">
-      <DashboardHeader />
-      <main className="px-4 md:px-6 py-5 space-y-5 max-w-[1600px] mx-auto">
+    <DashboardShell data-ui-version="stores-dashboard-shell-v2">
+      <main className="w-full px-6 md:px-8 py-8 space-y-5 w-full">
 
         {/* Page header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-base font-semibold font-mono text-foreground">Client Store Management</h1>
-            <p className="text-xs font-mono text-muted-foreground mt-0.5">
-              Manage API access, webhooks, and routing permissions for connected stores.
-            </p>
-          </div>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 text-xs font-mono font-semibold text-background bg-cyan-400 hover:bg-cyan-300 transition-colors rounded-md px-3.5 py-2"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Create New Store
-          </button>
-        </div>
+        <DashboardPageHeader
+  title="Connected Stores"
+  description="Manage ecommerce stores, API access, webhook endpoints, and gateway configuration."
+  eyebrow="STORES"
+  action={
+    <button
+      onClick={() => setShowCreate(true)}
+      className="flex items-center gap-2 text-sm font-semibold text-[#151821] bg-[#FFD600] hover:bg-[#e6c100] transition-colors rounded-md px-4 py-2.5"
+    >
+      <Plus className="w-4 h-4" />
+      Create New Store
+    </button>
+  }
+/>
 
         {/* Stats Overview */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1474,15 +1474,15 @@ export default function StoresPage() {
               label: "Total Connected Stores",
               value: stores.length.toString(),
               sub: `${activeCount} active`,
-              accent: "text-foreground",
-              border: "border-border",
+              accent: "text-[#e7edf8]",
+              border: "border-[#343947]",
             },
             {
               label: "Total Processed",
               value: `$${(totalVolume / 1000).toFixed(1)}k`,
               sub: "across all stores",
-              accent: "text-cyan-400",
-              border: "border-cyan-400/20",
+              accent: "text-[#FFD600]",
+              border: "border-[#FFD600]/20",
             },
             {
               label: "Active Stores",
@@ -1501,20 +1501,22 @@ export default function StoresPage() {
           ].map((card) => (
             <div
               key={card.label}
-              className={`bg-card border ${card.border} rounded-lg px-4 py-3.5`}
+              className={`bg-[#151821] border ${card.border} rounded-lg px-4 py-3.5 relative overflow-hidden`} data-ui-version="grid-background-v1"
             >
-              <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-1.5">{card.label}</p>
-              <p className={`text-2xl font-mono font-bold ${card.accent}`}>{card.value}</p>
-              <p className="text-[11px] font-mono text-muted-foreground mt-1">{card.sub}</p>
+              <GridBackground />
+              <p className="relative z-10 text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider mb-1.5">{card.label}</p>
+              <p className={`relative z-10 text-2xl font-mono font-bold ${card.accent}`}>{card.value}</p>
+              <p className="relative z-10 text-sm font-mono text-[#97a3b6] mt-1">{card.sub}</p>
             </div>
           ))}
         </div>
 
         {/* Table card */}
-        <div className="bg-card border border-border rounded-lg overflow-hidden">
+        <div className="bg-[#151821] border border-[#343947] rounded-lg overflow-hidden relative" data-ui-version="grid-background-v1">
+          <GridBackground />
 
           {/* Table toolbar */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border gap-4">
+          <div className="relative z-10 flex items-center justify-between px-4 py-3 border-b border-[#343947] gap-4 bg-[#1f222c]/80 backdrop-blur-sm">
             <div className="flex items-center gap-1">
               {(["All", "Active", "Trial", "Suspended"] as const).map((f) => (
                 <button
@@ -1522,29 +1524,29 @@ export default function StoresPage() {
                   onClick={() => setFilter(f)}
                   className={`px-3 py-1 text-xs font-mono rounded-md transition-colors ${
                     filter === f
-                      ? "bg-secondary text-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                      ? "bg-[#2a2d39] text-[#e7edf8]"
+                      : "text-[#97a3b6] hover:text-[#e7edf8] hover:bg-[#2a2d39]/50"
                   }`}
                 >
                   {f}
                   {f !== "All" && (
-                    <span className="ml-1.5 text-[10px] text-muted-foreground">
+                    <span className="ml-1.5 text-xs text-[#97a3b6]">
                       {stores.filter((s) => s.status === f).length}
                     </span>
                   )}
                 </button>
               ))}
             </div>
-            <p className="text-xs font-mono text-muted-foreground">
+            <p className="text-xs font-mono text-[#97a3b6]">
               {filtered.length} store{filtered.length !== 1 ? "s" : ""}
             </p>
           </div>
 
           {/* Table */}
-          <div className="overflow-x-auto">
+          <div className="relative z-10 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border">
+                <tr className="border-b border-[#343947]">
                   {[
                     "Store",
                     "Store ID",
@@ -1557,7 +1559,7 @@ export default function StoresPage() {
                   ].map((h) => (
                     <th
                       key={h}
-                      className="px-4 py-2.5 text-left text-[10px] font-mono text-muted-foreground uppercase tracking-wider whitespace-nowrap"
+                      className="px-4 py-2.5 text-left text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider whitespace-nowrap"
                     >
                       {h}
                     </th>
@@ -1569,19 +1571,19 @@ export default function StoresPage() {
                   <tr
                     key={store.id}
                     onClick={() => setSelectedStore(store)}
-                    className={`border-b border-border/50 hover:bg-secondary/30 cursor-pointer transition-colors ${
+                    className={`border-b border-[#343947]/50 hover:bg-[#2a2d39]/30 cursor-pointer transition-colors ${
                       !store.enabled ? "opacity-60" : ""
-                    } ${i % 2 !== 0 ? "bg-secondary/10" : ""}`}
+                    } ${i % 2 !== 0 ? "bg-[#2a2d39]/10" : ""}`}
                   >
                     {/* Store Name */}
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 bg-secondary border border-border rounded-md flex items-center justify-center shrink-0">
-                          <StoreIcon className="w-3.5 h-3.5 text-muted-foreground" />
+                        <div className="w-7 h-7 bg-[#2a2d39] border border-[#343947] rounded-md flex items-center justify-center shrink-0">
+                          <StoreIcon className="w-3.5 h-3.5 text-[#97a3b6]" />
                         </div>
                         <div>
-                          <p className="text-xs font-semibold font-mono text-foreground">{store.name}</p>
-                          <p className="text-[10px] font-mono text-muted-foreground">{store.platform}</p>
+                          <p className="text-xs font-semibold font-mono text-[#e7edf8]">{store.name}</p>
+                          <p className="text-xs font-mono text-[#97a3b6]">{store.platform}</p>
                         </div>
                       </div>
                     </td>
@@ -1589,7 +1591,7 @@ export default function StoresPage() {
                     {/* Store ID */}
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1.5">
-                        <code className="font-mono text-[11px] text-muted-foreground truncate max-w-[120px]" title={store.id}>
+                        <code className="font-mono text-sm text-[#97a3b6] truncate max-w-[160px]" title={store.id}>
                           {store.id.slice(0, 8)}…
                         </code>
                         <CopyButton value={store.id} />
@@ -1620,10 +1622,10 @@ export default function StoresPage() {
                     {/* Volume */}
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div>
-                        <p className="font-mono text-xs font-semibold text-foreground">
+                        <p className="font-mono text-xs font-semibold text-[#e7edf8]">
                           ${store.totalProcessed.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                         </p>
-                        <p className="font-mono text-[10px] text-muted-foreground">
+                        <p className="font-mono text-xs text-[#97a3b6]">
                           {store.txCount.toLocaleString()} txns
                         </p>
                       </div>
@@ -1641,7 +1643,7 @@ export default function StoresPage() {
                           enabled={store.enabled}
                           onChange={() => handleToggle(store.id)}
                         />
-                        <span className="text-[10px] font-mono text-muted-foreground">
+                        <span className="text-xs font-mono text-[#97a3b6]">
                           {store.enabled ? "On" : "Off"}
                         </span>
                       </div>
@@ -1663,18 +1665,18 @@ export default function StoresPage() {
 
             {filtered.length === 0 && (
               <div className="py-16 text-center">
-                <StoreIcon className="w-8 h-8 text-border mx-auto mb-3" />
-                <p className="text-sm font-mono text-muted-foreground">No stores match this filter.</p>
+                <StoreIcon className="w-8 h-8 text-[#343947] mx-auto mb-3" />
+                <p className="text-sm font-mono text-[#97a3b6]">No stores match this filter.</p>
               </div>
             )}
           </div>
 
           {/* Table footer */}
-          <div className="px-4 py-2.5 border-t border-border flex items-center justify-between">
-            <p className="text-[10px] font-mono text-muted-foreground">
+          <div className="px-4 py-2.5 border-t border-[#343947] flex items-center justify-between">
+            <p className="text-xs font-mono text-[#97a3b6]">
               Showing {filtered.length} of {stores.length} stores
             </p>
-            <p className="text-[10px] font-mono text-muted-foreground">
+            <p className="text-xs font-mono text-[#97a3b6]">
               Last updated: just now
             </p>
           </div>
@@ -1697,7 +1699,7 @@ export default function StoresPage() {
         onDelete={handleDelete}
         onRegenerateWebhookSecret={handleRegenerateWebhookSecret}
       />
-    </div>
+    </DashboardShell>
   )
 }
 
@@ -1713,7 +1715,7 @@ function CopyButton({ value }: { value: string }) {
         setCopied(true)
         setTimeout(() => setCopied(false), 2000)
       }}
-      className="p-1 text-muted-foreground hover:text-foreground transition-colors rounded shrink-0"
+      className="p-1 text-[#97a3b6] hover:text-[#e7edf8] transition-colors rounded shrink-0"
       title="Copy full ID"
     >
       {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}

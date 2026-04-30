@@ -8,7 +8,7 @@ import {
   ShieldCheck,
   Webhook,
 } from "lucide-react"
-import { DashboardHeader } from "@/components/dashboard/header"
+import { DashboardShell } from "@/components/dashboard/DashboardShell"
 
 const GATEWAY_BASE_URL = "https://www.gooytoy.com"
 const CHECKOUT_ENDPOINT = `${GATEWAY_BASE_URL}/api/gateway/checkout`
@@ -179,8 +179,7 @@ function SectionTitle({
 
 export default function ApiDocsPage() {
   return (
-    <div className="min-h-screen bg-background font-mono">
-      <DashboardHeader />
+    <DashboardShell>
 
       <main className="mx-auto flex max-w-[1400px] flex-col gap-5 px-4 py-5 md:px-6">
         <section className="overflow-hidden rounded-lg border border-border bg-card">
@@ -497,6 +496,6 @@ export default function ApiDocsPage() {
           </div>
         </section>
       </main>
-    </div>
+    </DashboardShell>
   )
 }

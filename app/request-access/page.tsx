@@ -1,88 +1,53 @@
-import Link from "next/link"
-import { ArrowLeft, ExternalLink, MessageCircle, Shield } from "lucide-react"
+import LandingNavbar from "@/components/landing/LandingNavbar"
+import RequestAccessForm from "@/components/landing/RequestAccessForm"
 
-const TELEGRAM_URL = "https://t.me/mrhoibeo"
+export const metadata = {
+  title: "Request Access — PayDef",
+  description: "Request access to PayDef, a payment gateway protection and operations platform for ecommerce teams."
+}
 
 export default function RequestAccessPage() {
   return (
-    <main className="relative min-h-screen bg-background flex items-center justify-center overflow-hidden px-4 py-10 font-mono">
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          backgroundImage: `
-            linear-gradient(to right, oklch(0.22 0 0 / 0.55) 1px, transparent 1px),
-            linear-gradient(to bottom, oklch(0.22 0 0 / 0.55) 1px, transparent 1px)
-          `,
-          backgroundSize: "40px 40px",
-        }}
-      />
+    <div className="min-h-screen bg-[#060606] font-sans selection:bg-[#FFD600] selection:text-[#0A0A0A] overflow-x-hidden flex flex-col relative">
+      
+      {/* Background elements */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        {/* Grain */}
+        <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: "url('https://grainy-gradients.vercel.app/noise.svg')", mixBlendMode: "overlay" }} />
+        {/* Subtle grid */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]" />
+        {/* Glow */}
+        <div className="absolute top-0 right-[10%] w-[500px] h-[500px] bg-[var(--landing-yellow)] opacity-[0.05] blur-[100px] rounded-full" />
+      </div>
 
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background:
-            "radial-gradient(ellipse 70% 60% at 50% 50%, transparent 0%, oklch(0.11 0 0 / 0.85) 100%)",
-        }}
-      />
+      {/* Header */}
+      <LandingNavbar isLoggedIn={false} />
 
-      <div
-        className="absolute pointer-events-none"
-        style={{
-          width: 520,
-          height: 520,
-          borderRadius: "50%",
-          background: "radial-gradient(circle, oklch(0.72 0.17 195 / 0.06) 0%, transparent 70%)",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-        }}
-      />
-
-      <section className="relative z-10 w-full max-w-[460px] rounded-lg border border-border bg-card shadow-2xl shadow-black/40">
-        <div className="border-b border-border px-7 py-6">
-          <div className="mb-4 flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-cyan-400/25 bg-cyan-400/10">
-              <Shield className="h-5 w-5 text-cyan-400" />
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Access Request</p>
-              <h1 className="text-lg font-semibold text-foreground">Connect With Gateway Central</h1>
-            </div>
-          </div>
-          <p className="text-sm leading-6 text-muted-foreground">
-            To request onboarding, pricing, or merchant access, contact our team directly on Telegram.
+      <main className="flex-1 flex flex-col px-6 md:px-[48px] max-w-[1400px] mx-auto w-full pt-[120px] pb-24 relative z-10">
+        
+        {/* Hero / Intro */}
+        <div className="flex flex-col gap-6 max-w-[800px] animate-in fade-in slide-in-from-bottom-8 duration-500">
+          <span className="font-ibm-mono text-[12px] font-bold text-[var(--landing-yellow)] tracking-[3px] uppercase">
+            [REQUEST ACCESS]
+          </span>
+          <h1 className="font-grotesk text-[32px] md:text-[56px] font-bold text-[#F5F5F0] tracking-[1px] leading-[1.1] uppercase">
+            Get early access<br />to PayDef.
+          </h1>
+          <p className="font-ibm-mono text-[12px] md:text-[14px] text-[#888888] tracking-[1px] leading-relaxed uppercase max-w-[600px]">
+            Tell us about your store, payment setup, and operational needs. Our team will review your request and help you decide if PayDef is the right fit for your payment workflow.
           </p>
-        </div>
-
-        <div className="space-y-5 px-7 py-6">
-          <div className="rounded-lg border border-cyan-400/20 bg-cyan-400/5 p-4">
-            <p className="text-[11px] uppercase tracking-[0.24em] text-cyan-400">Official Telegram</p>
-            <p className="mt-2 text-xl font-semibold text-foreground">@mrhoibeo</p>
-            <p className="mt-2 text-xs leading-5 text-muted-foreground">
-              Introduce your business, estimated monthly volume, current platform, and required timeline so the team can respond faster.
-            </p>
-          </div>
-
-          <a
-            href={TELEGRAM_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="flex w-full items-center justify-center gap-2 rounded-md bg-[#0088cc] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#0077bb]"
-          >
-            <MessageCircle className="h-4 w-4" />
-            Open Telegram Chat
-            <ExternalLink className="h-4 w-4" />
-          </a>
-
-          <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-            <span>Prefer to return first?</span>
-            <Link href="/login" className="inline-flex items-center gap-1.5 transition-colors hover:text-cyan-400">
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Back to Login
-            </Link>
+          <div className="flex items-center gap-3 py-3 px-4 bg-[#111111] border border-[#2D2D2D] w-fit mt-2">
+            <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full shrink-0" />
+            <span className="font-ibm-mono text-[10px] text-[#CCCCCC] tracking-[1px] uppercase">
+              Built for ecommerce operators who need better checkout visibility, webhook reliability, and payment operation control.
+            </span>
           </div>
         </div>
-      </section>
-    </main>
+
+        {/* Form & Contact */}
+        <RequestAccessForm />
+
+      </main>
+    </div>
   )
 }

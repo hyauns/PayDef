@@ -64,19 +64,19 @@ export function SuperAdminDescriptorTemplates() {
     mutate()
   }
 
-  if (isLoading) return <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 text-cyan-400 animate-spin" /></div>
+  if (isLoading) return <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 text-[#FFD600] animate-spin" /></div>
 
   return (
     <div className="space-y-6">
-      <div className="bg-background border border-border rounded-lg p-5 space-y-4">
-        <h3 className="text-sm font-semibold font-mono text-foreground flex items-center gap-2">
-          <Plus className="w-4 h-4 text-cyan-400" />
+      <div className="bg-[#151821] border border-[#343947] rounded-lg p-5 space-y-4">
+        <h3 className="text-sm font-semibold font-mono text-[#e7edf8] flex items-center gap-2">
+          <Plus className="w-4 h-4 text-[#FFD600]" />
           Add Descriptor Template
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Industry Vertical</label>
-            <select value={form.industryVertical} onChange={e => setForm(p => ({ ...p, industryVertical: e.target.value }))} className="w-full bg-card border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground">
+          <div className="space-y-2.5">
+            <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Industry Vertical</label>
+            <select value={form.industryVertical} onChange={e => setForm(p => ({ ...p, industryVertical: e.target.value }))} className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2.5 text-base text-[#e7edf8]">
               <option value="automotive_tires">Automotive / Tires</option>
               <option value="electronics">Electronics</option>
               <option value="home_goods">Home Goods</option>
@@ -86,27 +86,27 @@ export function SuperAdminDescriptorTemplates() {
               <option value="generic_ecommerce">Generic Ecommerce</option>
             </select>
           </div>
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Descriptor Text</label>
-            <input value={form.descriptorText} onChange={e => setForm(p => ({ ...p, descriptorText: e.target.value }))} className="w-full bg-card border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground" placeholder="e.g. Winter Tire Service" />
+          <div className="space-y-2.5">
+            <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Descriptor Text</label>
+            <input value={form.descriptorText} onChange={e => setForm(p => ({ ...p, descriptorText: e.target.value }))} className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2.5 text-base text-[#e7edf8]" placeholder="e.g. Winter Tire Service" />
           </div>
         </div>
         <div className="flex items-center gap-3 pt-2">
-          <button onClick={handleCreate} disabled={saving || !form.descriptorText} className="bg-cyan-400 text-background px-4 py-2 rounded-md text-xs font-mono font-semibold disabled:opacity-50">
+          <button onClick={handleCreate} disabled={saving || !form.descriptorText} className="bg-[#FFD600] text-[#151821] px-4 py-2 rounded-md text-base font-semibold text-[#e7edf8] disabled:opacity-50">
             {saving ? "Adding..." : "Add Template"}
           </button>
-          {success && <span className="text-[11px] font-mono text-emerald-400 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> {success}</span>}
-          {error && <span className="text-[11px] font-mono text-red-400 flex items-center gap-1"><XCircle className="w-3 h-3" /> {error}</span>}
+          {success && <span className="text-sm font-medium text-emerald-400 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> {success}</span>}
+          {error && <span className="text-sm font-medium text-red-400 flex items-center gap-1"><XCircle className="w-3 h-3" /> {error}</span>}
         </div>
       </div>
 
-      <div className="bg-background border border-border rounded-lg p-5">
+      <div className="bg-[#151821] border border-[#343947] rounded-lg p-5">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-          <h3 className="text-sm font-semibold font-mono text-foreground flex items-center gap-2">
-            <Tag className="w-4 h-4 text-cyan-400" />
+          <h3 className="text-sm font-semibold font-mono text-[#e7edf8] flex items-center gap-2">
+            <Tag className="w-4 h-4 text-[#FFD600]" />
             Active Templates
           </h3>
-          <select value={industryFilter} onChange={e => setIndustryFilter(e.target.value)} className="bg-card border border-border rounded-md px-3 py-1.5 text-xs font-mono text-foreground">
+          <select value={industryFilter} onChange={e => setIndustryFilter(e.target.value)} className="bg-[#222530] border border-[#343947] rounded-md px-3 py-1.5 text-xs font-mono text-[#e7edf8]">
             <option value="">All Industries</option>
             <option value="automotive_tires">Automotive / Tires</option>
             <option value="electronics">Electronics</option>
@@ -120,17 +120,17 @@ export function SuperAdminDescriptorTemplates() {
         
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {templates.map((t: any) => (
-            <div key={t.id} className={`border ${t.is_active ? 'border-border' : 'border-red-500/30 opacity-60'} rounded-md p-3 bg-card flex justify-between items-center gap-2`}>
+            <div key={t.id} className={`border ${t.is_active ? 'border-[#343947]' : 'border-red-500/30 opacity-60'} rounded-md p-3 bg-[#222530] flex justify-between items-center gap-2`}>
               <div className="space-y-1 overflow-hidden">
-                <p className="text-sm font-semibold font-mono text-foreground truncate" title={t.descriptor_text}>{t.descriptor_text}</p>
-                <p className="text-[10px] font-mono text-muted-foreground">{t.industry_vertical}</p>
+                <p className="text-sm font-semibold font-mono text-[#e7edf8] truncate" title={t.descriptor_text}>{t.descriptor_text}</p>
+                <p className="text-sm leading-6 text-[#aab4c5]">{t.industry_vertical}</p>
               </div>
-              <button onClick={() => toggleStatus(t.id, !t.is_active)} className="text-[10px] font-mono text-muted-foreground hover:text-foreground underline shrink-0">
+              <button onClick={() => toggleStatus(t.id, !t.is_active)} className="text-sm leading-6 text-[#aab4c5] hover:text-[#e7edf8] underline shrink-0">
                 {t.is_active ? "Disable" : "Enable"}
               </button>
             </div>
           ))}
-          {templates.length === 0 && <p className="text-xs font-mono text-muted-foreground py-2 col-span-2 text-center">No templates found</p>}
+          {templates.length === 0 && <p className="text-xs font-mono text-[#97a3b6] py-2 col-span-2 text-center">No templates found</p>}
         </div>
       </div>
     </div>

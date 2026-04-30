@@ -1,7 +1,8 @@
 // Cache invalidation: 2026-04-04
 "use client"
 
-import { DashboardHeader } from "@/components/dashboard/header"
+import { DashboardShell } from "@/components/dashboard/DashboardShell"
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader"
 import { GlobalMetrics } from "@/components/dashboard/global-metrics"
 import { MerchantAccounts } from "@/components/dashboard/merchant-accounts"
 import { ConnectedStores } from "@/components/dashboard/connected-stores"
@@ -11,11 +12,15 @@ import { RotationLogic } from "@/components/dashboard/rotation-logic"
 
 export default function DashboardPage() {
     return (
-        <div className="min-h-screen bg-background font-mono">
-            <DashboardHeader />
-            <main className="px-4 md:px-6 py-5 space-y-5 max-w-[1600px] mx-auto">
+        <DashboardShell>
+            <div className="w-full px-6 md:px-8 py-8 space-y-6">
+                <DashboardPageHeader 
+                    eyebrow="Overview"
+                    title="Dashboard"
+                    description="Real-time performance and system health across all merchant accounts."
+                />
                 <GlobalMetrics />
-                <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-5">
+                <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-6">
                     <RotationLogic />
                     <div className="xl:row-span-2">
                         <TransactionFeed />
@@ -24,7 +29,7 @@ export default function DashboardPage() {
                 <MerchantAccounts />
                 <ConnectedStores />
                 <ShieldDomains />
-            </main>
-        </div>
+            </div>
+        </DashboardShell>
     )
 }

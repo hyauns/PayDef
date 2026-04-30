@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { ArrowRightLeft, Zap } from "lucide-react"
+import { SectionCard } from "./SectionCard"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,27 +36,27 @@ function timeAgo(d: Date): string {
   return `${Math.floor(s / 86400)}d ago`
 }
 
-const STATUS_CFG: Record<TxStatus, { bg: string; text: string; label: string }> = {
-  completed: { bg: "bg-emerald-400/10", text: "text-emerald-400", label: "COMPLETED" },
-  pending:   { bg: "bg-amber-400/10",   text: "text-amber-400",   label: "PENDING"   },
-  failed:    { bg: "bg-red-400/10",     text: "text-red-400",     label: "FAILED"    },
+const STATUS_CFG: Record<TxStatus, { bg: string; text: string; label: string; amountColor: string }> = {
+  completed: { bg: "bg-[#063f33]", text: "text-[#34d399]", label: "COMPLETED", amountColor: "text-[#34d399]" },
+  pending:   { bg: "bg-[#4a3908]", text: "text-[#facc15]", label: "PENDING",   amountColor: "text-[#facc15]" },
+  failed:    { bg: "bg-[#4a1d24]", text: "text-[#fb7185]", label: "FAILED",    amountColor: "text-[#fb7185]" },
 }
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
 function FeedSkeleton() {
   return (
-    <div className="overflow-y-auto flex-1 max-h-[420px]">
+    <div className="overflow-y-auto flex-1 max-h-[420px] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-[#1f222c] [&::-webkit-scrollbar-thumb]:bg-[#6b7280] [&::-webkit-scrollbar-thumb]:rounded-full">
       {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="flex items-start gap-3 px-4 py-2.5 border-b border-border/40">
-          <div className="w-7 h-7 rounded-md bg-secondary shrink-0 mt-0.5" />
-          <div className="flex-1 space-y-1.5">
+        <div key={i} className="flex items-start gap-3 px-6 py-4 border-b border-[#343947]">
+          <div className="w-8 h-8 rounded-lg bg-[#2a2d39] shrink-0 mt-0.5" />
+          <div className="flex-1 space-y-2">
             <div className="flex justify-between gap-2">
-              <div className="h-3 w-24 bg-secondary rounded" />
-              <div className="h-3 w-14 bg-secondary rounded" />
+              <div className="h-4 w-24 bg-[#2a2d39] rounded" />
+              <div className="h-4 w-14 bg-[#2a2d39] rounded" />
             </div>
-            <div className="h-2.5 w-40 bg-secondary rounded" />
-            <div className="h-2.5 w-28 bg-secondary rounded" />
+            <div className="h-3 w-40 bg-[#2a2d39] rounded" />
+            <div className="h-3 w-28 bg-[#2a2d39] rounded" />
           </div>
         </div>
       ))}
@@ -121,52 +122,52 @@ function FeedList() {
 
   if (feed.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-center px-4 py-10">
+      <div className="flex-1 flex items-center justify-center text-center px-5 py-10">
         <div>
-          <ArrowRightLeft className="w-6 h-6 text-border mx-auto mb-2" />
-          <p className="text-xs font-mono text-muted-foreground">No transactions yet</p>
-          <p className="text-[10px] font-mono text-muted-foreground mt-1">Transactions will appear here as they come in</p>
+          <ArrowRightLeft className="w-6 h-6 text-[#37394d] mx-auto mb-2" />
+          <p className="text-xs font-mono text-[#97aac1]">No transactions yet</p>
+          <p className="text-[10px] font-mono text-[#6b7280] mt-1">Transactions will appear here as they come in</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="overflow-y-auto flex-1 max-h-[420px]">
+    <div className="overflow-y-auto flex-1 max-h-[420px] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-[#1f222c] [&::-webkit-scrollbar-thumb]:bg-[#6b7280] [&::-webkit-scrollbar-thumb]:rounded-full">
       {feed.map((tx, i) => {
         const cfg = STATUS_CFG[tx.status]
         return (
           <div
             key={`${tx.id}-${i}`}
-            className={`flex items-start gap-3 px-4 py-2.5 border-b border-border/40 hover:bg-secondary/20 transition-all ${i === 0 ? "bg-cyan-400/5" : ""}`}
+            className={`group flex items-start gap-3 px-6 py-4 border-b border-[#343947] hover:bg-[#2a2d39] transition-all ${i % 2 === 0 ? "bg-[#222530]" : "bg-[#20232d]"}`}
           >
             <div className="mt-0.5 shrink-0">
-              <div className={`w-7 h-7 rounded-md flex items-center justify-center ${cfg.bg}`}>
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${cfg.bg}`}>
                 <ArrowRightLeft className={`w-3.5 h-3.5 ${cfg.text}`} />
               </div>
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-foreground truncate">{tx.store}</span>
-                <span className="font-mono text-sm font-semibold text-foreground whitespace-nowrap">
+                <span className="text-sm font-bold text-[#e7edf8] truncate">{tx.store}</span>
+                <span className={`font-mono text-[15px] font-bold ${cfg.amountColor} whitespace-nowrap`}>
                   ${tx.amount.toFixed(2)}
                 </span>
               </div>
               <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                <span className="font-mono text-xs text-cyan-400">{tx.paypalAccount}</span>
+                <span className="font-mono text-xs font-semibold text-cyan-400">{tx.paypalAccount}</span>
                 {tx.shieldDomain !== "—" && (
                   <>
-                    <span className="text-muted-foreground text-xs">via</span>
-                    <span className="font-mono text-xs text-muted-foreground truncate">{tx.shieldDomain}</span>
+                    <span className="text-[#6b7280] text-xs">via</span>
+                    <span className="font-mono text-xs text-[#97a3b6] truncate">{tx.shieldDomain}</span>
                   </>
                 )}
               </div>
-              <div className="flex items-center gap-2 mt-1">
-                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${cfg.bg} ${cfg.text}`}>
+              <div className="flex items-center gap-2 mt-1.5">
+                <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border border-transparent ${cfg.bg} ${cfg.text}`}>
                   {cfg.label}
                 </span>
-                <span className="font-mono text-xs text-muted-foreground">{timeAgo(tx.timestamp)}</span>
-                <span className="font-mono text-[10px] text-muted-foreground opacity-40">{tx.id}</span>
+                <span className="font-mono text-xs text-[#aab4c5]">{timeAgo(tx.timestamp)}</span>
+                <span className="font-mono text-[10px] text-[#7f8aa0] group-hover:text-[#aab4c5] transition-colors">{tx.id}</span>
               </div>
             </div>
           </div>
@@ -187,18 +188,18 @@ function mapStatus(raw: string): TxStatus {
 
 export function TransactionFeed() {
   return (
-    <div className="bg-card border border-border rounded-lg overflow-hidden flex flex-col h-full">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-        <div className="flex items-center gap-2">
-          <Zap className="w-3.5 h-3.5 text-cyan-400" />
-          <h2 className="text-sm font-semibold text-foreground">Live Transaction Feed</h2>
-        </div>
+    <SectionCard
+      noPadding
+      title="Live Transaction Feed"
+      className="h-full flex flex-col"
+      action={
         <div className="flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
           <span className="text-xs font-mono text-emerald-400">LIVE</span>
         </div>
-      </div>
+      }
+    >
       <FeedList />
-    </div>
+    </SectionCard>
   )
 }

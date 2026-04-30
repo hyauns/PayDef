@@ -40,7 +40,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { DashboardHeader } from "@/components/dashboard/header"
+import { DashboardShell } from "@/components/dashboard/DashboardShell"
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader"
+import { GridBackground } from "@/components/ui/grid-background"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -295,19 +297,29 @@ interface SlideOverProps {
 
 function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose, onSave }: SlideOverProps) {
   const [draft, setDraft] = useState<Merchant | null>(merchant)
+  const [activeTab, setActiveTab] = useState<"overview" | "credentials" | "routing" | "domain" | "display" | "legacy">("overview")
   const fallbackPlatformDomain = verifiedPlatformDomains[0] ?? ""
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   // sync when a new merchant is opened
   if (draft?.id !== merchant?.id && merchant !== null) {
     setDraft(merchant)
+    setActiveTab("overview")
+    setSaveError(null)
+    setSaveSuccess(false)
   }
 
   if (!merchant || !draft) return null
 
-  const update = (patch: Partial<Merchant>) =>
+  const update = (patch: Partial<Merchant>) => {
     setDraft((prev) => (prev ? { ...prev, ...patch } : prev))
+    setSaveSuccess(false)
+    setSaveError(null)
+  }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!draft) return
     const nextDraft =
       draft.domainType === "platform" && !verifiedPlatformDomains.includes(draft.shieldDomain)
@@ -316,469 +328,470 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
     if (nextDraft.domainType === "platform" && !nextDraft.shieldDomain) {
       return
     }
-    onSave(nextDraft)
-    onClose()
+
+    setIsSaving(true)
+    setSaveSuccess(false)
+    setSaveError(null)
+
+    try {
+      await onSave(nextDraft)
+      setSaveSuccess(true)
+      setTimeout(() => setSaveSuccess(false), 3000)
+    } catch (err: any) {
+      setSaveError(err.message || "Unable to save changes. Please try again.")
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
     <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Panel */}
-      <aside className="fixed right-0 top-0 bottom-0 w-full max-w-[520px] bg-card border-l border-border z-50 flex flex-col shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
-          <div className="flex items-center gap-3">
-            <ChevronRight className="w-4 h-4 text-muted-foreground" />
-            <div>
-              <p className="text-xs font-mono text-muted-foreground">Editing</p>
-              <h2 className="text-sm font-semibold font-mono text-foreground">{draft.accountName}</h2>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 text-muted-foreground hover:text-foreground border border-border rounded-md transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-6">
-
-          {/* Quick stats */}
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { label: "Transactions", value: draft.txCount.toString() },
-              { label: "Success Rate", value: `${draft.successRate}%` },
-              { label: "Last Active", value: draft.lastActive },
-            ].map((s) => (
-              <div key={s.label} className="bg-background border border-border rounded-md px-3 py-2.5 text-center">
-                <p className="font-mono text-sm font-semibold text-foreground">{s.value}</p>
-                <p className="font-mono text-[10px] text-muted-foreground mt-0.5">{s.label}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Account Name */}
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-              Account Name
-            </label>
-            <input
-              value={draft.accountName}
-              onChange={(e) => update({ accountName: e.target.value })}
-              className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
-            />
-          </div>
-
-          {/* PayPal Email */}
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-              PayPal Email
-            </label>
-            <input
-              value={draft.email}
-              onChange={(e) => update({ email: e.target.value })}
-              className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
-            />
-          </div>
-
-          {/* Shield Domain */}
-          <div className="space-y-3 border border-border rounded-lg p-4 bg-background">
-            <div className="flex items-center gap-2">
-              <Globe className="w-3.5 h-3.5 text-cyan-400" />
-              <p className="text-xs font-mono font-semibold text-foreground">Shield Domain</p>
-            </div>
-            {/* Domain type toggle */}
-            <div className="flex rounded-md overflow-hidden border border-border">
-              {(["platform", "custom"] as DomainType[]).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => update({ domainType: t, shieldDomain: t === "platform" ? fallbackPlatformDomain : "" })}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-mono transition-colors ${
-                    draft.domainType === t
-                      ? "bg-cyan-400/10 text-cyan-400 border-r border-border"
-                      : "text-muted-foreground hover:text-foreground bg-transparent"
-                  }`}
-                >
-                  {t === "platform" ? <Lock className="w-3 h-3" /> : <Link2 className="w-3 h-3" />}
-                  {t === "platform" ? "Platform Domain" : "Custom Domain"}
-                </button>
-              ))}
-            </div>
-            {draft.domainType === "platform" ? (
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                  Select Platform Domain
-                </label>
-                <select
-                  value={verifiedPlatformDomains.includes(draft.shieldDomain) ? draft.shieldDomain : ""}
-                  onChange={(e) => update({ shieldDomain: e.target.value })}
-                  disabled={!verifiedPlatformDomains.length}
-                  className="w-full bg-card border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors appearance-none"
-                >
-                  <option value="" disabled>
-                    {verifiedPlatformDomains.length ? "Select a verified platform domain" : "No verified platform domains available"}
-                  </option>
-                  {verifiedPlatformDomains.map((d) => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
-                <p className="text-[10px] font-mono text-muted-foreground">Managed and monitored by Gateway Central</p>
-                {!verifiedPlatformDomains.length && (
-                  <p className="text-[10px] font-mono text-amber-400">Verify a domain in Domains before assigning it to an account.</p>
-                )}
-                {!!draft.shieldDomain && !verifiedPlatformDomains.includes(draft.shieldDomain) && verifiedPlatformDomains.length > 0 && (
-                  <p className="text-[10px] font-mono text-amber-400">The current platform domain is no longer verified. Select another verified domain before saving.</p>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                  Custom Domain
-                </label>
-                <input
-                  value={draft.shieldDomain}
-                  onChange={(e) => update({ shieldDomain: e.target.value })}
-                  placeholder="e.g. my-payment-shield.com"
-                  className="w-full bg-card border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
-                />
-                <p className="text-[10px] font-mono text-amber-400">You are responsible for DNS configuration and SSL</p>
-              </div>
-            )}
-            {draft.shieldDomain && (
-              <a
-                href={`https://${draft.shieldDomain}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-[11px] font-mono text-cyan-400 hover:text-cyan-300 transition-colors"
-              >
-                <ExternalLink className="w-3 h-3" />
-                {draft.shieldDomain}
-              </a>
-            )}
-          </div>
-
-          {/* Payment Display Profile */}
-          <div className="space-y-3 border border-border rounded-lg p-4 bg-background">
-            <div className="flex items-center gap-2">
-              <Package className="w-3.5 h-3.5 text-cyan-400" />
-              <p className="text-xs font-mono font-semibold text-foreground">Payment Display Profile</p>
-            </div>
-            <p className="text-[11px] font-mono text-muted-foreground">
-              Select a preferred display profile to route transactions through this account when the store uses this profile.
-            </p>
-            <select
-              value={draft.displayProfileId || ""}
-              onChange={(e) => update({ displayProfileId: e.target.value || null })}
-              className="w-full bg-card border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors appearance-none"
-            >
-              <option value="">None (Use fallback accounts)</option>
-              {displayProfiles.map((p) => (
-                <option key={p.id} value={p.id}>{p.profile_name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* PayPal Credentials */}
-          <div className="space-y-3 border border-border rounded-lg p-4 bg-background">
-            <div className="flex items-center gap-2">
-              <Lock className="w-3.5 h-3.5 text-cyan-400" />
-              <p className="text-xs font-mono font-semibold text-foreground">PayPal API Credentials</p>
-            </div>
-            <p className="text-[11px] font-mono text-muted-foreground">
-              Enter your PayPal REST API Client ID and Secret from the PayPal Developer Dashboard.
-            </p>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Client ID</label>
-              <div className="flex gap-2">
-                <input
-                  value={draft.clientId}
-                  onChange={(e) => update({ clientId: e.target.value })}
-                  placeholder="AeBFXkz..."
-                  className="flex-1 bg-card border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
-                />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Client Secret</label>
-              <MaskedField value={draft.clientSecret} label="" />
-            </div>
-            <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground bg-secondary/50 rounded-md px-3 py-2">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-              Credentials are encrypted at rest with AES-256 and never logged
-            </div>
-          </div>
-
-          {/* Proxy URL */}
-          <div className="space-y-3 border border-border rounded-lg p-4 bg-background">
-            <div className="flex items-center gap-2">
-              <Wifi className="w-3.5 h-3.5 text-orange-400" />
-              <p className="text-xs font-mono font-semibold text-foreground">Proxy Configuration</p>
-            </div>
-            <p className="text-[11px] font-mono text-muted-foreground">
-              Route PayPal API calls through a proxy to diversify IP origins. Supports HTTP, HTTPS, and SOCKS5 protocols.
-            </p>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Proxy URL</label>
-              {draft.proxyUrl ? (
-                <MaskedField value={draft.proxyUrl} label="" />
-              ) : (
-                <input
-                  value={draft.proxyUrl}
-                  onChange={(e) => update({ proxyUrl: e.target.value })}
-                  placeholder="http://user:pass@proxy.example.com:8080"
-                  className="w-full bg-card border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-orange-400/40 focus:border-orange-400/40 transition-colors"
-                />
-              )}
-              {draft.proxyUrl && (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => update({ proxyUrl: "" })}
-                    className="text-[11px] font-mono text-red-400 hover:text-red-300 transition-colors"
-                  >
-                    Remove Proxy
-                  </button>
-                </div>
-              )}
-            </div>
-            <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground bg-secondary/50 rounded-md px-3 py-2">
-              <ShieldCheck className="w-3.5 h-3.5 text-orange-400 shrink-0" />
-              Proxy URL may contain credentials — it is masked in the UI and never logged
-            </div>
-          </div>
-
-          {/* Status */}
-          <div className="space-y-2">
-            <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Status</label>
-            <div className="grid grid-cols-2 gap-2">
-              {(["Active", "Warm-up", "Limited", "Paused", "Suspended"] as Status[]).map((s) => {
-                const c = statusConfig[s]
-                const active = draft.status === s
-                return (
-                  <button
-                    key={s}
-                    onClick={() => update({ status: s })}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-md border text-xs font-mono transition-colors ${
-                      active
-                        ? `${c.bg} ${c.text} ${c.border}`
-                        : "bg-background border-border text-muted-foreground hover:border-border/80 hover:text-foreground"
-                    }`}
-                  >
-                    <span className={`w-2 h-2 rounded-full ${active ? c.dot : "bg-border"}`} />
-                    {s}
-                  </button>
-                )
-              })}
-            </div>
-            {/* Warm-up Info Tooltip */}
-            {draft.status === "Warm-up" && (
-              <div className="flex items-start gap-2 mt-2 px-3 py-2.5 rounded-md bg-sky-400/5 border border-sky-400/20">
-                <Info className="w-3.5 h-3.5 text-sky-400 shrink-0 mt-0.5" />
-                <div className="text-[11px] font-mono text-sky-300/80 leading-relaxed">
-                  <p className="font-semibold text-sky-400 mb-1">Warm-up Mode Active</p>
-                  <p>• Max <span className="text-sky-400">$50</span> per transaction to build account trust</p>
-                  <p>• Progressive daily cap: <span className="text-sky-400">$100</span> (Day 1) → <span className="text-sky-400">$500</span> (Day 7+)</p>
-                  <p>• Account is deprioritised for orders over $100</p>
-                </div>
-              </div>
-            )}
-            {draft.status === "Suspended" && (
-              <div className="flex items-start gap-2 mt-2 px-3 py-2.5 rounded-md bg-red-500/5 border border-red-500/20">
-                <Ban className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
-                <p className="text-[11px] font-mono text-red-300/80">
-                  Suspended accounts are excluded from the rotation pool entirely.
-                  No transactions will be routed to this account.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Priority */}
-          <div className="space-y-2">
-            <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-              Rotation Priority — {draft.priority}/5
-            </label>
-            <div className="flex items-center gap-1">
-              {Array.from({ length: 5 }, (_, i) => (
-                <button
-                  key={i}
-                  onClick={() => update({ priority: i + 1 })}
-                  className="p-1 transition-colors rounded"
-                >
-                  <Star
-                    className={`w-5 h-5 transition-colors ${
-                      i < draft.priority
-                        ? "text-cyan-400 fill-cyan-400"
-                        : "text-border hover:text-muted-foreground"
-                    }`}
-                  />
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Adaptive Limits */}
-          <div className="space-y-4 border border-border rounded-lg p-4 bg-background">
-            <div className="flex items-center gap-2">
-              <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-400" />
-              <p className="text-xs font-mono font-semibold text-foreground">Adaptive Volume Limits</p>
-            </div>
-            <p className="text-[11px] font-mono text-muted-foreground">
-              Instead of a hard cutoff, the rotator shifts away from this account when it nears the soft limit,
-              and locks it out at the hard limit.
-            </p>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                  Soft Limit ($)
-                </label>
-                <input
-                  type="number"
-                  value={draft.softLimit}
-                  onChange={(e) => update({ softLimit: Number(e.target.value) })}
-                  className="w-full bg-card border border-border rounded-md px-3 py-2 text-sm font-mono text-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400/40 focus:border-amber-400/40 transition-colors"
-                />
-                <p className="text-[10px] font-mono text-muted-foreground">Begin de-weighting</p>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                  Hard Limit ($)
-                </label>
-                <input
-                  type="number"
-                  value={draft.hardLimit}
-                  onChange={(e) => update({ hardLimit: Number(e.target.value) })}
-                  className="w-full bg-card border border-border rounded-md px-3 py-2 text-sm font-mono text-red-400 focus:outline-none focus:ring-1 focus:ring-red-400/40 focus:border-red-400/40 transition-colors"
-                />
-                <p className="text-[10px] font-mono text-muted-foreground">Full lockout threshold</p>
-              </div>
-            </div>
-
-            {/* Live preview bar */}
-            <div className="space-y-1.5">
-              <div className="relative h-3 bg-secondary rounded-full overflow-hidden">
-                <div
-                  className="absolute top-0 bottom-0 w-0.5 bg-amber-400 z-10 rounded-full"
-                  style={{ left: `${Math.min((draft.softLimit / draft.hardLimit) * 100, 100)}%` }}
-                />
-                <div
-                  className="h-full bg-cyan-400/70 rounded-full transition-all"
-                  style={{ width: `${Math.min((draft.currentVolume / draft.hardLimit) * 100, 100)}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-[10px] font-mono text-muted-foreground">
-                <span>$0</span>
-                <span className="text-amber-400">${draft.softLimit.toLocaleString()} soft</span>
-                <span className="text-red-400">${draft.hardLimit.toLocaleString()} hard</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Item Masking */}
-          <div className="space-y-4 border border-border rounded-lg p-4 bg-background">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Package className="w-3.5 h-3.5 text-violet-400" />
-                <p className="text-xs font-mono font-semibold text-foreground">Legacy Masking</p>
-              </div>
-              {/* Toggle switch */}
-              <button
-                onClick={() => update({ itemMasking: !draft.itemMasking })}
-                className={`relative w-10 h-5 rounded-full transition-colors ${
-                  draft.itemMasking ? "bg-violet-500" : "bg-secondary border border-border"
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 w-4 h-4 rounded-full bg-foreground shadow transition-all ${
-                    draft.itemMasking ? "left-5" : "left-0.5"
-                  }`}
-                />
+      <aside data-ui-version="account-edit-boron-tabs-v3" className="fixed right-0 top-0 bottom-0 w-full max-w-[800px] xl:max-w-[900px] bg-[#222530] border-l border-[#343947] z-50 flex flex-col shadow-2xl">
+        <div className="flex flex-col border-b border-[#343947] shrink-0 bg-[#1f222c]">
+          <div className="flex items-center justify-between px-6 py-4">
+            <div className="flex items-center gap-4">
+              <button onClick={onClose} className="p-1.5 text-[#97a3b6] hover:text-[#e7edf8] border border-[#343947] rounded-md transition-colors bg-[#151821] hover:bg-[#2a2d39]">
+                <ChevronRight className="w-4 h-4" />
               </button>
-            </div>
-
-            <p className="text-[11px] font-mono text-amber-400">
-              Deprecated. New stores should use Payment Display Profiles. This legacy setting only controls the old fake_product_name override.
-            </p>
-
-            {draft.itemMasking && (
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                    Legacy Fake Product Name
-                  </label>
-                  <input
-                    value={draft.fakeProductName}
-                    onChange={(e) => update({ fakeProductName: e.target.value })}
-                    placeholder="e.g. Digital Service Upgrade"
-                    className="w-full bg-card border border-border rounded-md px-3 py-2 text-sm font-mono text-violet-400 placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-violet-400/40 focus:border-violet-400/40 transition-colors"
-                  />
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="text-xs font-mono text-[#97a3b6] uppercase tracking-[0.08em]">Editing</p>
+                  <StatusBadge status={draft.status} />
                 </div>
-                <div className="space-y-1.5">
-                  <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Presets</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {FAKE_PRODUCT_PRESETS.map((preset) => (
-                      <button
-                        key={preset}
-                        onClick={() => update({ fakeProductName: preset })}
-                        className={`text-[11px] font-mono px-2 py-1 rounded-md border transition-colors ${
-                          draft.fakeProductName === preset
-                            ? "bg-violet-400/10 text-violet-400 border-violet-400/30"
-                            : "bg-secondary text-muted-foreground border-border hover:text-foreground hover:border-border/80"
-                        }`}
-                      >
-                        {preset}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="bg-secondary/50 rounded-md px-3 py-2 text-[11px] font-mono text-muted-foreground">
-                  <span className="text-muted-foreground">PayPal receipt will show: </span>
-                  <span className="text-violet-400 font-semibold">{draft.fakeProductName || "(empty)"}</span>
-                </div>
+                <h2 className="text-xl font-semibold text-[#e7edf8] mt-0.5">{draft.accountName}</h2>
+                {draft.email && <p className="text-sm text-[#97a3b6] mt-0.5">{draft.email}</p>}
               </div>
-            )}
-          </div>
-
-          {/* Danger zone */}
-          <div className="border border-red-500/20 rounded-lg p-4 space-y-2 bg-red-500/5">
-            <p className="text-[10px] font-mono text-red-400 uppercase tracking-wider font-semibold">Danger Zone</p>
-            <p className="text-[11px] font-mono text-muted-foreground">
-              Permanently removes this account from the rotator. All routing will stop immediately.
-            </p>
-            <button className="flex items-center gap-2 text-xs font-mono text-red-400 border border-red-500/30 hover:bg-red-500/10 rounded-md px-3 py-1.5 transition-colors">
-              <Trash2 className="w-3.5 h-3.5" />
-              Remove Account
+            </div>
+            <button onClick={onClose} className="p-1.5 text-[#97a3b6] hover:text-[#e7edf8] border border-[#343947] rounded-md transition-colors bg-[#151821] hover:bg-[#2a2d39]">
+              <X className="w-5 h-5" />
             </button>
           </div>
+          <div className="flex items-center gap-8 px-6 overflow-x-auto">
+            {[
+              { id: "overview", label: "Overview" },
+              { id: "credentials", label: "Credentials" },
+              { id: "routing", label: "Routing & Limits" },
+              { id: "domain", label: "Domain & Proxy" },
+              { id: "display", label: "Display Profile" },
+              { id: "legacy", label: "Legacy" },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`py-3 text-sm font-semibold uppercase tracking-[0.08em] border-b-2 transition-colors whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? "border-[#FFD600] text-[#FFD600]"
+                    : "border-transparent text-[#97a3b6] hover:text-[#e7edf8]"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Footer actions */}
-        <div className="flex items-center justify-between px-5 py-4 border-t border-border shrink-0 gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 px-4 py-2 text-xs font-mono text-muted-foreground border border-border rounded-md hover:bg-secondary transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={draft.domainType === "platform" && !fallbackPlatformDomain}
-            className="flex-1 px-4 py-2 text-xs font-mono text-background bg-cyan-400 hover:bg-cyan-300 rounded-md transition-colors font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Save Changes
-          </button>
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {activeTab === "overview" && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="grid grid-cols-3 gap-4">
+                {[
+                  { label: "Transactions", value: draft.txCount.toString() },
+                  { label: "Success Rate", value: `${draft.successRate}%` },
+                  { label: "Last Active", value: draft.lastActive },
+                ].map((s) => (
+                  <div key={s.label} className="bg-[#151821] border border-[#343947] rounded-md px-4 py-3 text-center">
+                    <p className="font-mono text-base font-semibold text-[#e7edf8]">{s.value}</p>
+                    <p className="text-xs text-[#97a3b6] mt-1">{s.label}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Account Name</label>
+                <input
+                  value={draft.accountName}
+                  onChange={(e) => update({ accountName: e.target.value })}
+                  className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">PayPal Email</label>
+                <input
+                  value={draft.email}
+                  onChange={(e) => update({ email: e.target.value })}
+                  className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+                />
+              </div>
+            </div>
+          )}
+
+          {activeTab === "credentials" && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
+                <div className="flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-[#FFD600]" />
+                  <p className="text-base font-semibold text-[#e7edf8]">PayPal API Credentials</p>
+                </div>
+                <p className="text-sm text-[#aab4c5] leading-6">
+                  Enter your PayPal REST API Client ID and Secret from the PayPal Developer Dashboard.
+                </p>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Client ID</label>
+                  <input
+                    value={draft.clientId}
+                    onChange={(e) => update({ clientId: e.target.value })}
+                    placeholder="AeBFXkz..."
+                    className="w-full bg-[#222530] border border-[#343947] rounded-md px-4 py-3 text-base font-mono text-[#e7edf8] placeholder:text-[#97a3b6]/50 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <MaskedField value={draft.clientSecret} label="Client Secret" />
+                </div>
+                <div className="flex items-center gap-2 text-sm text-[#aab4c5] leading-6 bg-[#2a2d39]/50 rounded-md px-4 py-3">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                  Credentials are encrypted at rest with AES-256 and never logged
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "routing" && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="space-y-3">
+                <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Status</label>
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                  {(["Active", "Warm-up", "Limited", "Paused", "Suspended"] as Status[]).map((s) => {
+                    const c = statusConfig[s]
+                    const active = draft.status === s
+                    return (
+                      <button
+                        key={s}
+                        onClick={() => update({ status: s })}
+                        className={`flex items-center gap-2 px-4 py-3 rounded-md border text-sm transition-colors font-semibold ${
+                          active
+                            ? `${c.bg} ${c.text} ${c.border}`
+                            : "bg-[#151821] border-[#343947] text-[#97a3b6] hover:border-[#343947]/80 hover:text-[#e7edf8]"
+                        }`}
+                      >
+                        <span className={`w-2.5 h-2.5 rounded-full ${active ? c.dot : "bg-border"}`} />
+                        {s}
+                      </button>
+                    )
+                  })}
+                </div>
+                {draft.status === "Warm-up" && (
+                  <div className="flex items-start gap-2 mt-3 px-4 py-3 rounded-md bg-sky-400/5 border border-sky-400/20">
+                    <Info className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+                    <div className="text-sm text-sky-300/80 leading-6">
+                      <p className="font-semibold text-sky-400 mb-1">Warm-up Mode Active</p>
+                      <p>• Max <span className="text-sky-400">$50</span> per transaction to build account trust</p>
+                      <p>• Progressive daily cap: <span className="text-sky-400">$100</span> (Day 1) → <span className="text-sky-400">$500</span> (Day 7+)</p>
+                      <p>• Account is deprioritised for orders over $100</p>
+                    </div>
+                  </div>
+                )}
+                {draft.status === "Suspended" && (
+                  <div className="flex items-start gap-2 mt-3 px-4 py-3 rounded-md bg-red-500/5 border border-red-500/20">
+                    <Ban className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                    <p className="text-sm text-red-300/80 leading-6">
+                      Suspended accounts are excluded from the rotation pool entirely. No transactions will be routed to this account.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">
+                  Rotation Priority — {draft.priority}/5
+                </label>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: 5 }, (_, i) => (
+                    <button key={i} onClick={() => update({ priority: i + 1 })} className="p-1 transition-colors rounded">
+                      <Star className={`w-6 h-6 transition-colors ${i < draft.priority ? "text-[#FFD600] fill-[#FFD600]" : "text-border hover:text-[#97a3b6]"}`} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal className="w-4 h-4 text-[#FFD600]" />
+                  <p className="text-base font-semibold text-[#e7edf8]">Adaptive Volume Limits</p>
+                </div>
+                <p className="text-sm text-[#aab4c5] leading-6">
+                  Instead of a hard cutoff, the rotator shifts away from this account when it nears the soft limit, and locks it out at the hard limit.
+                </p>
+
+                <div className="grid grid-cols-2 gap-5">
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Soft Limit ($)</label>
+                    <input
+                      type="number"
+                      value={draft.softLimit}
+                      onChange={(e) => update({ softLimit: Number(e.target.value) })}
+                      className="w-full bg-[#222530] border border-[#343947] rounded-md px-4 py-3 text-base font-mono text-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400/40 focus:border-amber-400/40 transition-colors"
+                    />
+                    <p className="text-sm text-[#aab4c5] leading-6">Begin de-weighting</p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Hard Limit ($)</label>
+                    <input
+                      type="number"
+                      value={draft.hardLimit}
+                      onChange={(e) => update({ hardLimit: Number(e.target.value) })}
+                      className="w-full bg-[#222530] border border-[#343947] rounded-md px-4 py-3 text-base font-mono text-red-400 focus:outline-none focus:ring-1 focus:ring-red-400/40 focus:border-red-400/40 transition-colors"
+                    />
+                    <p className="text-sm text-[#aab4c5] leading-6">Full lockout threshold</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2 pt-2">
+                  <div className="relative h-3 bg-[#2a2d39] rounded-full overflow-hidden">
+                    <div className="absolute top-0 bottom-0 w-0.5 bg-amber-400 z-10 rounded-full" style={{ left: `${Math.min((draft.softLimit / draft.hardLimit) * 100, 100)}%` }} />
+                    <div className="h-full bg-[#FFD600]/70 rounded-full transition-all" style={{ width: `${Math.min((draft.currentVolume / draft.hardLimit) * 100, 100)}%` }} />
+                  </div>
+                  <div className="flex justify-between text-sm text-[#aab4c5] leading-6">
+                    <span>$0</span>
+                    <span className="text-amber-400">${draft.softLimit.toLocaleString()} soft</span>
+                    <span className="text-red-400">${draft.hardLimit.toLocaleString()} hard</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "domain" && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
+                <div className="flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-[#FFD600]" />
+                  <p className="text-base font-semibold text-[#e7edf8]">Shield Domain</p>
+                </div>
+                <div className="flex rounded-md overflow-hidden border border-[#343947]">
+                  {(["platform", "custom"] as DomainType[]).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => update({ domainType: t, shieldDomain: t === "platform" ? fallbackPlatformDomain : "" })}
+                      className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold transition-colors ${
+                        draft.domainType === t ? "bg-[#FFD600]/10 text-[#FFD600] border-r border-[#343947]" : "text-[#97a3b6] hover:text-[#e7edf8] bg-transparent"
+                      }`}
+                    >
+                      {t === "platform" ? <Lock className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
+                      {t === "platform" ? "Platform Domain" : "Custom Domain"}
+                    </button>
+                  ))}
+                </div>
+                {draft.domainType === "platform" ? (
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Select Platform Domain</label>
+                    <select
+                      value={verifiedPlatformDomains.includes(draft.shieldDomain) ? draft.shieldDomain : ""}
+                      onChange={(e) => update({ shieldDomain: e.target.value })}
+                      disabled={!verifiedPlatformDomains.length}
+                      className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors appearance-none"
+                    >
+                      <option value="" disabled>{verifiedPlatformDomains.length ? "Select a verified platform domain" : "No verified platform domains available"}</option>
+                      {verifiedPlatformDomains.map((d) => (<option key={d} value={d}>{d}</option>))}
+                    </select>
+                    <p className="text-sm text-[#aab4c5] leading-6">Managed and monitored by Gateway Central</p>
+                    {!verifiedPlatformDomains.length && <p className="text-sm text-[#aab4c5] leading-6 text-amber-400">Verify a domain in Domains before assigning it to an account.</p>}
+                    {!!draft.shieldDomain && !verifiedPlatformDomains.includes(draft.shieldDomain) && verifiedPlatformDomains.length > 0 && (
+                      <p className="text-sm text-[#aab4c5] leading-6 text-amber-400">The current platform domain is no longer verified. Select another verified domain before saving.</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Custom Domain</label>
+                    <input
+                      value={draft.shieldDomain}
+                      onChange={(e) => update({ shieldDomain: e.target.value })}
+                      placeholder="e.g. my-payment-shield.com"
+                      className="w-full bg-[#222530] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#97a3b6]/50 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+                    />
+                    <p className="text-sm text-[#aab4c5] leading-6 text-amber-400">You are responsible for DNS configuration and SSL</p>
+                  </div>
+                )}
+                {draft.shieldDomain && (
+                  <a href={`https://${draft.shieldDomain}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm text-[#FFD600] hover:text-[#e6c100] transition-colors">
+                    <ExternalLink className="w-4 h-4" />
+                    {draft.shieldDomain}
+                  </a>
+                )}
+              </div>
+
+              <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
+                <div className="flex items-center gap-2">
+                  <Wifi className="w-4 h-4 text-orange-400" />
+                  <p className="text-base font-semibold text-[#e7edf8]">Proxy Configuration</p>
+                </div>
+                <p className="text-sm text-[#aab4c5] leading-6">
+                  Route PayPal API calls through a proxy to diversify IP origins. Supports HTTP, HTTPS, and SOCKS5 protocols.
+                </p>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Proxy URL</label>
+                  {draft.proxyUrl ? (
+                    <MaskedField value={draft.proxyUrl} label="" />
+                  ) : (
+                    <input
+                      value={draft.proxyUrl}
+                      onChange={(e) => update({ proxyUrl: e.target.value })}
+                      placeholder="http://user:pass@proxy.example.com:8080"
+                      className="w-full bg-[#222530] border border-[#343947] rounded-md px-4 py-3 text-base font-mono text-[#e7edf8] placeholder:text-[#97a3b6]/50 focus:outline-none focus:ring-1 focus:ring-orange-400/40 focus:border-orange-400/40 transition-colors"
+                    />
+                  )}
+                  {draft.proxyUrl && (
+                    <button onClick={() => update({ proxyUrl: "" })} className="text-sm font-semibold text-red-400 hover:text-red-300 transition-colors mt-2">
+                      Remove Proxy
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 text-sm text-[#aab4c5] leading-6 bg-[#2a2d39]/50 rounded-md px-4 py-3">
+                  <ShieldCheck className="w-4 h-4 text-orange-400 shrink-0" />
+                  Proxy URL may contain credentials — it is masked in the UI and never logged
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "display" && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
+                <div className="flex items-center gap-2">
+                  <Package className="w-4 h-4 text-[#FFD600]" />
+                  <p className="text-base font-semibold text-[#e7edf8]">Payment Display Profile</p>
+                </div>
+                <p className="text-sm text-[#aab4c5] leading-6">
+                  Select a preferred display profile to route transactions through this account when the store uses this profile.
+                </p>
+                <select
+                  value={draft.displayProfileId || ""}
+                  onChange={(e) => update({ displayProfileId: e.target.value || null })}
+                  className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors appearance-none"
+                >
+                  <option value="">None (Use fallback accounts)</option>
+                  {displayProfiles.map((p) => (
+                    <option key={p.id} value={p.id}>{p.profile_name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "legacy" && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Package className="w-4 h-4 text-[#97a3b6]" />
+                    <p className="text-base font-semibold text-[#e7edf8]">Legacy Masking</p>
+                  </div>
+                  <button
+                    onClick={() => update({ itemMasking: !draft.itemMasking })}
+                    className={`relative w-12 h-6 rounded-full transition-colors ${draft.itemMasking ? "bg-violet-500" : "bg-[#2a2d39] border border-[#343947]"}`}
+                  >
+                    <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-foreground shadow transition-all ${draft.itemMasking ? "left-6" : "left-0.5"}`} />
+                  </button>
+                </div>
+
+                <div className="bg-[#4a3908]/50 border border-[#ca8a04]/50 text-[#facc15] text-sm leading-6 px-4 py-3 rounded-md border-l-[3px] border-l-[#ca8a04]">
+                  Deprecated. New stores should use Payment Display Profiles. This legacy setting only controls the old fake_product_name override.
+                </div>
+
+                {draft.itemMasking && (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Legacy Fake Product Name</label>
+                      <input
+                        value={draft.fakeProductName}
+                        onChange={(e) => update({ fakeProductName: e.target.value })}
+                        placeholder="e.g. Digital Service Upgrade"
+                        className="w-full bg-[#222530] border border-[#343947] rounded-md px-4 py-3 text-base text-violet-400 placeholder:text-[#97a3b6]/50 focus:outline-none focus:ring-1 focus:ring-violet-400/40 focus:border-violet-400/40 transition-colors"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Presets</p>
+                      <div className="flex flex-wrap gap-2">
+                        {FAKE_PRODUCT_PRESETS.map((preset) => (
+                          <button
+                            key={preset}
+                            onClick={() => update({ fakeProductName: preset })}
+                            className={`text-xs font-semibold px-3 py-1.5 rounded-md border transition-colors ${
+                              draft.fakeProductName === preset ? "bg-violet-400/10 text-violet-400 border-violet-400/30" : "bg-[#2a2d39] text-[#97a3b6] border-[#343947] hover:text-[#e7edf8] hover:border-[#343947]/80"
+                            }`}
+                          >
+                            {preset}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="bg-[#2a2d39]/50 rounded-md px-4 py-3 text-sm text-[#aab4c5] leading-6">
+                      <span className="text-[#97a3b6]">PayPal receipt will show: </span>
+                      <span className="text-violet-400 font-semibold">{draft.fakeProductName || "(empty)"}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="border border-red-500/20 rounded-lg p-5 space-y-3 bg-red-500/5">
+                <p className="text-sm font-semibold uppercase tracking-[0.08em] text-red-400">Danger Zone</p>
+                <p className="text-sm text-[#aab4c5] leading-6">
+                  Permanently removes this account from the rotator. All routing will stop immediately.
+                </p>
+                <button className="flex items-center gap-2 text-sm font-semibold text-red-400 border border-red-500/30 hover:bg-red-500/10 rounded-md px-4 py-2 transition-colors">
+                  <Trash2 className="w-4 h-4" />
+                  Remove Account
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col px-6 py-4 border-t border-[#343947] shrink-0 bg-[#1f222c]">
+          {saveSuccess && (
+            <div className="mb-4 flex items-center gap-2 text-sm text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-3 py-2 rounded-md transition-all">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>Account changes saved successfully.</span>
+            </div>
+          )}
+          {saveError && (
+            <div className="mb-4 flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-md transition-all">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>{saveError}</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between gap-4">
+            <button onClick={onClose} className="flex-1 px-5 py-2.5 text-sm font-semibold text-[#97a3b6] border border-[#343947] rounded-md hover:bg-[#2a2d39] transition-colors">
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={isSaving || (draft.domainType === "platform" && !fallbackPlatformDomain)}
+              className="flex-1 px-5 py-2.5 text-sm font-semibold text-[#151821] bg-[#FFD600] hover:bg-[#e6c100] rounded-md transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Saving...
+                </>
+              ) : saveSuccess ? (
+                <>
+                  <Check className="w-4 h-4" />
+                  Saved
+                </>
+              ) : (
+                "Save Changes"
+              )}
+            </button>
+          </div>
         </div>
       </aside>
     </>
   )
 }
+
 
 // ─── Add Merchant Modal ───────────────────��───────────────────────────────────
 
@@ -809,14 +822,15 @@ function AddMerchantModal({
     itemMasking: false,
     fakeProductName: "Digital Service Upgrade",
   })
+  const [activeTab, setActiveTab] = useState<"info" | "credentials" | "routing" | "domain" | "display" | "review">("info")
   const [saving, setSaving] = useState(false)
+  const [success, setSuccess] = useState(false)
   const [error, setError]   = useState("")
   const [testing, setTesting]   = useState(false)
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null)
 
   const update = (patch: Partial<typeof form>) => {
     setForm((p) => ({ ...p, ...patch }))
-    // Reset test result if credentials change
     if ("clientId" in patch || "clientSecret" in patch) setTestResult(null)
   }
 
@@ -862,7 +876,6 @@ function AddMerchantModal({
     setError("")
 
     try {
-      // Map UI status to DB enum
       const statusMap: Record<string, string> = {
         "Active": "ACTIVE",
         "Warm-up": "WARMING_UP",
@@ -914,9 +927,12 @@ function AddMerchantModal({
         successRate: 0,
       }
       onAdd(newMerchant)
-      onClose()
-    } catch (err) {
-      setError(getErrorMessage(err))
+      setSuccess(true)
+      setTimeout(() => {
+        onClose()
+      }, 1500)
+    } catch (err: any) {
+      setError(err.message || "Failed to create account. Please try again.")
     } finally {
       setSaving(false)
     }
@@ -925,263 +941,331 @@ function AddMerchantModal({
   return (
     <>
       <div className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
-            <h3 className="text-sm font-semibold font-mono text-foreground">Add Merchant Account</h3>
-            <button onClick={onClose} className="p-1.5 text-muted-foreground hover:text-foreground border border-border rounded-md transition-colors">
-              <X className="w-4 h-4" />
+
+      <aside className="fixed right-0 top-0 bottom-0 w-full max-w-[800px] xl:max-w-[900px] bg-[#222530] border-l border-[#343947] z-50 flex flex-col shadow-2xl">
+        <div className="flex flex-col border-b border-[#343947] shrink-0 bg-[#1f222c]">
+          <div className="flex items-center justify-between px-6 py-4">
+            <div className="flex items-center gap-4">
+              <button onClick={onClose} className="p-1.5 text-[#97a3b6] hover:text-[#e7edf8] border border-[#343947] rounded-md transition-colors bg-[#151821] hover:bg-[#2a2d39]">
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              <div>
+                <h2 className="text-xl font-semibold text-[#e7edf8] mt-0.5">Add Merchant Account</h2>
+                <p className="text-sm text-[#97a3b6] mt-0.5">Connect a payment provider account and configure routing.</p>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-1.5 text-[#97a3b6] hover:text-[#e7edf8] border border-[#343947] rounded-md transition-colors bg-[#151821] hover:bg-[#2a2d39]">
+              <X className="w-5 h-5" />
             </button>
           </div>
-          <div className="p-5 space-y-4 overflow-y-auto flex-1">
-            {/* Basic info — standard fields */}
+          <div className="flex items-center gap-8 px-6 overflow-x-auto">
             {[
-              { label: "Account Name", key: "accountName", placeholder: "PP-Main-01" },
-              { label: "PayPal Email",  key: "email",       placeholder: "payments@store.com" },
-            ].map((f) => (
-              <div key={f.key} className="space-y-1.5">
-                <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{f.label}</label>
-                <input
-                  value={String(form[f.key as keyof typeof form])}
-                  onChange={(e) => update({ [f.key]: e.target.value })}
-                  placeholder={f.placeholder}
-                  className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
-                />
-              </div>
-            ))}
-
-            {/* PayPal API Credentials + Test Connection */}
-            <div className="space-y-3 border border-border rounded-lg p-4 bg-background">
-              <div className="flex items-center gap-2">
-                <Lock className="w-3.5 h-3.5 text-cyan-400" />
-                <p className="text-xs font-mono font-semibold text-foreground">PayPal API Credentials</p>
-              </div>
-              {[
-                { label: "Client ID",     key: "clientId",     placeholder: "AeBFXkzLmNoPQrStUvWxYz..." },
-                { label: "Client Secret", key: "clientSecret", placeholder: "EGfghIjkLMNopQRstUVwx..." },
-              ].map((f) => (
-                <div key={f.key} className="space-y-1.5">
-                  <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{f.label}</label>
-                  <input
-                    value={String(form[f.key as keyof typeof form])}
-                    onChange={(e) => update({ [f.key]: e.target.value })}
-                    placeholder={f.placeholder}
-                    type={f.key === "clientSecret" ? "password" : "text"}
-                    className="w-full bg-card border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
-                  />
-                </div>
-              ))}
-
-              {/* Test Connection button */}
+              { id: "info", label: "Account Info" },
+              { id: "credentials", label: "Credentials" },
+              { id: "routing", label: "Routing & Limits" },
+              { id: "domain", label: "Domain & Proxy" },
+              { id: "display", label: "Display Profile" },
+              { id: "review", label: "Review" },
+            ].map(tab => (
               <button
-                type="button"
-                onClick={handleTestPaypal}
-                disabled={testing || !form.clientId || !form.clientSecret}
-                className={`w-full flex items-center justify-center gap-2 text-xs font-mono py-2 rounded-md border transition-colors
-                  ${ testResult?.ok
-                    ? "bg-emerald-400/10 border-emerald-400/30 text-emerald-400"
-                    : testResult && !testResult.ok
-                      ? "bg-red-400/10 border-red-400/30 text-red-400"
-                      : "bg-secondary border-border text-muted-foreground hover:text-foreground hover:border-cyan-400/30"
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`py-3 text-sm font-semibold uppercase tracking-[0.08em] border-b-2 transition-colors whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? "border-[#FFD600] text-[#FFD600]"
+                    : "border-transparent text-[#97a3b6] hover:text-[#e7edf8]"
+                }`}
               >
-                {testing ? (
-                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Testing connection...</>
-                ) : testResult?.ok ? (
-                  <><CheckCircle2 className="w-3.5 h-3.5" /> {testResult.message}</>
-                ) : testResult && !testResult.ok ? (
-                  <><XCircle className="w-3.5 h-3.5" /> {testResult.message}</>
-                ) : (
-                  <><Zap className="w-3.5 h-3.5" /> Test PayPal Connection</>
-                )}
+                {tab.label}
               </button>
+            ))}
+          </div>
+        </div>
 
-              <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground bg-secondary/50 rounded-md px-3 py-2">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                Credentials are encrypted at rest with AES-256 and never logged
-              </div>
-            </div>
-
-            {/* Proxy URL */}
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                <Wifi className="w-3 h-3 text-orange-400" />
-                Proxy URL (optional)
-              </label>
-              <input
-                value={form.proxyUrl}
-                onChange={(e) => update({ proxyUrl: e.target.value })}
-                placeholder="http://user:pass@proxy.example.com:8080"
-                className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-orange-400/40 focus:border-orange-400/40 transition-colors"
-              />
-              <p className="text-[10px] font-mono text-muted-foreground">Supports HTTP, HTTPS, and SOCKS5 protocols</p>
-            </div>
-
-            {/* Initial Status */}
-            <div className="space-y-2">
-              <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Initial Status</label>
-              <div className="flex rounded-md overflow-hidden border border-border">
-                {(["Active", "Warm-up"] as Status[]).map((s) => {
-                  const c = statusConfig[s]
-                  return (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => update({ status: s })}
-                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] font-mono transition-colors ${
-                        form.status === s
-                          ? `${c.bg} ${c.text}`
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full ${form.status === s ? c.dot : "bg-border"}`} />
-                      {s}
-                    </button>
-                  )
-                })}
-              </div>
-              {form.status === "Warm-up" && (
-                <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-sky-400/5 border border-sky-400/20">
-                  <Info className="w-3 h-3 text-sky-400 shrink-0 mt-0.5" />
-                  <p className="text-[10px] font-mono text-sky-300/80">
-                    Warm-up mode limits txns to $50 with a progressive daily cap ($100→$500 over 7 days)
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Shield Domain */}
-            <div className="space-y-2">
-              <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Shield Domain</label>
-              <div className="flex rounded-md overflow-hidden border border-border">
-                {(["platform", "custom"] as DomainType[]).map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => update({ domainType: t, shieldDomain: t === "platform" ? fallbackPlatformDomain : "" })}
-                    className={`flex-1 py-1.5 text-[11px] font-mono transition-colors ${
-                      form.domainType === t
-                        ? "bg-cyan-400/10 text-cyan-400"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {t === "platform" ? "Platform Domain" : "Custom Domain"}
-                  </button>
-                ))}
-              </div>
-              {form.domainType === "platform" ? (
-                <select
-                  value={verifiedPlatformDomains.includes(form.shieldDomain) ? form.shieldDomain : ""}
-                  onChange={(e) => update({ shieldDomain: e.target.value })}
-                  disabled={!verifiedPlatformDomains.length}
-                  className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 appearance-none"
-                >
-                  <option value="" disabled>
-                    {verifiedPlatformDomains.length ? "Select a verified platform domain" : "No verified platform domains available"}
-                  </option>
-                  {verifiedPlatformDomains.map((d) => <option key={d} value={d}>{d}</option>)}
-                </select>
-              ) : (
-                <input
-                  value={form.shieldDomain}
-                  onChange={(e) => update({ shieldDomain: e.target.value })}
-                  placeholder="my-custom-domain.com"
-                  className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
-                />
-              )}
-              {form.domainType === "platform" && (
-                <p className={`text-[10px] font-mono ${verifiedPlatformDomains.length ? "text-muted-foreground" : "text-amber-400"}`}>
-                  {verifiedPlatformDomains.length
-                    ? "Only verified platform domains are shown here."
-                    : "No verified platform domains available. Verify a domain in Domains first or use a custom domain."}
-                </p>
-              )}
-            </div>
-
-            {/* Payment Display Profile */}
-            <div className="space-y-2">
-              <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Payment Display Profile</label>
-              <select
-                value={form.displayProfileId}
-                onChange={(e) => update({ displayProfileId: e.target.value })}
-                className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 appearance-none"
-              >
-                <option value="">None (Use fallback accounts)</option>
-                {displayProfiles.map((p) => (
-                  <option key={p.id} value={p.id}>{p.profile_name}</option>
-                ))}
-              </select>
-              <p className="text-[10px] font-mono text-muted-foreground">Select a preferred profile to route matching store traffic to this account.</p>
-            </div>
-
-            {/* Volume limits */}
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { label: "Soft Limit ($)", key: "softLimit" as const },
-                { label: "Hard Limit ($)", key: "hardLimit" as const },
-              ].map((f) => (
-                <div key={f.key} className="space-y-1.5">
-                  <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{f.label}</label>
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {activeTab === "info" && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Account Name <span className="text-red-400">*</span></label>
                   <input
-                    type="number"
-                    value={form[f.key]}
-                    onChange={(e) => update({ [f.key]: Number(e.target.value) })}
-                    className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors"
+                    value={form.accountName}
+                    onChange={(e) => update({ accountName: e.target.value })}
+                    placeholder="e.g. PP-Main-01"
+                    className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
                   />
                 </div>
-              ))}
-            </div>
-
-            {/* Item masking */}
-            <div className="space-y-3 border border-border rounded-lg p-3 bg-background">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Package className="w-3.5 h-3.5 text-violet-400" />
-                  <span className="text-xs font-mono font-semibold text-foreground">Legacy Masking</span>
-                </div>
-                <button
-                  onClick={() => update({ itemMasking: !form.itemMasking })}
-                  className={`relative w-10 h-5 rounded-full transition-colors ${
-                    form.itemMasking ? "bg-violet-500" : "bg-secondary border border-border"
-                  }`}
-                >
-                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-foreground shadow transition-all ${form.itemMasking ? "left-5" : "left-0.5"}`} />
-                </button>
-              </div>
-              {form.itemMasking && (
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Legacy Fake Product Name</label>
-                  <p className="text-[9px] font-mono text-amber-400 pb-1">Deprecated. New stores should use Payment Display Profiles.</p>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">PayPal Email <span className="text-red-400">*</span></label>
                   <input
-                    value={form.fakeProductName}
-                    onChange={(e) => update({ fakeProductName: e.target.value })}
-                    placeholder="Digital Service Upgrade"
-                    className="w-full bg-card border border-border rounded-md px-3 py-2 text-sm font-mono text-violet-400 placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-violet-400/40 focus:border-violet-400/40 transition-colors"
+                    value={form.email}
+                    onChange={(e) => update({ email: e.target.value })}
+                    placeholder="payments@store.com"
+                    className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
                   />
-                  <div className="flex flex-wrap gap-1">
-                    {FAKE_PRODUCT_PRESETS.slice(0, 4).map((p) => (
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Initial Status</label>
+                  <div className="flex rounded-md overflow-hidden border border-[#343947]">
+                    {(["Active", "Warm-up"] as Status[]).map((s) => (
                       <button
-                        key={p}
-                        onClick={() => update({ fakeProductName: p })}
-                        className="text-[10px] font-mono px-2 py-0.5 rounded bg-secondary text-muted-foreground hover:text-foreground border border-border transition-colors"
+                        key={s}
+                        type="button"
+                        onClick={() => update({ status: s })}
+                        className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
+                          form.status === s ? "bg-[#FFD600]/10 text-[#FFD600] border border-[#FFD600]" : "text-[#97a3b6] bg-[#2a2d39] border border-[#343947] hover:text-[#e7edf8]"
+                        }`}
                       >
-                        {p}
+                        {s}
                       </button>
                     ))}
                   </div>
                 </div>
-              )}
-            </div>
-          </div>
-
-          {error && (
-            <div className="mx-5 mb-0 flex items-center gap-2 text-xs font-mono text-red-400 bg-red-400/5 border border-red-400/20 rounded-md px-3 py-2">
-              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-              {error}
+              </div>
             </div>
           )}
 
-          <div className="flex gap-3 px-5 py-4 border-t border-border shrink-0">
-            <button onClick={onClose} className="flex-1 px-4 py-2 text-xs font-mono text-muted-foreground border border-border rounded-md hover:bg-secondary transition-colors">
+          {activeTab === "credentials" && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
+                <div className="flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-[#FFD600]" />
+                  <p className="text-base font-semibold text-[#e7edf8]">PayPal API Credentials</p>
+                </div>
+                <p className="text-sm text-[#aab4c5] leading-6">
+                  Enter your PayPal REST API Client ID and Secret from the PayPal Developer Dashboard.
+                </p>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Client ID <span className="text-red-400">*</span></label>
+                  <input
+                    value={form.clientId}
+                    onChange={(e) => update({ clientId: e.target.value })}
+                    placeholder="AeBFXkzLmNoPQ..."
+                    className="w-full bg-[#222530] border border-[#343947] rounded-md px-4 py-3 text-base font-mono text-[#e7edf8] placeholder:text-[#97a3b6]/50 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Client Secret <span className="text-red-400">*</span></label>
+                  <input
+                    value={form.clientSecret}
+                    onChange={(e) => update({ clientSecret: e.target.value })}
+                    placeholder="EGfghIjkLMNop..."
+                    type="password"
+                    className="w-full bg-[#222530] border border-[#343947] rounded-md px-4 py-3 text-base font-mono text-[#e7edf8] placeholder:text-[#97a3b6]/50 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+                  />
+                </div>
+                <div className="flex items-center gap-2 text-sm text-[#aab4c5] leading-6 bg-[#2a2d39]/50 rounded-md px-4 py-3">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                  Credentials are encrypted at rest with AES-256 and never logged
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleTestPaypal}
+                  disabled={testing || !form.clientId || !form.clientSecret}
+                  className={`w-full flex items-center justify-center gap-2 text-sm font-semibold py-2.5 rounded-md border transition-colors
+                    ${ testResult?.ok
+                      ? "bg-emerald-400/10 border-emerald-400/30 text-emerald-400"
+                      : testResult && !testResult.ok
+                        ? "bg-red-400/10 border-red-400/30 text-red-400"
+                        : "bg-[#2a2d39] border-[#343947] text-[#97a3b6] hover:text-[#e7edf8] hover:border-[#343947]/80"
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  {testing ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Testing connection...</>
+                  ) : testResult?.ok ? (
+                    <><CheckCircle2 className="w-4 h-4" /> {testResult.message}</>
+                  ) : testResult && !testResult.ok ? (
+                    <><XCircle className="w-4 h-4" /> {testResult.message}</>
+                  ) : (
+                    <><Zap className="w-4 h-4 text-[#FFD600]" /> Test PayPal Connection</>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "routing" && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal className="w-4 h-4 text-[#FFD600]" />
+                  <p className="text-base font-semibold text-[#e7edf8]">Adaptive Volume Limits</p>
+                </div>
+                <p className="text-sm text-[#aab4c5] leading-6">
+                  Set soft and hard daily volume limits. The rotator shifts traffic away when nearing the soft limit.
+                </p>
+
+                <div className="grid grid-cols-2 gap-5">
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Soft Limit ($)</label>
+                    <input
+                      type="number"
+                      value={form.softLimit}
+                      onChange={(e) => update({ softLimit: Number(e.target.value) })}
+                      className="w-full bg-[#222530] border border-[#343947] rounded-md px-4 py-3 text-base font-mono text-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400/40 focus:border-amber-400/40 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Hard Limit ($)</label>
+                    <input
+                      type="number"
+                      value={form.hardLimit}
+                      onChange={(e) => update({ hardLimit: Number(e.target.value) })}
+                      className="w-full bg-[#222530] border border-[#343947] rounded-md px-4 py-3 text-base font-mono text-red-400 focus:outline-none focus:ring-1 focus:ring-red-400/40 focus:border-red-400/40 transition-colors"
+                    />
+                  </div>
+                </div>
+
+                {form.status === "Warm-up" && (
+                  <div className="flex items-start gap-2 px-4 py-3 rounded-md bg-sky-400/5 border border-sky-400/20 mt-4">
+                    <Info className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+                    <p className="text-sm text-sky-300/80 leading-6">
+                      Warm-up mode ignores limits temporarily. It limits transactions to $50 each with a progressive daily cap ($100 → $500) over 7 days.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === "domain" && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
+                <div className="flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-[#FFD600]" />
+                  <p className="text-base font-semibold text-[#e7edf8]">Shield Domain</p>
+                </div>
+                <div className="flex rounded-md overflow-hidden border border-[#343947]">
+                  {(["platform", "custom"] as DomainType[]).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => update({ domainType: t, shieldDomain: t === "platform" ? fallbackPlatformDomain : "" })}
+                      className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold transition-colors ${
+                        form.domainType === t ? "bg-[#FFD600]/10 text-[#FFD600] border border-[#FFD600]" : "text-[#97a3b6] hover:text-[#e7edf8] bg-[#2a2d39] border border-[#343947]"
+                      }`}
+                    >
+                      {t === "platform" ? <Lock className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
+                      {t === "platform" ? "Platform Domain" : "Custom Domain"}
+                    </button>
+                  ))}
+                </div>
+                {form.domainType === "platform" ? (
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Select Platform Domain <span className="text-red-400">*</span></label>
+                    <select
+                      value={verifiedPlatformDomains.includes(form.shieldDomain) ? form.shieldDomain : ""}
+                      onChange={(e) => update({ shieldDomain: e.target.value })}
+                      disabled={!verifiedPlatformDomains.length}
+                      className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors appearance-none"
+                    >
+                      <option value="" disabled>{verifiedPlatformDomains.length ? "Select a verified platform domain" : "No verified platform domains available"}</option>
+                      {verifiedPlatformDomains.map((d) => (<option key={d} value={d}>{d}</option>))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Custom Domain <span className="text-red-400">*</span></label>
+                    <input
+                      value={form.shieldDomain}
+                      onChange={(e) => update({ shieldDomain: e.target.value })}
+                      placeholder="my-custom-domain.com"
+                      className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
+                <div className="flex items-center gap-2">
+                  <Wifi className="w-4 h-4 text-[#FFD600]" />
+                  <p className="text-base font-semibold text-[#e7edf8]">Static Proxy</p>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Proxy URL (Optional)</label>
+                  <input
+                    value={form.proxyUrl}
+                    onChange={(e) => update({ proxyUrl: e.target.value })}
+                    placeholder="http://user:pass@proxy.example.com:8080"
+                    className="w-full bg-[#222530] border border-[#343947] rounded-md px-4 py-3 text-base font-mono text-orange-400 placeholder:text-[#97a3b6]/50 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+                  />
+                  <p className="text-sm text-[#aab4c5] leading-6">Supports HTTP, HTTPS, and SOCKS5.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "display" && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
+                <div className="flex items-center gap-2">
+                  <Package className="w-4 h-4 text-[#FFD600]" />
+                  <p className="text-base font-semibold text-[#e7edf8]">Payment Display Profile</p>
+                </div>
+                <p className="text-sm text-[#aab4c5] leading-6">
+                  Optional. When assigned, this account is preferred for stores using the same Payment Display Profile.
+                </p>
+                <select
+                  value={form.displayProfileId || ""}
+                  onChange={(e) => update({ displayProfileId: e.target.value || "" })}
+                  className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors appearance-none"
+                >
+                  <option value="">None (Use fallback accounts)</option>
+                  {displayProfiles.map((p) => (
+                    <option key={p.id} value={p.id}>{p.profile_name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "review" && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
+                <p className="text-base font-semibold text-[#e7edf8]">Review Account Details</p>
+                <div className="space-y-3">
+                  {[
+                    { label: "Account Name", value: form.accountName || "—" },
+                    { label: "PayPal Email", value: form.email || "—" },
+                    { label: "Initial Status", value: form.status },
+                    { label: "Shield Domain", value: form.shieldDomain || "—" },
+                    { label: "Display Profile", value: displayProfiles.find(p => p.id === form.displayProfileId)?.profile_name || "None" },
+                    { label: "Limits", value: `$${form.softLimit} soft / $${form.hardLimit} hard` },
+                    { label: "Proxy Configured", value: form.proxyUrl ? "Yes" : "No" },
+                  ].map((s) => (
+                    <div key={s.label} className="flex justify-between items-center py-2 border-b border-[#343947]/50 last:border-0">
+                      <span className="text-sm text-[#97a3b6]">{s.label}</span>
+                      <span className="text-sm font-semibold text-[#e7edf8]">{s.value}</span>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="bg-[#2a2d39]/50 rounded-md px-4 py-3 mt-4">
+                  <p className="text-sm text-[#aab4c5] leading-6">
+                    Credentials have been entered and will be encrypted before storage.
+                    Client Secret is hidden for security.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col px-6 py-4 border-t border-[#343947] shrink-0 bg-[#1f222c]">
+          {error && (
+            <div className="mb-4 flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-md transition-all">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+          {success && (
+            <div className="mb-4 flex items-center gap-2 text-sm text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-3 py-2 rounded-md transition-all">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>Account created successfully.</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between gap-4">
+            <button onClick={onClose} className="flex-1 px-5 py-2.5 text-sm font-semibold text-[#97a3b6] border border-[#343947] rounded-md hover:bg-[#2a2d39] transition-colors">
               Cancel
             </button>
             <button
@@ -1191,20 +1275,26 @@ function AddMerchantModal({
                 !form.email ||
                 !form.clientId ||
                 !form.clientSecret ||
-                saving ||
+                saving || success ||
                 (form.domainType === "platform" && !form.shieldDomain)
               }
-              className="flex-1 px-4 py-2 text-xs font-mono text-background bg-cyan-400 hover:bg-cyan-300 disabled:opacity-40 disabled:cursor-not-allowed rounded-md transition-colors font-semibold flex items-center justify-center gap-1.5"
+              className="flex-1 px-5 py-2.5 text-sm font-semibold text-[#151821] bg-[#FFD600] hover:bg-[#e6c100] rounded-md transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              {saving && <Loader2 className="w-3 h-3 animate-spin" />}
-              {saving ? "Creating..." : "Add Account"}
+              {saving ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Adding...</>
+              ) : success ? (
+                <><Check className="w-4 h-4" /> Added</>
+              ) : (
+                "Add Account"
+              )}
             </button>
           </div>
         </div>
-      </div>
+      </aside>
     </>
   )
 }
+
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
@@ -1319,29 +1409,31 @@ export default function AccountsPage() {
   const handleSave = useCallback(async (updated: Merchant) => {
     // Optimistic UI
     setMerchants((prev) => prev.map((m) => (m.id === updated.id ? updated : m)))
-    setSelected(null)
 
     // Persist to backend
-    try {
-      await fetch(`/api/merchant/accounts/${updated.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: updated.accountName,
-          email: updated.email,
-          clientId: updated.clientId,
-          shieldDomain: updated.shieldDomain,
-          displayProfileId: updated.displayProfileId || null,
-          proxyUrl: updated.proxyUrl,
-          status: mapUiStatus(updated.status),
-          priority: updated.priority,
-          softLimit: updated.softLimit,
-          hardLimit: updated.hardLimit,
-          itemMasking: updated.itemMasking,
-          fakeProductName: updated.fakeProductName,
-        }),
-      })
-    } catch {}
+    const res = await fetch(`/api/merchant/accounts/${updated.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: updated.accountName,
+        email: updated.email,
+        clientId: updated.clientId,
+        shieldDomain: updated.shieldDomain,
+        displayProfileId: updated.displayProfileId || null,
+        proxyUrl: updated.proxyUrl,
+        status: mapUiStatus(updated.status),
+        priority: updated.priority,
+        softLimit: updated.softLimit,
+        hardLimit: updated.hardLimit,
+        itemMasking: updated.itemMasking,
+        fakeProductName: updated.fakeProductName,
+      }),
+    })
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || "Unable to save changes. Please try again.")
+    }
   }, [])
 
   const toggleStatus = useCallback(async (id: string, action: "pause" | "resume") => {
@@ -1405,102 +1497,103 @@ export default function AccountsPage() {
   const activeCount = merchants.filter((m) => m.status === "Active" || m.status === "Limited").length
 
   return (
-    <div className="min-h-screen bg-background font-mono">
-      <DashboardHeader />
-
-      <main className="px-4 md:px-6 py-5 max-w-[1600px] mx-auto space-y-5">
-
+    <DashboardShell>
+      <main data-ui-version="accounts-boron-v3" className="w-full px-6 md:px-8 py-8 space-y-6">
         {/* Page header */}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-base font-semibold text-foreground">Merchant Accounts</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              PayPal account rotator — {merchants.length} accounts configured
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleSync}
-              disabled={syncing}
-              className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground hover:text-foreground border border-border rounded-md px-3 py-1.5 hover:bg-secondary transition-colors disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
-              {syncing ? "Syncing..." : "Sync"}
-            </button>
-            <button
-              onClick={() => setShowAdd(true)}
-              className="flex items-center gap-1.5 text-xs font-mono text-background bg-cyan-400 hover:bg-cyan-300 rounded-md px-3 py-1.5 font-semibold transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Add Merchant
-            </button>
-          </div>
-        </div>
+        <DashboardPageHeader 
+          eyebrow="ACCOUNTS"
+          title="Merchant Accounts"
+          description="Manage payment provider accounts, routing status, limits, profile mapping, and operational health."
+          action={
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleSync}
+                disabled={syncing}
+                className="flex items-center gap-1.5 text-sm font-semibold text-[#97a3b6] hover:text-[#e7edf8] border border-[#343947] rounded-md px-4 py-2 hover:bg-[#2a2d39] transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
+                {syncing ? "Syncing..." : "Sync"}
+              </button>
+              <button
+                onClick={() => setShowAdd(true)}
+                className="flex items-center gap-1.5 text-sm font-semibold text-[#151821] bg-[#FFD600] hover:bg-[#e6c100] rounded-md px-4 py-2 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Account
+              </button>
+            </div>
+          }
+        />
 
         {/* Summary stat row */}
         <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3">
-          <div className="col-span-2 md:col-span-2 bg-card border border-border rounded-lg px-4 py-3">
-            <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Total Volume Today</p>
-            <p className="text-xl font-mono font-semibold text-foreground mt-1">${totalVolume.toLocaleString()}</p>
-            <p className="text-[10px] font-mono text-muted-foreground mt-1">{activeCount} active accounts</p>
+          <div className="col-span-2 md:col-span-2 bg-[#222530] border border-[#343947] rounded-lg px-4 py-3 relative overflow-hidden" data-ui-version="grid-background-v1">
+            <GridBackground />
+            <div className="relative z-10">
+              <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Total Volume Today</p>
+              <p className="text-xl font-mono font-semibold text-[#e7edf8] mt-1">${totalVolume.toLocaleString()}</p>
+              <p className="text-sm text-[#aab4c5] leading-6 mt-1">{activeCount} active accounts</p>
+            </div>
           </div>
           {statusCounts.map(({ status, count }) => {
             const cfg = statusConfig[status]
             return (
-              <div key={status} className="bg-card border border-border rounded-lg px-4 py-3">
-                <div className={`flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider ${cfg.text}`}>
-                  {cfg.icon}
-                  {status}
+              <div key={status} className="bg-[#222530] border border-[#343947] rounded-lg px-4 py-3 relative overflow-hidden" data-ui-version="grid-background-v1">
+                <GridBackground />
+                <div className="relative z-10">
+                  <div className={`flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider ${cfg.text}`}>
+                    {cfg.icon}
+                    {status}
+                  </div>
+                  <p className="text-xl font-mono font-semibold text-[#e7edf8] mt-2">{count}</p>
                 </div>
-                <p className="text-xl font-mono font-semibold text-foreground mt-1">{count}</p>
-                <p className="text-[10px] font-mono text-muted-foreground mt-1">accounts</p>
               </div>
             )
           })}
         </div>
 
-        {/* Table card */}
-        <div className="bg-card border border-border rounded-lg overflow-hidden">
-          {/* Toolbar */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-wrap gap-3">
-            <div className="flex items-center gap-1.5">
-              {(["All", "Active", "Limited", "Warm-up", "Paused", "Suspended"] as const).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setFilterStatus(s)}
-                  className={`px-2.5 py-1 text-[11px] font-mono rounded-md transition-colors ${
-                    filterStatus === s
-                      ? "bg-secondary text-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-                  }`}
-                >
-                  {s}
-                  <span className="ml-1 text-muted-foreground">
-                    {s === "All" ? merchants.length : merchants.filter((m) => m.status === s).length}
-                  </span>
-                </button>
-              ))}
-            </div>
+        {/* Main content area */}
+        <div className="bg-[#222530] border border-[#343947] rounded-lg shadow-sm">
+          {/* Tabs */}
+          <div className="flex items-center gap-6 px-6 border-b border-[#343947] bg-[#1f222c] rounded-t-lg overflow-x-auto">
+            {(["All", "Active", "Limited", "Warm-up", "Paused", "Suspended"] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setFilterStatus(s)}
+                className={`py-4 text-sm font-semibold uppercase tracking-[0.08em] transition-colors border-b-2 whitespace-nowrap ${
+                  filterStatus === s
+                    ? "border-[#FFD600] text-[#FFD600]"
+                    : "border-transparent text-[#97a3b6] hover:text-[#e7edf8]"
+                }`}
+              >
+                {s}
+                <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
+                  filterStatus === s ? "bg-[#FFD600]/10 text-[#FFD600]" : "bg-[#2a2d39] text-[#97a3b6]"
+                }`}>
+                  {s === "All" ? merchants.length : merchants.filter((m) => m.status === s).length}
+                </span>
+              </button>
+            ))}
           </div>
 
           {/* Table */}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border">
+                <tr className="border-b border-[#343947] bg-[#1a1d24]">
                   {[
                     "Account Name",
                     "Shield Domain",
-                    "Credentials",
                     "Status",
-                    "Priority",
-                    "Item Masking",
+                    "Display Profile",
                     "Daily Volume",
+                    "Priority",
+                    "Tx",
                     "",
                   ].map((h) => (
                     <th
                       key={h}
-                      className="px-4 py-2.5 text-left text-[10px] font-mono text-muted-foreground uppercase tracking-wider whitespace-nowrap"
+                      className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-[0.08em] text-[#b6c2d3] whitespace-nowrap"
                     >
                       {h}
                     </th>
@@ -1508,58 +1601,48 @@ export default function AccountsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((m, i) => (
+                {filtered.map((m) => (
                   <tr
                     key={m.id}
                     onClick={() => setSelected(m)}
-                    className={`border-b border-border/50 cursor-pointer transition-colors hover:bg-secondary/40 ${
-                      i % 2 === 0 ? "" : "bg-secondary/10"
-                    } ${selected?.id === m.id ? "bg-cyan-400/5 border-l-2 border-l-cyan-400" : ""}`}
+                    className={`border-b border-[#343947] cursor-pointer transition-colors hover:bg-[#2a2d39] ${
+                      selected?.id === m.id ? "bg-[#FFD600]/5 border-l-2 border-l-[#FFD600]" : ""
+                    }`}
                   >
                     {/* Account Name */}
-                    <td className="px-4 py-3">
-                      <div>
-                        <p className="font-mono text-xs font-semibold text-cyan-400">{m.accountName}</p>
-                        <p className="font-mono text-[11px] text-muted-foreground mt-0.5">{m.email}</p>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-1">
+                        <span className="font-semibold text-[#e7edf8]">{m.accountName}</span>
+                        <span className="text-xs text-[#97a3b6]">{m.email}</span>
                       </div>
                     </td>
 
                     {/* Shield Domain */}
-                    <td className="px-4 py-3">
+                    <td className="px-6 py-4">
                       <a
                         href={`https://${m.shieldDomain}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center gap-1 font-mono text-xs text-foreground hover:text-cyan-400 transition-colors group"
+                        className="inline-flex items-center gap-1 text-sm font-semibold text-[#FFD600] hover:text-[#e6c100] transition-colors group max-w-[140px] md:max-w-[180px]" title={m.shieldDomain}
                       >
-                        {m.shieldDomain}
-                        <ExternalLink className="w-3 h-3 text-muted-foreground group-hover:text-cyan-400 transition-colors" />
+                        <span className="truncate">{m.shieldDomain}</span>
+                        <ExternalLink className="w-3 h-3 shrink-0 opacity-70 group-hover:opacity-100 transition-colors" />
                       </a>
                     </td>
 
-                    {/* Credentials */}
-                    <td className="px-4 py-3">
-                      <CredentialCell clientId={m.clientId} />
-                    </td>
-
                     {/* Status */}
-                    <td className="px-4 py-3">
+                    <td className="px-6 py-4">
                       <StatusBadge status={m.status} />
                     </td>
 
-                    {/* Priority */}
-                    <td className="px-4 py-3">
-                      <PriorityStars value={m.priority} />
-                    </td>
-
-                    {/* Item Masking */}
-                    <td className="px-4 py-3">
-                      <ItemMaskingBadge enabled={m.itemMasking} productName={m.fakeProductName} />
+                    {/* Display Profile */}
+                    <td className="px-6 py-4">
+                      <PaymentDisplayProfileBadge profileId={m.displayProfileId} profiles={displayProfiles} isActive={m.status === "Active" || m.status === "Limited"} />
                     </td>
 
                     {/* Volume */}
-                    <td className="px-4 py-3 min-w-[220px]">
+                    <td className="px-6 py-4 min-w-[220px]">
                       <VolumeBar
                         current={m.currentVolume}
                         soft={m.softLimit}
@@ -1567,49 +1650,24 @@ export default function AccountsPage() {
                       />
                     </td>
 
+                    {/* Priority */}
+                    <td className="px-6 py-4">
+                      <PriorityStars value={m.priority} />
+                    </td>
+
+                    {/* Tx Count */}
+                    <td className="px-6 py-4">
+                      <span className="font-mono text-sm text-[#e7edf8]">{m.txCount}</span>
+                    </td>
+
                     {/* Actions */}
-                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button className="p-1.5 rounded-md hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground focus:outline-none">
-                            <MoreHorizontal className="w-4 h-4" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-44 bg-popover border-border text-xs font-mono">
-                          <DropdownMenuItem
-                            onClick={() => { setSelected(m) }}
-                            className="flex items-center gap-2 cursor-pointer"
-                          >
-                            <SlidersHorizontal className="w-3.5 h-3.5 text-muted-foreground" />
-                            Edit Details
-                          </DropdownMenuItem>
-                          {m.status !== "Paused" ? (
-                            <DropdownMenuItem
-                              onClick={() => toggleStatus(m.id, "pause")}
-                              className="flex items-center gap-2 text-amber-400 focus:text-amber-400 cursor-pointer"
-                            >
-                              <Pause className="w-3.5 h-3.5" />
-                              Pause Account
-                            </DropdownMenuItem>
-                          ) : (
-                            <DropdownMenuItem
-                              onClick={() => toggleStatus(m.id, "resume")}
-                              className="flex items-center gap-2 text-emerald-400 focus:text-emerald-400 cursor-pointer"
-                            >
-                              <Play className="w-3.5 h-3.5" />
-                              Resume Account
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuSeparator className="bg-border" />
-                          <DropdownMenuItem
-                            onClick={() => handleDelete(m.id)}
-                            className="flex items-center gap-2 text-red-400 focus:text-red-400 focus:bg-red-400/10 cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            Remove
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                    <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                      <button 
+                        onClick={() => setSelected(m)}
+                        className="p-2 text-[#97a3b6] hover:text-[#FFD600] transition-colors"
+                      >
+                        <SlidersHorizontal className="w-4 h-4" />
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -1618,12 +1676,17 @@ export default function AccountsPage() {
           </div>
 
           {filtered.length === 0 && (
-            <div className="py-16 text-center">
-              <p className="font-mono text-sm text-muted-foreground">No accounts match the selected filter.</p>
+            <div className="py-24 flex flex-col items-center justify-center text-center px-4">
+              <div className="w-16 h-16 rounded-full bg-[#1a1d24] flex items-center justify-center mb-4">
+                <Package className="w-8 h-8 text-[#343947]" />
+              </div>
+              <p className="text-lg font-semibold text-[#e7edf8] mb-2">No accounts found</p>
+              <p className="text-[#97a3b6] max-w-sm">There are no accounts matching the selected filter status.</p>
             </div>
           )}
         </div>
       </main>
+
 
       {/* Slide-over edit panel */}
       <SlideOver
@@ -1643,7 +1706,7 @@ export default function AccountsPage() {
           onAdd={handleAdd}
         />
       )}
-    </div>
+    </DashboardShell>
   )
 }
 
@@ -1673,6 +1736,34 @@ function CredentialCell({ clientId }: { clientId: string }) {
           : <Copy className="w-3 h-3" />
         }
       </button>
+    </div>
+  )
+}
+
+
+function PaymentDisplayProfileBadge({ profileId, profiles, isActive }: { profileId: string | null, profiles: PaymentDisplayProfile[], isActive: boolean }) {
+  if (!profileId) {
+    return (
+      <div className="inline-flex items-center px-2.5 py-1 rounded-md bg-[#2a2d39] border border-[#343947]">
+        <span className="text-xs font-medium text-[#97a3b6]">Inherit Store Default</span>
+      </div>
+    )
+  }
+  
+  const p = profiles.find(x => x.id === profileId)
+  
+  if (!p) {
+    return (
+      <div className="inline-flex items-center px-2.5 py-1 rounded-md bg-red-500/10 border border-red-500/20">
+        <span className="text-xs font-medium text-red-400">Unknown profile</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-cyan-400/10 border border-cyan-400/20" title={p.profile_name}>
+      <Package className="w-3.5 h-3.5 text-cyan-400" />
+      <span className="truncate max-w-[140px] text-xs font-medium text-cyan-400">{p.profile_name}</span>
     </div>
   )
 }
