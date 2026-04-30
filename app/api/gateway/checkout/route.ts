@@ -593,13 +593,21 @@ export async function POST(req: NextRequest) {
     if (!shieldDomainId && finalShieldDomain) {
       const fallbackIdRows = await client.query<{ id: string }>(
         `SELECT id FROM shield_domains
-         WHERE domain = $1 AND is_active = true AND health_ok = true
-         ORDER BY (tenant_id = $2) DESC NULLS LAST, created_at DESC
-         LIMIT 1`,
+         WHERE LOWER(domain) = LOWER($1) 
+           AND is_active = true 
+           AND health_ok = true
+           AND (tenant_id = $2 OR tenant_id IS NULL)`,
         [finalShieldDomain, tenantId]
       )
-      if (fallbackIdRows.rows.length > 0) {
+      if (fallbackIdRows.rows.length === 1) {
         shieldDomainId = fallbackIdRows.rows[0].id
+      } else if (fallbackIdRows.rows.length > 1) {
+        txLog.warn("payment_display_profile.shield_domain_ambiguous", "Multiple shield domains match fallback hostname", {
+          targetHost: finalShieldDomain,
+          tenantId,
+          matchCount: fallbackIdRows.rows.length
+        })
+        // Ambiguous match — leave shieldDomainId undefined for safety
       }
     }
 
