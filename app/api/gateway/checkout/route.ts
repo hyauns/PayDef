@@ -739,16 +739,16 @@ export async function POST(req: NextRequest) {
         }
 
         if (bundleResult.reason === "disabled_by_mode") {
-           txLog.info("payment_identity_bundle.enforce_fallback", "Resolver disabled by mode", {
+           txLog.warn("payment_identity_bundle.enforce_fallback", "Resolver disabled by mode", {
              tenantId, storeId: store.id, fallbackReason: "mode_not_enforce"
            })
         } else if (!bundleResult.bundle) {
-           txLog.info("payment_identity_bundle.enforce_fallback", "No bundle assigned to merchant/store", {
+           txLog.warn("payment_identity_bundle.enforce_fallback", "No bundle assigned to merchant/store", {
              tenantId, storeId: store.id, fallbackReason: "no_bundle"
            })
         } else if (!bundleResult.selectedItem) {
-           txLog.info("payment_identity_bundle.enforce_fallback", "Bundle has no active selected item", {
-             tenantId, storeId: store.id, bundleId: bundleResult.bundle.id, fallbackReason: "no_selected_item"
+           txLog.warn("payment_identity_bundle.enforce_fallback", "Bundle has no active selected item", {
+             tenantId, storeId: store.id, bundleId: bundleResult.bundle?.id, fallbackReason: "no_selected_item"
            })
         } else if (!candidate) {
            txLog.warn("payment_identity_bundle.enforce_fallback", "Missing candidate descriptor", {

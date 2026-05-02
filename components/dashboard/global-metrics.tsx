@@ -3,6 +3,8 @@
 import useSWR from "swr"
 import { DollarSign, Shield, Activity } from "lucide-react"
 import { StatCard } from "./StatCard"
+import { useLanguage } from "@/components/i18n/LanguageProvider"
+import { dashboardCopy } from "@/lib/i18n/dashboard"
 
 const fetcher = (url: string) => fetch(url).then(r => {
   if (!r.ok) throw new Error(`HTTP ${r.status}`)
@@ -18,6 +20,9 @@ function formatCurrency(n: number): string {
 }
 
 export function GlobalMetrics() {
+  const { language } = useLanguage()
+  const t = dashboardCopy[language]
+
   const { data, isLoading } = useSWR<{
     volume: { today: number; yesterday: number; percentChange: number }
     domains: { active: number; total: number; degraded: number }
@@ -63,24 +68,24 @@ export function GlobalMetrics() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
       <StatCard
-        label="Total Volume Today"
+        label={t.totalVolumeToday}
         value={formatCurrency(volume?.today ?? 0)}
-        helper={pctChange === 0 ? "No change from yesterday" : `${Math.abs(pctChange)}% from yesterday`}
+        helper={pctChange === 0 ? t.noChangeFromYesterday : `${Math.abs(pctChange)}% ${t.fromYesterday}`}
         icon={DollarSign}
         trend={isPositive ? "up" : isNegative ? "down" : "neutral"}
         active
       />
       <StatCard
-        label="Active Shield Domains"
+        label={t.activeShieldDomains}
         value={`${domains?.active ?? 0} / ${domains?.total ?? 0}`}
-        helper={hasDegraded ? `${domains?.degraded} domain${(domains?.degraded ?? 0) > 1 ? "s" : ""} degraded` : "All domains healthy"}
+        helper={hasDegraded ? `${domains?.degraded} ${t.domainsDegraded}` : t.allDomainsHealthy}
         icon={Shield}
         trend={hasDegraded ? "down" : "up"}
       />
       <StatCard
-        label="Transactions Today"
+        label={t.transactionsToday}
         value={txCount.toLocaleString()}
-        helper={txCount > 0 ? "Processing normally" : "No transactions yet today"}
+        helper={txCount > 0 ? t.processingNormally : t.noTransactionsYetToday}
         icon={Activity}
         trend={txCount > 0 ? "up" : "neutral"}
       />

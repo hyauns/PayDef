@@ -2,10 +2,11 @@ import { cn } from "@/lib/utils"
 
 interface StatusBadgeProps {
   status: string
+  label?: string
   className?: string
 }
 
-export function StatusBadge({ status, className }: StatusBadgeProps) {
+export function StatusBadge({ status, label, className }: StatusBadgeProps) {
   const s = status.toLowerCase()
 
   // Default neutral
@@ -32,7 +33,7 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
   return (
     <span className={cn("inline-flex items-center gap-1.5 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border tracking-wide uppercase", styles, className)}>
       <span className={cn("w-1.5 h-1.5 rounded-full", dot)} />
-      {status}
+      {label || status}
     </span>
   )
 }

@@ -1,0 +1,1513 @@
+<!DOCTYPE html>
+<html lang="en" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0"
+    />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>BankCo -  Users</title>
+    <link rel="stylesheet" href="./assets/css/output.css" />
+    <link rel="stylesheet" href="./assets/css/style.css" />
+  </head>
+  <body>
+    <!-- layout start -->
+    <div class="w-full layout-wrapper active">
+      <div class="w-full flex relative">
+        
+        <div class="body-wrapper dark:bg-darkblack-700 flex-1 overflow-x-hidden">
+         
+          <main
+            class="w-full xl:px-[48px] px-6 pb-6 xl:pb-[48px] sm:pt-[156px] pt-[100px]"
+          >
+            <!-- write your code here-->
+            <div class="flex 2xl:flex-row 2xl:space-x-11 rtl:space-x-reverse flex-col space-y-20">
+              <div class="2xl:flex-1 w-full">
+                <div class="bg-white dark:bg-darkblack-600 rounded-lg p-4 mb-8 items-center flex">
+                  <div
+                    class="flex items-center flex-1 ltr:pl-4 rtl:pr-4  xl:border-r rtl:xl:border-l border-bgray-400 dark:border-darkblack-400"
+                  >
+                    <span>
+                      <svg
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M11 19C15.4183 19 19 15.4183 19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19Z"
+                          stroke="#94A3B8"
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                        <path
+                          d="M21 21L17 17"
+                          stroke="#94A3B8"
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                      </svg>
+                    </span>
+                    <input
+                      type="text"
+                      class="border-0 w-full dark:bg-darkblack-600 dark:text-white focus:outline-none focus:ring-0 focus:border-none"
+                      placeholder="Job Title, Company, or Keywords "
+                    />
+                  </div>
+                  <div class="relative">
+                    <div
+                      onclick="dateFilterAction('#locationSelect')"
+                      class="items-center pl-9 rtl:pr-9 ltr:border-r rtl:border-l border-bgray-400 dark:border-darkblack-400 xl:flex hidden"
+                    >
+                      <span
+                        ><svg
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            d="M19.9092 10.448C19.9092 16.4935 11.9092 21.6753 11.9092 21.6753C11.9092 21.6753 3.90918 16.4935 3.90918 10.448C3.90918 8.38656 4.75203 6.40954 6.25233 4.95187C7.75262 3.4942 9.78745 2.67529 11.9092 2.67529C14.0309 2.67529 16.0657 3.4942 17.566 4.95187C19.0663 6.40954 19.9092 8.38656 19.9092 10.448Z"
+                            stroke="#94A3B8"
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          />
+                          <path
+                            d="M12 12.6753C13.3807 12.6753 14.5 11.556 14.5 10.1753C14.5 8.79458 13.3807 7.67529 12 7.67529C10.6193 7.67529 9.5 8.79458 9.5 10.1753C9.5 11.556 10.6193 12.6753 12 12.6753Z"
+                            stroke="#94A3B8"
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          />
+                        </svg>
+                      </span>
+                      <input
+                        type="text"
+                        class="border-0 dark:bg-darkblack-600 focus:outline-none focus:ring-0 focus:border-none"
+                        placeholder="Select Location "
+                      />
+                      <span class="pr-10"
+                        ><svg
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            d="M6 9L12 15L18 9"
+                            stroke="#94A3B8"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          />
+                        </svg>
+                      </span>
+                    </div>
+                    <div
+                      id="locationSelect"
+                      class="rounded-lg shadow-lg w-full bg-white dark:bg-darkblack-500 absolute right-0 z-10 top-full hidden overflow-hidden"
+                    >
+                      <ul>
+                        <li
+                          onclick="dateFilterAction('#locationSelect')"
+                          class="text-sm  text-bgray-900 dark:text-bgray-50 hover:dark:bg-darkblack-600  cursor-pointer px-5 py-2 hover:bg-bgray-100 font-semibold"
+                        >
+                          Bangladesh
+                        </li>
+                        <li
+                          onclick="dateFilterAction('#locationSelect')"
+                          class="text-sm  text-bgray-900 dark:text-bgray-50 hover:dark:bg-darkblack-600   cursor-pointer px-5 py-2 hover:bg-bgray-100 font-semibold"
+                        >
+                          America
+                        </li>
+                        <li
+                          onclick="dateFilterAction('#locationSelect')"
+                          class="text-sm  text-bgray-900 dark:text-bgray-50 hover:dark:bg-darkblack-600  cursor-pointer px-5 py-2 hover:bg-bgray-100 font-semibold"
+                        >
+                          Thailand
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                  <div class="ltr:pl-8 rtl:pr-8 md:block hidden">
+                    <button>
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M1.49999 1H14.5C14.644 1.05051 14.7745 1.13331 14.8816 1.24206C14.9887 1.35082 15.0695 1.48264 15.1177 1.62742C15.166 1.77221 15.1805 1.92612 15.1601 2.07737C15.1396 2.22861 15.0849 2.37318 15 2.5L9.99998 8V15L5.99999 12V8L0.999985 2.5C0.915076 2.37318 0.860321 2.22861 0.839913 2.07737C0.819506 1.92612 0.833987 1.77221 0.882249 1.62742C0.930511 1.48264 1.01127 1.35082 1.11835 1.24206C1.22542 1.13331 1.35597 1.05051 1.49999 1Z"
+                          stroke="#94A3B8"
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                  <div class="ltr:pl-10 rtl:pr-10 md:block hidden">
+                    <button
+                      class="py-3 px-10 bg-bgray-600 dark:bg-darkblack-500 rounded-lg text-white font-medium text-sm"
+                    >
+                      Search
+                    </button>
+                  </div>
+                </div>
+                <div class="w-full overflow-x-scroll">
+                  <table class="w-full">
+                    <tbody>
+                      <tr class="bg-white dark:bg-darkblack-600">
+                        <td
+                          class="whitespace-nowrap p-4 text-sm font-medium ltr:rounded-l-lg rtl:rounded-r-lg"
+                        >
+                          <span>
+                            <svg
+                              width="24"
+                              height="24"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                d="M12.0001 17.75L5.82808 20.995L7.00708 14.122L2.00708 9.25495L8.90708 8.25495L11.9931 2.00195L15.0791 8.25495L21.9791 9.25495L16.9791 14.122L18.1581 20.995L12.0001 17.75Z"
+                                fill="#F6A723"
+                                stroke="#F6A723"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                            </svg>
+                          </span>
+                        </td>
+                        <td
+                          class="whitespace-nowrap py-4 text-sm text-gray-500 w-[400px] lg:w-auto"
+                        >
+                          <div class="flex items-center gap-5">
+                            <div class="w-[64px] h-[64px]">
+                              <img
+                                class="w-full h-full object-cover rounded-lg"
+                                src="assets/images/avatar/user-1.png"
+                                alt=""
+                              />
+                            </div>
+                            <div class="flex-1">
+                              <h4 class="font-bold text-lg text-bgray-900 dark:text-white">
+                                Abdur Rohman
+                              </h4>
+                              <div>
+                                <span
+                                  class="font-medium text-base text-bgray-700 dark:text-bgray-50"
+                                  >Finance managers • </span
+                                ><span class="text-gray-500"
+                                  >Jakarta, Indonesia•</span
+                                >
+                                <span class="text-gray-500">2 days ago</span>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td
+                          class="whitespace-nowrap px-3 py-4 text-sm text-gray-500"
+                        >
+                          <span
+                            class="bg-success-50 dark:bg-darkblack-500 text-sm text-success-300 font-medium rounded-lg py-1 px-3"
+                            >Full Time</span
+                          >
+                        </td>
+                        <td
+                          class="whitespace-nowrap px-2 py-4 text-sm text-gray-500"
+                        >
+                          <span
+                            class="bg-bamber-50 dark:bg-darkblack-500 rounded-lg text-sm text-bamber-500 font-medium text-am px-3 py-1"
+                            >Senior Level</span
+                          >
+                        </td>
+                        <td
+                          class="whitespace-nowrap px-3 py-4 text-sm text-gray-500"
+                        >
+                          <a
+                            href="messages.html"
+                            class="bg-success-300 hover:bg-success-400 transition duration-300 ease-in-out ml-6 font-semibold text-white py-3 flex items-center justify-center rounded-xl px-11"
+                          >
+                            Message
+                          </a>
+                        </td>
+                        <td
+                          class="whitespace-nowrap pr-3 py-4 text-sm text-gray-500 ltr:rounded-r-lg rtl:rounded-l-lg"
+                        >
+                          <button class="">
+                            <svg
+                              width="24"
+                              height="24"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                d="M5 13C5.55228 13 6 12.5523 6 12C6 11.4477 5.55228 11 5 11C4.44772 11 4 11.4477 4 12C4 12.5523 4.44772 13 5 13Z"
+                                stroke="#94A3B8"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                              <path
+                                d="M12 13C12.5523 13 13 12.5523 13 12C13 11.4477 12.5523 11 12 11C11.4477 11 11 11.4477 11 12C11 12.5523 11.4477 13 12 13Z"
+                                stroke="#94A3B8"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                              <path
+                                d="M19 13C19.5523 13 20 12.5523 20 12C20 11.4477 19.5523 11 19 11C18.4477 11 18 11.4477 18 12C18 12.5523 18.4477 13 19 13Z"
+                                stroke="#94A3B8"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td
+                          class="whitespace-nowrap p-4 text-sm font-medium"
+                        >
+                          <span>
+                            <svg
+                              class="fill-bgray-400"
+                              width="24"
+                              height="24"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                d="M12.0001 17.75L5.82808 20.995L7.00708 14.122L2.00708 9.25495L8.90708 8.25495L11.9931 2.00195L15.0791 8.25495L21.9791 9.25495L16.9791 14.122L18.1581 20.995L12.0001 17.75Z"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                            </svg>
+                          </span>
+                        </td>
+                        <td
+                          class="whitespace-nowrap py-4 text-sm text-gray-500 w-[400px] lg:w-auto"
+                        >
+                          <div class="flex items-center gap-5">
+                            <div class="w-[64px] h-[64px]">
+                              <img
+                                class="w-full h-full object-cover rounded-lg"
+                                src="assets/images/avatar/aj.png"
+                                alt=""
+                              />
+                            </div>
+                            <div class="flex-1">
+                              <h4 class="font-bold text-lg text-bgray-900 dark:text-white">
+                                Ajoy Sarker
+                              </h4>
+                              <div>
+                                <span
+                                  class="font-medium text-base text-bgray-700 dark:text-bgray-50"
+                                  >Investors • </span
+                                ><span class="text-gray-500"
+                                  >Jakarta, Indonesia•</span
+                                >
+                                <span class="text-gray-500">2 days ago</span>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td
+                          class="whitespace-nowrap px-3 py-4 text-sm text-gray-500"
+                        >
+                          <span
+                            class="bg-success-50 dark:bg-darkblack-600 text-sm text-success-300 font-medium rounded-lg px-3 py-1"
+                            >Full Time</span
+                          >
+                        </td>
+                        <td
+                          class="whitespace-nowrap px-3 py-4 text-sm text-gray-500"
+                        >
+                          <span
+                            class="bg-bamber-50 dark:bg-darkblack-600 rounded-lg text-sm text-bamber-500 font-medium text-am px-3 py-1"
+                            >Senior Level</span
+                          >
+                        </td>
+                        <td
+                          class="whitespace-nowrap px-3 py-4 text-sm text-gray-500"
+                        >
+                          <a
+                            href="messages.html"
+                            class="bg-success-300 hover:bg-success-400 transition duration-300 ease-in-out ml-6 font-semibold text-white py-3 flex items-center justify-center rounded-xl px-11"
+                          >
+                            Message
+                          </a>
+                        </td>
+                        <td
+                          class="whitespace-nowrap pr-3 py-4 text-sm text-gray-500"
+                        >
+                          <button class="">
+                            <svg
+                              width="24"
+                              height="24"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                d="M5 13C5.55228 13 6 12.5523 6 12C6 11.4477 5.55228 11 5 11C4.44772 11 4 11.4477 4 12C4 12.5523 4.44772 13 5 13Z"
+                                stroke="#94A3B8"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                              <path
+                                d="M12 13C12.5523 13 13 12.5523 13 12C13 11.4477 12.5523 11 12 11C11.4477 11 11 11.4477 11 12C11 12.5523 11.4477 13 12 13Z"
+                                stroke="#94A3B8"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                              <path
+                                d="M19 13C19.5523 13 20 12.5523 20 12C20 11.4477 19.5523 11 19 11C18.4477 11 18 11.4477 18 12C18 12.5523 18.4477 13 19 13Z"
+                                stroke="#94A3B8"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                      <tr class="bg-white dark:bg-darkblack-600">
+                        <td
+                          class="whitespace-nowrap p-4 text-sm font-medium ltr:rounded-l-lg rtl:rounded-r-lg"
+                        >
+                          <span>
+                            <svg
+                              class="fill-bgray-400"
+                              width="24"
+                              height="24"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                d="M12.0001 17.75L5.82808 20.995L7.00708 14.122L2.00708 9.25495L8.90708 8.25495L11.9931 2.00195L15.0791 8.25495L21.9791 9.25495L16.9791 14.122L18.1581 20.995L12.0001 17.75Z"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                            </svg>
+                          </span>
+                        </td>
+                        <td
+                          class="whitespace-nowrap py-4 text-sm text-gray-500 w-[400px] lg:w-auto"
+                        >
+                          <div class="flex items-center gap-5">
+                            <div class="w-[64px] h-[64px]">
+                              <img
+                                class="w-full h-full object-cover rounded-lg"
+                                src="assets/images/avatar/ma.png"
+                                alt=""
+                              />
+                            </div>
+                            <div class="flex-1">
+                              <h4 class="font-bold text-lg text-bgray-900 dark:text-white">
+                                Mohammad Ali
+                              </h4>
+                              <div>
+                                <span
+                                  class="font-medium text-base text-bgray-700 dark:text-white"
+                                  >Boarrd Members • </span
+                                ><span class="text-gray-500"
+                                  >Jakarta, Indonesia•</span
+                                >
+                                <span class="text-gray-500">2 days ago</span>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td
+                          class="whitespace-nowrap px-3 py-4 text-sm text-gray-500"
+                        >
+                          <span
+                            class="bg-success-50 dark:bg-darkblack-500 text-sm text-success-300 font-medium rounded-lg px-3 py-1"
+                            >Full Time</span
+                          >
+                        </td>
+                        <td
+                          class="whitespace-nowrap px-3 py-4 text-sm text-gray-500"
+                        >
+                          <span
+                            class="bg-error-50 dark:bg-darkblack-500 rounded-lg text-sm text-error-300 font-medium text-am px-3 py-1"
+                            >Junior Level</span
+                          >
+                        </td>
+                        <td
+                          class="whitespace-nowrap px-3 py-4 text-sm text-gray-500"
+                        >
+                          <a
+                            href="messages.html"
+                            class="bg-success-300 hover:bg-success-400 transition duration-300 ease-in-out ml-6 font-semibold text-white py-3 flex items-center justify-center rounded-xl px-11"
+                          >
+                            Message
+                          </a>
+                        </td>
+                        <td
+                          class="whitespace-nowrap pr-3 py-4 text-sm text-gray-500 ltr:rounded-r-lg rtl:rounded-l-lg"
+                        >
+                          <button class="">
+                            <svg
+                              width="24"
+                              height="24"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                d="M5 13C5.55228 13 6 12.5523 6 12C6 11.4477 5.55228 11 5 11C4.44772 11 4 11.4477 4 12C4 12.5523 4.44772 13 5 13Z"
+                                stroke="#94A3B8"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                              <path
+                                d="M12 13C12.5523 13 13 12.5523 13 12C13 11.4477 12.5523 11 12 11C11.4477 11 11 11.4477 11 12C11 12.5523 11.4477 13 12 13Z"
+                                stroke="#94A3B8"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                              <path
+                                d="M19 13C19.5523 13 20 12.5523 20 12C20 11.4477 19.5523 11 19 11C18.4477 11 18 11.4477 18 12C18 12.5523 18.4477 13 19 13Z"
+                                stroke="#94A3B8"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td
+                          class="whitespace-nowrap p-4 text-sm font-medium  w-[400px] lg:w-auto"
+                        >
+                          <span>
+                            <svg
+                              class="fill-bgray-400"
+                              width="24"
+                              height="24"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                d="M12.0001 17.75L5.82808 20.995L7.00708 14.122L2.00708 9.25495L8.90708 8.25495L11.9931 2.00195L15.0791 8.25495L21.9791 9.25495L16.9791 14.122L18.1581 20.995L12.0001 17.75Z"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                            </svg>
+                          </span>
+                        </td>
+                        <td
+                          class="whitespace-nowrap py-4 text-sm text-gray-500"
+                        >
+                          <div class="flex items-center gap-5">
+                            <div class="w-[64px] h-[64px]">
+                              <img
+                                class="w-full h-full object-cover rounded-lg"
+                                src="assets/images/avatar/ni.png"
+                                alt=""
+                              />
+                            </div>
+                            <div class="flex-1">
+                              <h4 class="font-bold text-lg text-bgray-900 dark:text-white">
+                                Nayeem Islam
+                              </h4>
+                              <div>
+                                <span
+                                  class="font-medium text-base text-bgray-700 dark:text-bgray-50"
+                                  >Financial Analyst • </span
+                                ><span class="text-gray-500"
+                                  >Jakarta, Indonesia•</span
+                                >
+                                <span class="text-gray-500">2 days ago</span>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td
+                          class="whitespace-nowrap px-3 py-4 text-sm text-gray-500"
+                        >
+                          <span
+                            class="bg-success-50 dark:bg-darkblack-500 text-sm text-success-300 font-medium rounded-lg px-3 py-1"
+                            >Part Time</span
+                          >
+                        </td>
+                        <td
+                          class="whitespace-nowrap px-3 py-4 text-sm text-gray-500"
+                        >
+                          <span
+                            class="bg-bamber-50 dark:bg-darkblack-500 rounded-lg text-sm text-bamber-500 font-medium text-am px-3 py-1"
+                            >Senior Level</span
+                          >
+                        </td>
+                        <td
+                          class="whitespace-nowrap px-3 py-4 text-sm text-gray-500"
+                        >
+                          <a
+                            href="messages.html"
+                            class="bg-success-300 hover:bg-success-400 transition duration-300 ease-in-out ml-6 font-semibold text-white py-3 flex items-center justify-center rounded-xl px-11"
+                          >
+                            Message
+                          </a>
+                        </td>
+                        <td
+                          class="whitespace-nowrap pr-3 py-4 text-sm text-gray-500"
+                        >
+                          <button class="">
+                            <svg
+                              width="24"
+                              height="24"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                d="M5 13C5.55228 13 6 12.5523 6 12C6 11.4477 5.55228 11 5 11C4.44772 11 4 11.4477 4 12C4 12.5523 4.44772 13 5 13Z"
+                                stroke="#94A3B8"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                              <path
+                                d="M12 13C12.5523 13 13 12.5523 13 12C13 11.4477 12.5523 11 12 11C11.4477 11 11 11.4477 11 12C11 12.5523 11.4477 13 12 13Z"
+                                stroke="#94A3B8"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                              <path
+                                d="M19 13C19.5523 13 20 12.5523 20 12C20 11.4477 19.5523 11 19 11C18.4477 11 18 11.4477 18 12C18 12.5523 18.4477 13 19 13Z"
+                                stroke="#94A3B8"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                      <tr class="bg-white dark:bg-darkblack-600">
+                        <td
+                          class="whitespace-nowrap p-4 text-sm font-medium ltr:rounded-l-lg rtl:rounded-r-lg w-[400px] lg:w-auto"
+                        >
+                          <span>
+                            <svg
+                              class="fill-bgray-400"
+                              width="24"
+                              height="24"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                d="M12.0001 17.75L5.82808 20.995L7.00708 14.122L2.00708 9.25495L8.90708 8.25495L11.9931 2.00195L15.0791 8.25495L21.9791 9.25495L16.9791 14.122L18.1581 20.995L12.0001 17.75Z"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                            </svg>
+                          </span>
+                        </td>
+                        <td
+                          class="whitespace-nowrap py-4 text-sm text-gray-500"
+                        >
+                          <div class="flex items-center gap-5">
+                            <div class="w-[64px] h-[64px]">
+                              <img
+                                class="w-full h-full object-cover rounded-lg"
+                                src="assets/images/avatar/am.png"
+                                alt=""
+                              />
+                            </div>
+                            <div class="flex-1">
+                              <h4 class="font-bold text-lg text-bgray-900 dark:text-white">
+                                Abdullah Mamun
+                              </h4>
+                              <div>
+                                <span
+                                  class="font-medium text-base text-bgray-700 dark:text-bgray-50"
+                                  >Finance managers • </span
+                                ><span class="text-gray-500 "
+                                  >Jakarta, Indonesia•</span
+                                >
+                                <span class="text-gray-500">2 days ago</span>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td
+                          class="whitespace-nowrap px-3 py-4 text-sm text-gray-500"
+                        >
+                          <span
+                            class="bg-error-50 dark:bg-darkblack-500 text-sm text-error-300 font-medium rounded-lg px-3 py-1"
+                            >Part Time</span
+                          >
+                        </td>
+                        <td
+                          class="whitespace-nowrap px-3 py-4 text-sm text-gray-500"
+                        >
+                          <span
+                            class="bg-bamber-50 dark:bg-darkblack-500 rounded-lg text-sm text-bamber-500 font-medium text-am px-3 py-1"
+                            >Senior Level</span
+                          >
+                        </td>
+                        <td
+                          class="whitespace-nowrap px-3 py-4 text-sm text-gray-500"
+                        >
+                          <a
+                            href="messages.html"
+                            class="bg-success-300 hover:bg-success-400 transition duration-300 ease-in-out ml-6 font-semibold text-white py-3 flex items-center justify-center rounded-xl px-11"
+                          >
+                            Message
+                          </a>
+                        </td>
+                        <td
+                          class="whitespace-nowrap pr-3 py-4 text-sm text-gray-500 ltr:rounded-r-lg rtl:rounded-l-lg"
+                        >
+                          <button class="">
+                            <svg
+                              width="24"
+                              height="24"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                d="M5 13C5.55228 13 6 12.5523 6 12C6 11.4477 5.55228 11 5 11C4.44772 11 4 11.4477 4 12C4 12.5523 4.44772 13 5 13Z"
+                                stroke="#94A3B8"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                              <path
+                                d="M12 13C12.5523 13 13 12.5523 13 12C13 11.4477 12.5523 11 12 11C11.4477 11 11 11.4477 11 12C11 12.5523 11.4477 13 12 13Z"
+                                stroke="#94A3B8"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                              <path
+                                d="M19 13C19.5523 13 20 12.5523 20 12C20 11.4477 19.5523 11 19 11C18.4477 11 18 11.4477 18 12C18 12.5523 18.4477 13 19 13Z"
+                                stroke="#94A3B8"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td
+                          class="whitespace-nowrap p-4 text-sm font-medium"
+                        >
+                          <span>
+                            <svg
+                              class="fill-bgray-400"
+                              width="24"
+                              height="24"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                d="M12.0001 17.75L5.82808 20.995L7.00708 14.122L2.00708 9.25495L8.90708 8.25495L11.9931 2.00195L15.0791 8.25495L21.9791 9.25495L16.9791 14.122L18.1581 20.995L12.0001 17.75Z"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                            </svg>
+                          </span>
+                        </td>
+                        <td
+                          class="whitespace-nowrap py-4 text-sm text-gray-500 w-[400px] lg:w-auto"
+                        >
+                          <div class="flex items-center gap-5">
+                            <div class="w-[64px] h-[64px]">
+                              <img
+                                class="w-full h-full object-cover rounded-lg"
+                                src="assets/images/avatar/sr.png"
+                                alt=""
+                              />
+                            </div>
+                            <div class="flex-1">
+                              <h4 class="font-bold text-lg text-bgray-900 dark:text-white">
+                                Sheikh Rakib
+                              </h4>
+                              <div>
+                                <span
+                                  class="font-medium text-base text-bgray-700 dark:text-white"
+                                >
+                                  Accountants• </span
+                                ><span class="text-gray-500"
+                                  >Jakarta, Indonesia•</span
+                                >
+                                <span class="text-gray-500">2 days ago</span>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td
+                          class="whitespace-nowrap px-3 py-4 text-sm text-gray-500"
+                        >
+                          <span
+                            class="bg-success-50 dark:bg-darkblack-500 text-sm text-success-300 font-medium rounded-lg px-3 py-1"
+                            >Full Time</span
+                          >
+                        </td>
+                        <td
+                          class="whitespace-nowrap px-3 py-4 text-sm text-gray-500"
+                        >
+                          <span
+                            class="bg-bamber-50 dark:bg-darkblack-500 rounded-lg text-sm text-bamber-500 font-medium text-am px-3 py-1"
+                            >Senior Level</span
+                          >
+                        </td>
+                        <td
+                          class="whitespace-nowrap px-3 py-4 text-sm text-gray-500"
+                        >
+                          <a
+                            href="messages.html"
+                            class="bg-success-300 dark:bg-darkblack-500 hover:bg-success-400 transition duration-300 ease-in-out ml-6 font-semibold text-white py-3 flex items-center justify-center rounded-xl px-11"
+                          >
+                            Message
+                          </a>
+                        </td>
+                        <td
+                          class="whitespace-nowrap pr-3 py-4 text-sm text-gray-500"
+                        >
+                          <button class="">
+                            <svg
+                              width="24"
+                              height="24"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                d="M5 13C5.55228 13 6 12.5523 6 12C6 11.4477 5.55228 11 5 11C4.44772 11 4 11.4477 4 12C4 12.5523 4.44772 13 5 13Z"
+                                stroke="#94A3B8"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                              <path
+                                d="M12 13C12.5523 13 13 12.5523 13 12C13 11.4477 12.5523 11 12 11C11.4477 11 11 11.4477 11 12C11 12.5523 11.4477 13 12 13Z"
+                                stroke="#94A3B8"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                              <path
+                                d="M19 13C19.5523 13 20 12.5523 20 12C20 11.4477 19.5523 11 19 11C18.4477 11 18 11.4477 18 12C18 12.5523 18.4477 13 19 13Z"
+                                stroke="#94A3B8"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                      <tr class="bg-white dark:bg-darkblack-600">
+                        <td
+                          class="whitespace-nowrap p-4 text-sm font-medium ltr:rounded-l-lg rtl:rounded-r-lg"
+                        >
+                          <span>
+                            <svg
+                              class="fill-bgray-400"
+                              width="24"
+                              height="24"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                d="M12.0001 17.75L5.82808 20.995L7.00708 14.122L2.00708 9.25495L8.90708 8.25495L11.9931 2.00195L15.0791 8.25495L21.9791 9.25495L16.9791 14.122L18.1581 20.995L12.0001 17.75Z"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                            </svg>
+                          </span>
+                        </td>
+                        <td
+                          class="whitespace-nowrap py-4 text-sm text-gray-500 w-[400px] lg:w-auto"
+                        >
+                          <div class="flex items-center gap-5">
+                            <div class="w-[64px] h-[64px]">
+                              <img
+                                class="w-full h-full object-cover rounded-lg"
+                                src="assets/images/avatar/mh.png"
+                                alt=""
+                              />
+                            </div>
+                            <div class="flex-1">
+                              <h4 class="font-bold text-lg text-bgray-900 dark:text-white">
+                                Michal Hamer
+                              </h4>
+                              <div>
+                                <span
+                                  class="font-medium text-base text-bgray-700 dark:text-bgray-50"
+                                  >Executives • </span
+                                ><span class="text-gray-500"
+                                  >Jakarta, Indonesia•</span
+                                >
+                                <span class="text-gray-500">2 days ago</span>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td
+                          class="whitespace-nowrap px-3 py-4 text-sm text-gray-500"
+                        >
+                          <span
+                            class="bg-error-50 dark:bg-darkblack-500 text-sm text-error-300 font-medium rounded-lg px-3 py-1"
+                            >Part Time</span
+                          >
+                        </td>
+                        <td
+                          class="whitespace-nowrap px-3 py-4 text-sm text-gray-500"
+                        >
+                          <span
+                            class="bg-bamber-50 dark:bg-darkblack-500 rounded-lg text-sm text-bamber-500 font-medium text-am px-3 py-1"
+                            >Senior Level</span
+                          >
+                        </td>
+                        <td
+                          class="whitespace-nowrap px-3 py-4 text-sm text-gray-500"
+                        >
+                          <a
+                            href="messages.html"
+                            class="bg-success-300 hover:bg-success-400 transition duration-300 ease-in-out ml-6 font-semibold text-white py-3 flex items-center justify-center rounded-xl px-11"
+                          >
+                            Message
+                          </a>
+                        </td>
+                        <td
+                          class="whitespace-nowrap pr-3 py-4 text-sm text-gray-500 ltr:rounded-r-lg rtl:rounded-l-lg"
+                        >
+                          <button class="">
+                            <svg
+                              width="24"
+                              height="24"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                d="M5 13C5.55228 13 6 12.5523 6 12C6 11.4477 5.55228 11 5 11C4.44772 11 4 11.4477 4 12C4 12.5523 4.44772 13 5 13Z"
+                                stroke="#94A3B8"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                              <path
+                                d="M12 13C12.5523 13 13 12.5523 13 12C13 11.4477 12.5523 11 12 11C11.4477 11 11 11.4477 11 12C11 12.5523 11.4477 13 12 13Z"
+                                stroke="#94A3B8"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                              <path
+                                d="M19 13C19.5523 13 20 12.5523 20 12C20 11.4477 19.5523 11 19 11C18.4477 11 18 11.4477 18 12C18 12.5523 18.4477 13 19 13Z"
+                                stroke="#94A3B8"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <aside
+                class="2xl:w-[382px] w-full bg-white dark:bg-darkblack-600 rounded-lg px-12 pb-7"
+              >
+                <header
+                  class="flex flex-col items-center text-center -mt-8 pb-7"
+                >
+                  <img
+                    src="assets/images/avatar/user-1.png"
+                    class="rounded-lg"
+                    alt=""
+                  />
+                  <h3 class="text-xl font-bold text-bgray-700 dark:text-white mt-4">
+                    Abdur Rohman
+                  </h3>
+                  <p class="text-base font-medium text-bgray-500 dark:text-white">
+                    Finance managers • Jakarta, Indonesia • 2 days ago
+                  </p>
+                  <div class="mt-4 flex -space-x-2 rtl:space-x-reverse overflow-hidden">
+                    <img
+                      class="inline-block h-8 w-8 rounded-full ring ring-white"
+                      src="assets/images/avatar/group-img-1.png"
+                      alt=""
+                    /><img
+                      class="inline-block h-8 w-8 rounded-full ring ring-white"
+                      src="assets/images/avatar/group-img-2.png"
+                      alt=""
+                    /><img
+                      class="inline-block h-8 w-8 rounded-full ring ring-white"
+                      src="assets/images/avatar/group-img.png"
+                      alt=""
+                    />
+                    <div
+                      class="inline-flex justify-center h-8 w-8 rounded-full items-center text-gray-500 text-xs font-semibold bg-white"
+                    >
+                      +5
+                    </div>
+                  </div>
+                  <div class="flex gap-4 mt-6">
+                    <button
+                      class="w-10 h-10 group rounded-full bg-transparent hover:bg-success-300 hover:border-transparent inline-flex items-center justify-center border border-gray-500"
+                    >
+                      <svg
+                        class="stroke-bgray-500 group-hover:stroke-white"
+                        width="24"
+                        height="25"
+                        viewBox="0 0 24 25"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M19 21.5659L12 16.5659L5 21.5659V5.56592C5 5.03548 5.21071 4.52678 5.58579 4.1517C5.96086 3.77663 6.46957 3.56592 7 3.56592H17C17.5304 3.56592 18.0391 3.77663 18.4142 4.1517C18.7893 4.52678 19 5.03548 19 5.56592V21.5659Z"
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                      </svg>
+                    </button>
+                    <button
+                      class="w-10 h-10 rounded-full group bg-transparent hover:bg-success-300 hover:border-transparent inline-flex items-center justify-center border border-gray-500"
+                    >
+                      <svg
+                        class="stroke-bgray-500 group-hover:stroke-white"
+                        width="20"
+                        height="21"
+                        viewBox="0 0 20 21"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M4 13.5659C5.65685 13.5659 7 12.2228 7 10.5659C7 8.90906 5.65685 7.56592 4 7.56592C2.34315 7.56592 1 8.90906 1 10.5659C1 12.2228 2.34315 13.5659 4 13.5659Z"
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                        <path
+                          d="M16 7.56592C17.6569 7.56592 19 6.22277 19 4.56592C19 2.90906 17.6569 1.56592 16 1.56592C14.3431 1.56592 13 2.90906 13 4.56592C13 6.22277 14.3431 7.56592 16 7.56592Z"
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                        <path
+                          d="M16 19.5659C17.6569 19.5659 19 18.2228 19 16.5659C19 14.9091 17.6569 13.5659 16 13.5659C14.3431 13.5659 13 14.9091 13 16.5659C13 18.2228 14.3431 19.5659 16 19.5659Z"
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                        <path
+                          d="M6.69995 9.26572L13.3 5.86572"
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                        <path
+                          d="M6.69995 11.8657L13.3 15.2657"
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                </header>
+                <ul class="py-7 border-t border-b border-gray-200 dark:border-darkblack-400 space-y-6">
+                  <li class="flex justify-between">
+                    <span class="font-medium text-gray-500 text-sm dark:text-white"
+                      >Experience</span
+                    >
+                    <span class="text-sm font-semibold text-bgray-900 dark:text-white">
+                      2-4 Years</span
+                    >
+                  </li>
+                  <li class="flex justify-between">
+                    <span class="font-medium text-gray-500 text-sm dark:text-white"
+                      >Seniority Level</span
+                    >
+                    <span class="text-sm font-semibold text-bgray-900 dark:text-white">
+                      Senior Level</span
+                    >
+                  </li>
+                  <li class="flex justify-between">
+                    <span class="font-medium text-gray-500 text-sm dark:text-white"
+                      >Employment</span
+                    >
+                    <span class="text-sm font-semibold text-bgray-900 dark:text-white">
+                      Full Time</span
+                    >
+                  </li>
+                  <li class="flex justify-between">
+                    <span class="font-medium text-gray-500 text-sm dark:text-white"
+                      >Salary</span
+                    >
+                    <span class="text-sm font-semibold text-bgray-900 dark:text-white">
+                      $250-300</span
+                    >
+                  </li>
+                </ul>
+                <div class="py-6 border-b border-bgray-200 dark:border-darkblack-400">
+                  <h4 class="font-medium text-gray-500 text-sm dark:text-white mb-3">Files</h4>
+                  <ul class="space-y-2.5">
+                    <li
+                    class="bg-[#E4FDED] dark:bg-darkblack-500 py-3 px-2 pr-4 flex justify-between items-center rounded-lg"
+                  >
+                    <div class="flex items-center gap-x-3">
+                      <span
+                        class="bg-white dark:bg-darkblack-600 w-10 h-10 rounded-lg inline-flex justify-center items-center"
+                      >
+                        <svg
+                          width="22"
+                          height="22"
+                          viewBox="0 0 22 22"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            d="M12.8334 2.74951V6.41618C12.8334 6.65929 12.93 6.89245 13.1019 7.06436C13.2738 7.23627 13.5069 7.33285 13.75 7.33285H17.4167"
+                            stroke="#22C55E"
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          />
+                          <path
+                            d="M15.5834 19.2495H6.41671C5.93048 19.2495 5.46416 19.0564 5.12034 18.7125C4.77653 18.3687 4.58337 17.9024 4.58337 17.4162V4.58285C4.58337 4.09661 4.77653 3.6303 5.12034 3.28648C5.46416 2.94267 5.93048 2.74951 6.41671 2.74951H12.8334L17.4167 7.33285V17.4162C17.4167 17.9024 17.2236 18.3687 16.8797 18.7125C16.5359 19.0564 16.0696 19.2495 15.5834 19.2495Z"
+                            stroke="#22C55E"
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          />
+                          <path
+                            d="M8.25 8.24951H9.16667"
+                            stroke="#22C55E"
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          />
+                          <path
+                            d="M8.25 11.916H13.75"
+                            stroke="#22C55E"
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          />
+                          <path
+                            d="M8.25 15.583H13.75"
+                            stroke="#22C55E"
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          />
+                        </svg>
+                      </span>
+                      <div class="flex flex-col">
+                        <h5 class="font-semibold text-bgray-900 dark:text-white  text-sm">
+                          Overview.pdf
+                        </h5>
+                        <span class="text-xs text-bgray-500">50 Kb</span>
+                      </div>
+                    </div>
+                    <button>
+                      <svg
+                        class="stroke-bgray-900 dark:stroke-bgray-50"
+                        width="20"
+                        height="20"
+                        viewBox="0 0 20 20"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M17.5 12.4995V15.8328C17.5 16.2749 17.3244 16.6988 17.0118 17.0114C16.6993 17.3239 16.2754 17.4995 15.8333 17.4995H4.16667C3.72464 17.4995 3.30072 17.3239 2.98816 17.0114C2.67559 16.6988 2.5 16.2749 2.5 15.8328V12.4995"
+                        
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                        <path
+                          d="M5.83337 8.33301L10 12.4997L14.1667 8.33301"
+                         
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                        <path
+                          d="M10 12.4995V2.49951"
+                          
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                      </svg>
+                    </button>
+                  </li>
+                    <li
+                      class="bg-[#E4FDED] dark:bg-darkblack-500 py-3 px-2 pr-4 flex justify-between items-center rounded-lg"
+                    >
+                      <div class="flex items-center gap-x-3">
+                        <span
+                          class="bg-white dark:bg-darkblack-600 w-10 h-10 rounded-lg inline-flex justify-center items-center"
+                        >
+                          <svg
+                            width="22"
+                            height="22"
+                            viewBox="0 0 22 22"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              d="M12.8334 2.74951V6.41618C12.8334 6.65929 12.93 6.89245 13.1019 7.06436C13.2738 7.23627 13.5069 7.33285 13.75 7.33285H17.4167"
+                              stroke="#22C55E"
+                              stroke-width="1.5"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                            />
+                            <path
+                              d="M15.5834 19.2495H6.41671C5.93048 19.2495 5.46416 19.0564 5.12034 18.7125C4.77653 18.3687 4.58337 17.9024 4.58337 17.4162V4.58285C4.58337 4.09661 4.77653 3.6303 5.12034 3.28648C5.46416 2.94267 5.93048 2.74951 6.41671 2.74951H12.8334L17.4167 7.33285V17.4162C17.4167 17.9024 17.2236 18.3687 16.8797 18.7125C16.5359 19.0564 16.0696 19.2495 15.5834 19.2495Z"
+                              stroke="#22C55E"
+                              stroke-width="1.5"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                            />
+                            <path
+                              d="M8.25 8.24951H9.16667"
+                              stroke="#22C55E"
+                              stroke-width="1.5"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                            />
+                            <path
+                              d="M8.25 11.916H13.75"
+                              stroke="#22C55E"
+                              stroke-width="1.5"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                            />
+                            <path
+                              d="M8.25 15.583H13.75"
+                              stroke="#22C55E"
+                              stroke-width="1.5"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                            />
+                          </svg>
+                        </span>
+                        <div class="flex flex-col">
+                          <h5 class="font-semibold text-bgray-900 dark:text-white  text-sm">
+                            Overview.pdf
+                          </h5>
+                          <span class="text-xs text-bgray-500">50 Kb</span>
+                        </div>
+                      </div>
+                      <button>
+                        <svg
+                          class="stroke-bgray-900 dark:stroke-bgray-50"
+                          width="20"
+                          height="20"
+                          viewBox="0 0 20 20"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            d="M17.5 12.4995V15.8328C17.5 16.2749 17.3244 16.6988 17.0118 17.0114C16.6993 17.3239 16.2754 17.4995 15.8333 17.4995H4.16667C3.72464 17.4995 3.30072 17.3239 2.98816 17.0114C2.67559 16.6988 2.5 16.2749 2.5 15.8328V12.4995"
+                          
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          />
+                          <path
+                            d="M5.83337 8.33301L10 12.4997L14.1667 8.33301"
+                           
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          />
+                          <path
+                            d="M10 12.4995V2.49951"
+                            
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          />
+                        </svg>
+                      </button>
+                    </li>
+                  </ul>
+                </div>
+                <div class="pt-6">
+                  <h4 class="font-medium text-gray-500 text-sm dark:text-white mb-4">
+                    Hiring Agent
+                  </h4>
+                  <div class="flex gap-x-4">
+                    <div>
+                      <img src="assets/images/avatar/hr.png" alt="" />
+                    </div>
+                    <div>
+                      <h5 class="text-base font-semibold text-bgray-900 dark:text-white">
+                        Annette Black
+                      </h5>
+                      <span class="text-sm font-medium text-success-300"
+                        >HR Specialist •
+                        <span class="text-bgray-500 dark:text-bgray-50">4 Yrs Exp</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex justify-center mt-8">
+                  <button
+                    data-target="#multi-step-modal"
+                    class="bg-success-300 hover:bg-success-400 transition duration-300 ease-in-out modal-open py-3 px-7 text-white rounded-lg font-medium"
+                  >
+                    Add a contact
+                  </button>
+                </div>
+              </aside>
+            </div>
+            <!-- write your code here-->
+          </main>
+        </div>
+      </div>
+    </div>
+    <!-- layout end -->
+    <!-- Modal -->
+
+    <div
+      class="modal hidden fixed inset-0 z-50 overflow-y-auto flex items-center justify-center"
+      id="multi-step-modal"
+    >
+      <div class="modal-overlay fixed inset-0 bg-gray-500 opacity-75 dark:bg-bgray-900 dark:opacity-50"></div>
+      <div class="modal-content w-full max-w-xl px-4 mx-auto">
+        <div class="step-content step-1 relative top-40">
+          <div
+            class="relative max-w-[530px] rounded-lg bg-white dark:bg-darkblack-600 p-7 transition-all"
+          >
+            <div class="flex justify-between items-center">
+              <div>
+                <h3 class="text-3xl font-medium text-bgray-900 dark:text-white font-poppins">
+                  Edit Contact
+                </h3>
+              </div>
+              <div>
+                <button
+                  type="button"
+                  id="step-1-cancel"
+                  class="rounded-md focus:outline-none w-8 h-8 bg-bgray-200 dark:bg-darkblack-500 hover:bg-red-500 hover:text-white text-bgray-700 inline-flex justify-center items-center"
+                >
+                  <span class="sr-only">Close</span>
+                  <svg class="fill-bgray-900 dark:fill-darkblack-300" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path fill-rule="evenodd" clip-rule="evenodd" d="M9.68746 10.609C9.94199 10.8636 10.3547 10.8636 10.6092 10.609C10.8638 10.3545 10.8638 9.94174 10.6092 9.6872L6.92202 5.99993L10.6093 2.31268C10.8638 2.05813 10.8638 1.64542 10.6093 1.39087C10.3547 1.13631 9.94199 1.13631 9.68746 1.39087L6.00019 5.07809L2.31292 1.39087C2.05837 1.13632 1.64566 1.13632 1.39111 1.39087C1.13656 1.64543 1.13656 2.05814 1.39111 2.3127L5.07835 5.99993L1.39112 9.6872C1.13657 9.94174 1.13657 10.3544 1.39112 10.609C1.64567 10.8636 2.05838 10.8636 2.31293 10.609L6.00019 6.92177L9.68746 10.609Z"/>
+                    </svg>
+                </button>
+              </div>
+            </div>
+            <div class="flex flex-col">
+              <div class="py-8 flex justify-center">
+                <div
+                  class="flex items-center justify-center rounded-md border-2 border-dashed border-gray-300 w-28 h-28 relative"
+                >
+                  <div
+                    class="flex items-center justify-center text-sm text-gray-600"
+                  >
+                    <label
+                      for="file-upload"
+                      class="relative cursor-pointer rounded-md bg-white dark:bg-transparent font-medium text-indigo-600 focus-within:outline-none focus-within:ring-2"
+                    >
+                      <span>
+                        <svg class="stroke-bgray-900 dark:stroke-bgray-50" width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M19.9997 13.3333V26.6666M26.6663 19.9999H13.333M19.9997 36.6666C29.2044 36.6666 36.6663 29.2047 36.6663 19.9999C36.6663 10.7952 29.2044 3.33325 19.9997 3.33325C10.7949 3.33325 3.33301 10.7952 3.33301 19.9999C3.33301 29.2047 10.7949 36.6666 19.9997 36.6666Z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                          </svg>
+                          
+                      </span>
+                      <input
+                        id="file-upload"
+                        name="file-upload"
+                        type="file"
+                        class="sr-only"
+                      />
+                    </label>
+                  </div>
+                  <button
+                    class="border rounded-full absolute -right-3 -top-3 w-8 h-8 flex items-center justify-center bg-white dark:bg-darkblack-600"
+                  >
+                    <svg
+                      class="fill-bgray-900 dark:fill-bgray-50"
+                      width="20"
+                      height="20"
+                      viewBox="0 0 20 20"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        fill-rule="evenodd"
+                        clip-rule="evenodd"
+                        d="M15.1817 3.5C15.0085 3.5 14.8371 3.5341 14.6771 3.60035C14.5172 3.66661 14.3719 3.76371 14.2494 3.88613L13.0763 5.05922L14.9408 6.92366L16.1139 5.75057C16.2363 5.62815 16.3334 5.48281 16.3996 5.32286C16.4659 5.16291 16.5 4.99148 16.5 4.81835C16.5 4.64522 16.4659 4.47379 16.3996 4.31384C16.3334 4.15389 16.2363 4.00856 16.1139 3.88613C15.9914 3.76371 15.8461 3.66661 15.6862 3.60035C15.5262 3.5341 15.3548 3.5 15.1817 3.5ZM13.8801 7.98432L12.0157 6.11988L4.51809 13.6175L3.81893 16.1811L6.38252 15.4819L13.8801 7.98432ZM14.1031 2.21453C14.4451 2.0729 14.8115 2 15.1817 2C15.5518 2 15.9182 2.0729 16.2602 2.21453C16.6021 2.35617 16.9128 2.56377 17.1745 2.82548C17.4362 3.08718 17.6438 3.39788 17.7855 3.73981C17.9271 4.08175 18 4.44824 18 4.81835C18 5.18846 17.9271 5.55495 17.7855 5.89689C17.6438 6.23882 17.4362 6.54952 17.1745 6.81123L7.30235 16.6834C7.21005 16.7757 7.09527 16.8423 6.96935 16.8766L2.94735 17.9736C2.6877 18.0444 2.41 17.9706 2.21969 17.7803C2.02937 17.59 1.95563 17.3123 2.02644 17.0526L3.12335 13.0306C3.1577 12.9047 3.2243 12.7899 3.3166 12.6977L13.1888 2.82548C13.4505 2.56377 13.7612 2.35617 14.1031 2.21453Z"
+               
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div>
+                <form action="" class="space-y-6">
+                  <div class="flex flex-col md:flex-row justify-between gap-4">
+                    <div>
+                      <label
+                        for="fname"
+                        class="text-sm text-bgray-500 dark:text-bgray-50 block mb-2.5 text-left"
+                        >First Name</label
+                      >
+                      <input
+                        type="text"
+                        class="border border-bgray-300 w-full rounded-lg py-3 px-4 h-10 focus:border focus:border-success-300 focus:ring-0 dark:bg-darkblack-600 dark:border-darkblack-400"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        for="lname"
+                        class="text-sm text-bgray-500 dark:text-bgray-50 block mb-2.5 text-left"
+                        >Last Name</label
+                      >
+                      <input
+                        type="text"
+                        class="border border-bgray-300 w-full rounded-lg py-3 px-4 h-10 focus:border focus:border-success-300 focus:ring-0 dark:bg-darkblack-600 dark:border-darkblack-400"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label
+                      for="lname"
+                      class="text-sm text-bgray-500 dark:text-bgray-50 block mb-2.5 text-left"
+                      >Email</label
+                    >
+                    <input
+                      type="text"
+                      class="w-full border border-bgray-300 rounded-lg py-3 px-4 h-10 focus:border focus:border-success-300 focus:ring-0 dark:bg-darkblack-600 dark:border-darkblack-400"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      for="phone-number"
+                      class="text-sm text-bgray-500 dark:text-bgray-50 block mb-2.5 text-left"
+                      >Phone</label
+                    >
+                    <div class="relative mt-1 rounded-lg">
+                      <div class="absolute inset-y-0 left-0 flex items-center">
+                        <label for="country" class="sr-only">Country</label>
+                        <select
+                          id="country"
+                          name="country"
+                          autocomplete="country"
+                          class="focus:border focus:border-success-300 focus:ring-0 border-0 rounded-none border-r rounded-l-lg border-l border-bgray-300 bg-bgray-100 py-2 pl-3 pr-7 text-gray-500 dark:bg-darkblack-600 dark:border-darkblack-400"
+                        >
+                          <option>+1</option>
+                          <option>+2</option>
+                          <option>+3</option>
+                        </select>
+                      </div>
+                      <input
+                        type="text"
+                        name="phone-number"
+                        id="phone-number"
+                        class="block w-full rounded-lg border-bgray-300 pl-16 focus:border focus:border-success-300 focus:ring-0 dark:bg-darkblack-600 dark:border-darkblack-400"
+                        placeholder="+1 (070) 123–9221"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label
+                      for="jobtitle"
+                      class="text-sm text-bgray-500 dark:text-bgray-50 block mb-2.5 text-left"
+                      >Job Title</label
+                    >
+                    <input
+                      type="text"
+                      class="w-full border border-bgray-300 rounded-lg py-3 px-4 h-10 focus:border focus:border-success-300 focus:ring-0 dark:bg-darkblack-600 dark:border-darkblack-400"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      for="address"
+                      class="text-sm text-bgray-500 dark:text-bgray-50 block mb-2.5 text-left"
+                      >Address</label
+                    >
+                    <input
+                      type="text"
+                      class="w-full border border-bgray-300 rounded-lg py-3 px-4 h-10 focus:border focus:border-success-300 focus:ring-0 dark:bg-darkblack-600 dark:border-darkblack-400"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      for="address"
+                      class="text-sm text-bgray-500 dark:text-bgray-50 block mb-2.5 text-left"
+                      >Date of Birth</label
+                    >
+                    <input
+                      type="date"
+                      class="w-full border dark:placeholder:text-white dark:text-white border-bgray-300 rounded-lg py-3 px-4 h-10 focus:border focus:border-success-300 focus:ring-0 dark:bg-darkblack-600 dark:border-darkblack-400"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      for="address"
+                      class="text-sm text-bgray-500 dark:text-bgray-50 block mb-2.5 text-left"
+                      >Address</label
+                    >
+                    <textarea
+                      class="w-full border border-bgray-300 rounded-lg py-3 px-4 h-36 focus:border focus:border-success-300 focus:ring-0 dark:bg-darkblack-600 dark:border-darkblack-400 resize-none"
+                    >
+                    </textarea>
+                  </div>
+                  <div class="flex justify-end">
+                    <button
+                      class="bg-success-300 hover:bg-success-400 text-white text-base font-medium rounded-lg py-3 px-6"
+                    >
+                      Add Contact
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!--scripts -->
+    <script src="./assets/js/jquery-3.6.0.min.js"></script>
+    <script src="./assets/js/slick.min.js"></script>
+    <script src="./assets/js/quill.min.js"></script>
+
+    <script src="./assets/js/main.js"></script>
+  </body>
+</html>

@@ -4,6 +4,8 @@ import { useState, useEffect } from "react"
 import useSWR from "swr"
 import { BarChart2, Clock, List, CheckCircle2, Info, Loader2 } from "lucide-react"
 import { SectionCard } from "./SectionCard"
+import { useLanguage } from "@/components/i18n/LanguageProvider"
+import { dashboardCopy } from "@/lib/i18n/dashboard"
 
 type RotationMode = "volume" | "time" | "sequential"
 
@@ -19,42 +21,7 @@ interface ModeConfig {
   border: string
 }
 
-const modes: ModeConfig[] = [
-  {
-    id: "volume",
-    dbValue: "VOLUME",
-    label: "Volume Based",
-    description: "Route to account with lowest daily spend",
-    detail: "Distributes load by comparing each account's current volume vs daily limit, always routing to the account with the most headroom.",
-    icon: BarChart2,
-    color: "text-cyan-400",
-    bg: "bg-cyan-400/10",
-    border: "border-cyan-400/30",
-  },
-  {
-    id: "time",
-    dbValue: "TIME",
-    label: "Time Based",
-    description: "Rotate accounts on a fixed schedule",
-    detail: "Switches the active PayPal account at configured time intervals (e.g., every 2 hours) regardless of current volume.",
-    icon: Clock,
-    color: "text-violet-400",
-    bg: "bg-violet-400/10",
-    border: "border-violet-400/30",
-  },
-  {
-    id: "sequential",
-    dbValue: "SEQUENTIAL",
-    label: "Sequential",
-    description: "Round-robin through account list in order",
-    detail: "Each new transaction is routed to the next account in the list cyclically, distributing requests evenly over time.",
-    icon: List,
-    color: "text-emerald-400",
-    bg: "bg-emerald-400/10",
-    border: "border-emerald-400/30",
-  },
-]
-
+// Moved modes into component
 const timeIntervals = [
   { label: "15 min", minutes: 15 },
   { label: "30 min", minutes: 30 },
@@ -98,6 +65,45 @@ function labelToMinutes(label: string): number {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function RotationLogic() {
+  const { language } = useLanguage()
+  const t = dashboardCopy[language]
+
+  const modes: ModeConfig[] = [
+    {
+      id: "volume",
+      dbValue: "VOLUME",
+      label: t.volumeBased,
+      description: t.volumeBasedDesc,
+      detail: t.volumeBasedDetail,
+      icon: BarChart2,
+      color: "text-cyan-400",
+      bg: "bg-cyan-400/10",
+      border: "border-cyan-400/30",
+    },
+    {
+      id: "time",
+      dbValue: "TIME",
+      label: t.timeBased,
+      description: t.timeBasedDesc,
+      detail: t.timeBasedDetail,
+      icon: Clock,
+      color: "text-violet-400",
+      bg: "bg-violet-400/10",
+      border: "border-violet-400/30",
+    },
+    {
+      id: "sequential",
+      dbValue: "SEQUENTIAL",
+      label: t.sequential,
+      description: t.sequentialDesc,
+      detail: t.sequentialDetail,
+      icon: List,
+      color: "text-emerald-400",
+      bg: "bg-emerald-400/10",
+      border: "border-emerald-400/30",
+    },
+  ]
+
   const [active, setActive] = useState<RotationMode>("sequential")
   const [timeInterval, setTimeInterval] = useState("2 hours")
   const [showInfo, setShowInfo] = useState(false)
@@ -152,13 +158,13 @@ export function RotationLogic() {
 
   return (
     <SectionCard
-      title="Rotation Logic"
-      description="Configure how traffic is routed across PayPal accounts"
+      title={t.rotationLogic}
+      description={t.configureTraffic}
       action={
         <button
           onClick={() => setShowInfo(!showInfo)}
           className="text-[#97a3b6] hover:text-[#e7edf8] transition-colors p-1"
-          title="Mode info"
+          title={t.modeInfo}
         >
           <Info className="w-5 h-5" />
         </button>
@@ -222,7 +228,7 @@ export function RotationLogic() {
             {/* Time interval sub-option */}
             {active === "time" && (
               <div className="space-y-2">
-                <p className="text-xs font-bold text-[#97a3b6] uppercase tracking-wider">Rotation Interval</p>
+                <p className="text-xs font-bold text-[#97a3b6] uppercase tracking-wider">{t.rotationInterval}</p>
                 <div className="flex flex-wrap gap-2">
                   {timeIntervals.map((interval) => (
                     <button
@@ -251,10 +257,10 @@ export function RotationLogic() {
             {/* Status bar */}
             <div className="flex items-center justify-between pt-1 border-t border-[#343947]">
               <div className="flex items-center gap-2 mt-3">
-                <span className="text-sm font-medium text-[#97a3b6]">Active strategy:</span>
+                <span className="text-sm font-medium text-[#97a3b6]">{t.activeStrategy}</span>
                 <span className={`text-sm font-bold ${activeMode.color}`}>
                   {activeMode.label}
-                  {active === "time" ? ` (every ${timeInterval})` : ""}
+                  {active === "time" ? ` (${t.every} ${timeInterval})` : ""}
                 </span>
               </div>
               <button
@@ -269,11 +275,11 @@ export function RotationLogic() {
                 }`}
               >
                 {saved ? (
-                  <><CheckCircle2 className="w-3 h-3" /> Saved</>
+                  <><CheckCircle2 className="w-3 h-3" /> {t.saved}</>
                 ) : saving ? (
-                  <><Loader2 className="w-3 h-3 animate-spin" /> Applying...</>
+                  <><Loader2 className="w-3 h-3 animate-spin" /> {t.applying}</>
                 ) : (
-                  "Apply Strategy"
+                  t.applyStrategy
                 )}
               </button>
             </div>

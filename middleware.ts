@@ -214,7 +214,7 @@ function blockShieldApiAccess() {
   return NextResponse.json({ error: "Not found" }, { status: 404 })
 }
 
-export async function proxy(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
   const host = normalizeHost(req.headers.get("x-forwarded-host") ?? req.headers.get("host"))
 

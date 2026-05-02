@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react"
 import { ArrowRightLeft, Zap } from "lucide-react"
 import { SectionCard } from "./SectionCard"
+import { useLanguage } from "@/components/i18n/LanguageProvider"
+import { dashboardCopy } from "@/lib/i18n/dashboard"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -27,20 +29,7 @@ interface FeedTransactionApiRow {
   createdAt?: string | null
 }
 
-function timeAgo(d: Date): string {
-  const s = Math.floor((Date.now() - d.getTime()) / 1000)
-  if (s < 10) return "just now"
-  if (s < 60) return `${s}s ago`
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`
-  return `${Math.floor(s / 86400)}d ago`
-}
-
-const STATUS_CFG: Record<TxStatus, { bg: string; text: string; label: string; amountColor: string }> = {
-  completed: { bg: "bg-[#063f33]", text: "text-[#34d399]", label: "COMPLETED", amountColor: "text-[#34d399]" },
-  pending:   { bg: "bg-[#4a3908]", text: "text-[#facc15]", label: "PENDING",   amountColor: "text-[#facc15]" },
-  failed:    { bg: "bg-[#4a1d24]", text: "text-[#fb7185]", label: "FAILED",    amountColor: "text-[#fb7185]" },
-}
+// STATUS_CFG moved to FeedList component to use translation
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
@@ -67,9 +56,27 @@ function FeedSkeleton() {
 // ─── Feed list (fetches real data from API) ──────────────────────────────────
 
 function FeedList() {
+  const { language } = useLanguage()
+  const t = dashboardCopy[language]
+
   const [feed, setFeed] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
   const [, setTick] = useState(0)
+
+  const STATUS_CFG: Record<TxStatus, { bg: string; text: string; label: string; amountColor: string }> = {
+    completed: { bg: "bg-[#063f33]", text: "text-[#34d399]", label: t.completed, amountColor: "text-[#34d399]" },
+    pending:   { bg: "bg-[#4a3908]", text: "text-[#facc15]", label: t.pending,   amountColor: "text-[#facc15]" },
+    failed:    { bg: "bg-[#4a1d24]", text: "text-[#fb7185]", label: t.failed,    amountColor: "text-[#fb7185]" },
+  }
+
+  const timeAgo = (d: Date): string => {
+    const s = Math.floor((Date.now() - d.getTime()) / 1000)
+    if (s < 10) return t.justNow
+    if (s < 60) return `${s}s ${t.ago}`
+    if (s < 3600) return `${Math.floor(s / 60)}m ${t.ago}`
+    if (s < 86400) return `${Math.floor(s / 3600)}h ${t.ago}`
+    return `${Math.floor(s / 86400)}d ${t.ago}`
+  }
 
   const fetchTransactions = async () => {
     try {
@@ -97,7 +104,7 @@ function FeedList() {
         })
       )
     } catch {
-      // Silently fail — keep showing whatever we have
+      // Silently fail
     } finally {
       setLoading(false)
     }
@@ -125,8 +132,8 @@ function FeedList() {
       <div className="flex-1 flex items-center justify-center text-center px-5 py-10">
         <div>
           <ArrowRightLeft className="w-6 h-6 text-[#37394d] mx-auto mb-2" />
-          <p className="text-xs font-mono text-[#97aac1]">No transactions yet</p>
-          <p className="text-[10px] font-mono text-[#6b7280] mt-1">Transactions will appear here as they come in</p>
+          <p className="text-xs font-mono text-[#97aac1]">{t.noTransactionsYet}</p>
+          <p className="text-[10px] font-mono text-[#6b7280] mt-1">{t.transactionsWillAppearHere}</p>
         </div>
       </div>
     )
@@ -157,7 +164,7 @@ function FeedList() {
                 <span className="font-mono text-xs font-semibold text-cyan-400">{tx.paypalAccount}</span>
                 {tx.shieldDomain !== "—" && (
                   <>
-                    <span className="text-[#6b7280] text-xs">via</span>
+                    <span className="text-[#6b7280] text-xs">{t.via}</span>
                     <span className="font-mono text-xs text-[#97a3b6] truncate">{tx.shieldDomain}</span>
                   </>
                 )}
@@ -187,15 +194,18 @@ function mapStatus(raw: string): TxStatus {
 // ─── Public export ────────────────────────────────────────────────────────────
 
 export function TransactionFeed() {
+  const { language } = useLanguage()
+  const t = dashboardCopy[language]
+
   return (
     <SectionCard
       noPadding
-      title="Live Transaction Feed"
+      title={t.liveTransactionFeed}
       className="h-full flex flex-col"
       action={
         <div className="flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="text-xs font-mono text-emerald-400">LIVE</span>
+          <span className="text-xs font-mono text-emerald-400">{t.live}</span>
         </div>
       }
     >

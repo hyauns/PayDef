@@ -24,6 +24,8 @@ import {
 import { DashboardShell } from "@/components/dashboard/DashboardShell"
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader"
 import { GridBackground } from "@/components/ui/grid-background"
+import { useLanguage } from "@/components/i18n/LanguageProvider"
+import { transactionsCopy } from "@/lib/i18n/transactions"
 
 type TxStatus =
   | "Completed"
@@ -233,17 +235,17 @@ const fetcher = (url: string) =>
     return response.json()
   })
 
-const STATUS_CFG: Record<TxStatus, { label: string; bg: string; text: string; dot: string }> = {
-  Completed: { label: "Completed", bg: "bg-emerald-400/10", text: "text-emerald-400", dot: "bg-emerald-400" },
-  Authorized: { label: "Authorized", bg: "bg-[#00e5ff]/10", text: "text-[#00e5ff]", dot: "bg-[#00e5ff]" },
-  Pending: { label: "Pending", bg: "bg-amber-400/10", text: "text-amber-400", dot: "bg-amber-400" },
-  Failed: { label: "Failed", bg: "bg-rose-400/10", text: "text-rose-400", dot: "bg-rose-400" },
-  Refunded: { label: "Refunded", bg: "bg-blue-400/10", text: "text-blue-400", dot: "bg-blue-400" },
-  Disputed: { label: "Disputed", bg: "bg-amber-500/10", text: "text-amber-500", dot: "bg-amber-500" },
-  Canceled: { label: "Canceled", bg: "bg-zinc-400/10", text: "text-zinc-300", dot: "bg-zinc-400" },
-  Expired: { label: "Expired", bg: "bg-orange-400/10", text: "text-orange-400", dot: "bg-orange-400" },
-  Voided: { label: "Voided", bg: "bg-slate-400/10", text: "text-slate-400", dot: "bg-slate-400" },
-}
+const getStatusCfg = (t: any) => ({
+  Completed: { label: t.statusCompleted, bg: "bg-emerald-400/10", text: "text-emerald-400", dot: "bg-emerald-400" },
+  Authorized: { label: t.statusAuthorized, bg: "bg-[#00e5ff]/10", text: "text-[#00e5ff]", dot: "bg-[#00e5ff]" },
+  Pending: { label: t.statusPending, bg: "bg-amber-400/10", text: "text-amber-400", dot: "bg-amber-400" },
+  Failed: { label: t.statusFailed, bg: "bg-rose-400/10", text: "text-rose-400", dot: "bg-rose-400" },
+  Refunded: { label: t.statusRefunded, bg: "bg-blue-400/10", text: "text-blue-400", dot: "bg-blue-400" },
+  Disputed: { label: t.statusDisputed, bg: "bg-amber-500/10", text: "text-amber-500", dot: "bg-amber-500" },
+  Canceled: { label: t.statusCanceled, bg: "bg-zinc-400/10", text: "text-zinc-300", dot: "bg-zinc-400" },
+  Expired: { label: t.statusExpired, bg: "bg-orange-400/10", text: "text-orange-400", dot: "bg-orange-400" },
+  Voided: { label: t.statusVoided, bg: "bg-slate-400/10", text: "text-slate-400", dot: "bg-slate-400" },
+})
 
 const ALL_STATUSES: TxStatus[] = ["Completed", "Authorized", "Pending", "Failed", "Refunded", "Disputed", "Canceled", "Expired", "Voided"]
 
@@ -350,6 +352,9 @@ function MockChargeModal({
   onClose: () => void
   onSuccess: () => Promise<void> | void
 }) {
+  const { language } = useLanguage()
+  const t = transactionsCopy[language]
+  
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState<MockChargeFormState>({
@@ -417,9 +422,9 @@ function MockChargeModal({
         <div className="w-full max-w-2xl rounded-xl border border-[#343947] bg-[#151821] shadow-2xl">
           <div className="flex items-center justify-between border-b border-[#343947] px-5 py-4">
             <div>
-              <p className="text-sm font-semibold text-[#e7edf8]">Test Mock Charge</p>
+              <p className="text-sm font-semibold text-[#e7edf8]">{t.testMockCharge}</p>
               <p className="text-xs font-mono text-[#97a3b6] mt-1">
-                Create a completed mock card transaction and trigger the existing webhook flow.
+                {t.mockChargeDesc}
               </p>
             </div>
             <button
@@ -439,7 +444,7 @@ function MockChargeModal({
 
             <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-1">
-                <span className="text-xs font-mono uppercase tracking-wider text-[#97a3b6]">Store ID</span>
+                <span className="text-xs font-mono uppercase tracking-wider text-[#97a3b6]">{t.storeId}</span>
                 <input
                   value={form.storeId}
                   onChange={(event) => setField("storeId", event.target.value)}
@@ -448,7 +453,7 @@ function MockChargeModal({
               </label>
 
               <label className="space-y-1">
-                <span className="text-xs font-mono uppercase tracking-wider text-[#97a3b6]">Amount</span>
+                <span className="text-xs font-mono uppercase tracking-wider text-[#97a3b6]">{t.amount}</span>
                 <input
                   value={form.amount}
                   onChange={(event) => setField("amount", event.target.value)}
@@ -458,7 +463,7 @@ function MockChargeModal({
               </label>
 
               <label className="space-y-1 md:col-span-2">
-                <span className="text-xs font-mono uppercase tracking-wider text-[#97a3b6]">Mock Card Number</span>
+                <span className="text-xs font-mono uppercase tracking-wider text-[#97a3b6]">{t.mockCardNumber}</span>
                 <input
                   value={form.cardNumber}
                   onChange={(event) => setField("cardNumber", event.target.value)}
@@ -467,7 +472,7 @@ function MockChargeModal({
               </label>
 
               <label className="space-y-1">
-                <span className="text-xs font-mono uppercase tracking-wider text-[#97a3b6]">CVV</span>
+                <span className="text-xs font-mono uppercase tracking-wider text-[#97a3b6]">{t.cvv}</span>
                 <input
                   value={form.cvv}
                   onChange={(event) => setField("cvv", event.target.value)}
@@ -477,7 +482,7 @@ function MockChargeModal({
 
               <div className="grid grid-cols-2 gap-4">
                 <label className="space-y-1">
-                  <span className="text-xs font-mono uppercase tracking-wider text-[#97a3b6]">Exp Month</span>
+                  <span className="text-xs font-mono uppercase tracking-wider text-[#97a3b6]">{t.expMonth}</span>
                   <input
                     value={form.expMonth}
                     onChange={(event) => setField("expMonth", event.target.value)}
@@ -485,7 +490,7 @@ function MockChargeModal({
                   />
                 </label>
                 <label className="space-y-1">
-                  <span className="text-xs font-mono uppercase tracking-wider text-[#97a3b6]">Exp Year</span>
+                  <span className="text-xs font-mono uppercase tracking-wider text-[#97a3b6]">{t.expYear}</span>
                   <input
                     value={form.expYear}
                     onChange={(event) => setField("expYear", event.target.value)}
@@ -495,7 +500,7 @@ function MockChargeModal({
               </div>
 
               <label className="space-y-1 md:col-span-2">
-                <span className="text-xs font-mono uppercase tracking-wider text-[#97a3b6]">Buyer Name</span>
+                <span className="text-xs font-mono uppercase tracking-wider text-[#97a3b6]">{t.buyerNameModal}</span>
                 <input
                   value={form.buyerName}
                   onChange={(event) => setField("buyerName", event.target.value)}
@@ -504,7 +509,7 @@ function MockChargeModal({
               </label>
 
               <label className="space-y-1 md:col-span-2">
-                <span className="text-xs font-mono uppercase tracking-wider text-[#97a3b6]">Billing Address JSON</span>
+                <span className="text-xs font-mono uppercase tracking-wider text-[#97a3b6]">{t.billingAddressJson}</span>
                 <textarea
                   value={form.billingAddress}
                   onChange={(event) => setField("billingAddress", event.target.value)}
@@ -520,7 +525,7 @@ function MockChargeModal({
               onClick={onClose}
               className="rounded-md border border-[#343947] px-3 py-2 text-xs font-mono text-[#97a3b6] transition-colors hover:text-[#e7edf8]"
             >
-              Cancel
+              {t.cancel}
             </button>
             <button
               onClick={() => void handleSubmit()}
@@ -528,7 +533,7 @@ function MockChargeModal({
               className="inline-flex items-center gap-2 rounded-md border border-[#FFD600]/30 px-3 py-2 text-xs font-mono text-[#FFD600] transition-colors hover:bg-[#FFD600]/10 disabled:opacity-40"
             >
               {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FlaskConical className="w-3.5 h-3.5" />}
-              Submit Mock Charge
+              {t.submitMockCharge}
             </button>
           </div>
         </div>
@@ -538,9 +543,12 @@ function MockChargeModal({
 }
 
 function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }) {
+  const { language } = useLanguage()
+  const t = transactionsCopy[language]
+  
   const [showEmail, setShowEmail] = useState(false)
   const [replayBusy, setReplayBusy] = useState(false)
-  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
+  const [toastMsg, setToastMsg] = useState<{ msg: string; ok: boolean } | null>(null)
   const detailKey = `/api/merchant/transactions/${tx.id}`
   const { data, error, isLoading, mutate } = useSWR<TransactionDetailResponse>(detailKey, fetcher, {
     refreshInterval: 10_000,
@@ -548,7 +556,7 @@ function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }
   })
 
   const status = data ? mapStatus(data.status) : tx.status
-  const cfg = STATUS_CFG[status]
+  const cfg = getStatusCfg(t)[status]
   const amount = data ? Number(data.amount) : tx.amount
   const fee = data ? Number(data.gateway_fee) : tx.fee
   const customerEmail = data?.customer_email ?? tx.customerEmail
@@ -562,7 +570,7 @@ function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }
 
   const handleReplay = async (eventId?: string) => {
     setReplayBusy(true)
-    setToast(null)
+    setToastMsg(null)
 
     try {
       const response = await fetch(`/api/merchant/transactions/${tx.id}/replay`, {
@@ -575,11 +583,11 @@ function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }
         throw new Error(payload.error ?? "Replay failed")
       }
 
-      setToast({ ok: true, msg: `Webhook replay created delivery ${payload.delivery_id ?? "pending"} with status ${payload.delivery_status}.` })
+      setToastMsg({ ok: true, msg: `Webhook replay created delivery ${payload.delivery_id ?? "pending"} with status ${payload.delivery_status}.` })
       await mutate()
       globalMutate((key) => typeof key === "string" && key.startsWith("/api/merchant/logs"))
     } catch (replayError) {
-      setToast({ ok: false, msg: replayError instanceof Error ? replayError.message : "Replay failed" })
+      setToastMsg({ ok: false, msg: replayError instanceof Error ? replayError.message : "Replay failed" })
     } finally {
       setReplayBusy(false)
     }
@@ -593,7 +601,7 @@ function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }
       <div className="fixed right-0 top-0 h-full w-full max-w-[560px] bg-[#151821] border-l border-[#343947] z-50 overflow-y-auto flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#343947] sticky top-0 bg-[#151821] z-10">
           <div>
-            <p className="text-xs font-mono text-[#97a3b6]">Transaction Detail</p>
+            <p className="text-xs font-mono text-[#97a3b6]">{t.txDetail}</p>
             <p className="text-sm font-mono font-semibold text-[#e7edf8] mt-0.5">{tx.orderId}</p>
           </div>
           <div className="flex items-center gap-2">
@@ -608,38 +616,38 @@ function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }
         </div>
 
         <div className="flex-1 p-5 space-y-5">
-        {toast && (
+        {toastMsg && (
             <div className={`rounded-md border px-3 py-2 text-sm font-mono ${
-              toast.ok
+              toastMsg.ok
                 ? "bg-emerald-400/5 border-emerald-400/20 text-emerald-400"
                 : "bg-red-400/5 border-red-400/20 text-red-400"
             }`}>
-              {toast.msg}
+              {toastMsg.msg}
             </div>
           )}
 
           {error && (
             <div className="rounded-md border border-red-500/20 bg-red-500/5 px-3 py-2 text-sm font-mono text-red-400">
-              Failed to load webhook delivery history for this transaction.
+              {t.failedToLoadWebhook}
             </div>
           )}
 
           <div className="bg-[#1a1d24] border border-[#343947] rounded-lg p-4 text-center">
             <p className="text-3xl font-mono font-bold text-[#e7edf8]">{fmt(amount)}</p>
-            <p className="text-xs font-mono text-[#97a3b6] mt-1">Platform fee: {fmt(fee)} (2.5%)</p>
-            <p className="text-xs font-mono text-emerald-400 mt-0.5">Net to merchant: {fmt(amount - fee)}</p>
+            <p className="text-xs font-mono text-[#97a3b6] mt-1">{t.platformFee} {fmt(fee)} (2.5%)</p>
+            <p className="text-xs font-mono text-emerald-400 mt-0.5">{t.netToMerchant} {fmt(amount - fee)}</p>
           </div>
 
 
 
           <div className="grid grid-cols-2 gap-3">
             {[
-              { label: "PayPal Order", value: data?.paypal_order_id ?? tx.orderId, color: "text-[#FFD600]", copy: true },
-              { label: "Capture ID", value: data?.paypal_capture_id ?? tx.paypalTxId, color: "text-[#e7edf8]", copy: !!data?.paypal_capture_id },
-              { label: "Authorization", value: data?.authorization_id ?? "—", color: "text-[#e7edf8]", copy: !!data?.authorization_id },
-              { label: "Status Reason", value: data?.status_reason ?? "—", color: "text-[#97a3b6]" },
-              { label: "Store", value: data?.store_name ?? tx.storeName, color: "text-[#e7edf8]" },
-              { label: "Shield Domain", value: data?.shield_domain ?? "—", color: "text-[#e7edf8]" },
+              { label: t.paypalOrder, value: data?.paypal_order_id ?? tx.orderId, color: "text-[#FFD600]", copy: true },
+              { label: t.captureId, value: data?.paypal_capture_id ?? tx.paypalTxId, color: "text-[#e7edf8]", copy: !!data?.paypal_capture_id },
+              { label: t.authorization, value: data?.authorization_id ?? "—", color: "text-[#e7edf8]", copy: !!data?.authorization_id },
+              { label: t.statusReason, value: data?.status_reason ?? "—", color: "text-[#97a3b6]" },
+              { label: t.store, value: data?.store_name ?? tx.storeName, color: "text-[#e7edf8]" },
+              { label: t.shieldDomain, value: data?.shield_domain ?? "—", color: "text-[#e7edf8]" },
             ].map((row) => (
               <div key={row.label} className="space-y-0.5 rounded-md border border-[#343947] bg-[#1a1d24] px-3 py-2.5">
                 <p className="text-xs font-mono text-[#97a3b6] uppercase tracking-wider">{row.label}</p>
@@ -654,22 +662,22 @@ function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }
           <div className="border border-[#343947] rounded-lg p-4 space-y-3">
             <div className="flex items-center gap-2">
               <Package className="w-3.5 h-3.5 text-violet-400" />
-              <p className="text-xs font-mono font-semibold text-[#e7edf8]">Item Masking</p>
+              <p className="text-xs font-mono font-semibold text-[#e7edf8]">{t.itemMasking}</p>
               {masked ? (
-                <span className="ml-auto text-xs font-mono px-2 py-0.5 rounded-full bg-violet-400/10 text-violet-400 border border-violet-400/20">Active</span>
+                <span className="ml-auto text-xs font-mono px-2 py-0.5 rounded-full bg-violet-400/10 text-violet-400 border border-violet-400/20">{t.active}</span>
               ) : (
-                <span className="ml-auto text-xs font-mono px-2 py-0.5 rounded-full bg-[#2a2d39] text-[#97a3b6] border border-[#343947]">Disabled</span>
+                <span className="ml-auto text-xs font-mono px-2 py-0.5 rounded-full bg-[#2a2d39] text-[#97a3b6] border border-[#343947]">{t.disabled}</span>
               )}
             </div>
             <div className="grid grid-cols-1 gap-3">
               <div className="space-y-1">
-                <p className="text-xs font-mono text-[#97a3b6] uppercase tracking-wider">Original Product</p>
+                <p className="text-xs font-mono text-[#97a3b6] uppercase tracking-wider">{t.originalProduct}</p>
                 <div className="flex items-center gap-2 bg-[#1a1d24] rounded-md px-3 py-2 border border-[#343947]">
                   <span className="text-xs font-mono text-[#e7edf8]">{data?.original_item_name ?? tx.originalProduct}</span>
                 </div>
               </div>
               <div className="space-y-1">
-                <p className="text-xs font-mono text-[#97a3b6] uppercase tracking-wider">Sent to PayPal</p>
+                <p className="text-xs font-mono text-[#97a3b6] uppercase tracking-wider">{t.sentToPaypal}</p>
                 <div className={`flex items-center gap-2 rounded-md px-3 py-2 border ${masked ? "bg-violet-400/5 border-violet-400/20" : "bg-[#1a1d24] border-[#343947]"}`}>
                   <span className={`text-xs font-mono ${masked ? "text-violet-400" : "text-[#e7edf8]"}`}>
                     {data?.masked_item_name ?? tx.maskedProduct}
@@ -682,10 +690,10 @@ function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }
           <div className="border border-[#343947] rounded-lg p-4 space-y-2">
             <div className="flex items-center gap-2">
               <CreditCard className="w-3.5 h-3.5 text-[#97a3b6]" />
-              <p className="text-xs font-mono font-semibold text-[#e7edf8]">Customer</p>
+              <p className="text-xs font-mono font-semibold text-[#e7edf8]">{t.customer}</p>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-mono text-[#97a3b6]">Email:</span>
+              <span className="text-xs font-mono text-[#97a3b6]">{t.email}</span>
               <span className="text-xs font-mono text-[#e7edf8] flex-1">
                 {showEmail || !customerEmail.includes("@")
                   ? customerEmail
@@ -704,17 +712,17 @@ function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }
           <div className="border border-[#343947] rounded-lg p-4 space-y-3">
             <div className="flex items-center gap-2">
               <CreditCard className="w-3.5 h-3.5 text-[#FFD600]" />
-              <p className="text-xs font-mono font-semibold text-[#e7edf8]">Payment Details</p>
+              <p className="text-xs font-mono font-semibold text-[#e7edf8]">{t.paymentDetails}</p>
             </div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div className="space-y-1">
-                <p className="text-xs font-mono uppercase tracking-wider text-[#97a3b6]">Method</p>
+                <p className="text-xs font-mono uppercase tracking-wider text-[#97a3b6]">{t.method}</p>
                 <div className="rounded-md border border-[#343947] bg-[#1a1d24] px-3 py-2 text-xs font-mono text-[#e7edf8]">
                   {paymentMethod}
                 </div>
               </div>
               <div className="space-y-1">
-                <p className="text-xs font-mono uppercase tracking-wider text-[#97a3b6]">Buyer Name</p>
+                <p className="text-xs font-mono uppercase tracking-wider text-[#97a3b6]">{t.buyerName}</p>
                 <div className="rounded-md border border-[#343947] bg-[#1a1d24] px-3 py-2 text-xs font-mono text-[#e7edf8]">
                   {buyerName}
                 </div>
@@ -722,14 +730,14 @@ function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }
             </div>
             {(data?.card_brand || tx.cardBrand) ? (
               <div className="space-y-1">
-                <p className="text-xs font-mono uppercase tracking-wider text-[#97a3b6]">Billing Address</p>
+                <p className="text-xs font-mono uppercase tracking-wider text-[#97a3b6]">{t.billingAddress}</p>
                 <div className="rounded-md border border-[#343947] bg-[#1a1d24] px-3 py-2 text-xs font-mono text-[#e7edf8] whitespace-pre-wrap break-words">
                   {billingAddress}
                 </div>
               </div>
             ) : (
               <p className="text-sm font-mono text-[#97a3b6]">
-                PayPal transaction. No stored mock card metadata for this payment.
+                {t.paypalNoMock}
               </p>
             )}
           </div>
@@ -737,9 +745,9 @@ function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }
           <div className="border border-[#343947] rounded-lg p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="text-xs font-mono font-semibold text-[#e7edf8]">Delivery Recovery</p>
+                <p className="text-xs font-mono font-semibold text-[#e7edf8]">{t.deliveryRecovery}</p>
                 <p className="text-xs font-mono text-[#97a3b6] mt-1">
-                  Manual sync refreshes canonical state. Replay re-sends the latest merchant webhook with the same event ID and a new delivery ID.
+                  {t.recoveryDesc}
                 </p>
               </div>
               {isLoading && <Loader2 className="w-4 h-4 animate-spin text-[#FFD600]" />}
@@ -751,7 +759,7 @@ function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }
                 className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-mono border border-[#343947] text-[#97a3b6] hover:text-[#e7edf8] hover:bg-[#2a2d39] rounded-md transition-colors"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
-                Manual Sync
+                {t.manualSync}
               </button>
               <button
                 onClick={() => void handleReplay()}
@@ -759,7 +767,7 @@ function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }
                 className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-mono border border-[#FFD600]/30 text-[#FFD600] hover:bg-[#FFD600]/10 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {replayBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                Replay Webhook
+                {t.replayWebhook}
               </button>
             </div>
           </div>
@@ -767,11 +775,11 @@ function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }
           <div className="border border-[#343947] rounded-lg p-4 space-y-3">
             <div className="flex items-center gap-2">
               <ArrowRightLeft className="w-3.5 h-3.5 text-[#97a3b6]" />
-              <p className="text-xs font-mono font-semibold text-[#e7edf8]">Webhook Delivery History</p>
+              <p className="text-xs font-mono font-semibold text-[#e7edf8]">{t.webhookHistory}</p>
             </div>
             {!data?.event_history?.length ? (
               <p className="text-sm font-mono text-[#97a3b6]">
-                No gateway webhook event has been generated for this transaction yet.
+                {t.noWebhookYet}
               </p>
             ) : (
               <div className="space-y-3">
@@ -780,7 +788,7 @@ function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }
                     <div className="flex items-start justify-between gap-3">
                       <div className="space-y-1">
                         <p className="text-xs font-mono text-[#e7edf8]">{event.event}</p>
-                        <p className="text-xs font-mono text-[#97a3b6]">Event ID: {event.event_id}</p>
+                        <p className="text-xs font-mono text-[#97a3b6]">{t.eventId} {event.event_id}</p>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="inline-flex items-center rounded-full border border-[#343947] bg-[#2a2d39]/40 px-2 py-1 text-xs font-mono text-[#e7edf8]">
@@ -791,16 +799,16 @@ function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }
                           disabled={replayBusy}
                           className="px-2.5 py-1 text-xs font-mono border border-[#FFD600]/30 text-[#FFD600] rounded-md hover:bg-[#FFD600]/10 transition-colors disabled:opacity-40"
                         >
-                          Replay
+                          {t.replay}
                         </button>
                       </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 text-xs font-mono text-[#97a3b6]">
-                      <div>Attempts: {event.attempt_count}</div>
-                      <div>Latest HTTP: {event.latest_http_status ?? "—"}</div>
-                      <div>Next Retry: {event.next_retry_at ?? "—"}</div>
-                      <div>Last Delivery: {event.last_delivery_id ?? "—"}</div>
+                      <div>{t.attempts} {event.attempt_count}</div>
+                      <div>{t.latestHttp} {event.latest_http_status ?? "—"}</div>
+                      <div>{t.nextRetry} {event.next_retry_at ?? "—"}</div>
+                      <div>{t.lastDelivery} {event.last_delivery_id ?? "—"}</div>
                     </div>
 
                     {event.latest_error && (
@@ -812,21 +820,21 @@ function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }
                         <div key={delivery.delivery_id} className="rounded-md border border-[#343947]/70 px-2.5 py-2">
                           <div className="flex items-center justify-between gap-2">
                             <p className="text-xs font-mono text-[#e7edf8]">
-                              Attempt #{delivery.attempt_number} · {delivery.final_status}
+                              {t.attemptNum}{delivery.attempt_number} · {delivery.final_status}
                             </p>
                             <span className="text-xs font-mono text-[#97a3b6]">
-                              {delivery.http_status ?? "timeout"}
+                              {delivery.http_status ?? t.timeout}
                             </span>
                           </div>
                           <p className="mt-1 text-xs font-mono text-[#97a3b6]">
-                            Delivery ID: {delivery.delivery_id}
+                            {t.deliveryId} {delivery.delivery_id}
                           </p>
                           {delivery.error_message && (
                             <p className="mt-1 text-xs font-mono text-amber-400">{delivery.error_message}</p>
                           )}
                           {delivery.response_snippet && (
                             <p className="mt-1 text-xs font-mono text-[#97a3b6] break-all">
-                              Response: {delivery.response_snippet}
+                              {t.response} {delivery.response_snippet}
                             </p>
                           )}
                         </div>
@@ -844,6 +852,9 @@ function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }
 }
 
 export default function TransactionsPage() {
+  const { language } = useLanguage()
+  const t = transactionsCopy[language]
+
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<TxStatus | "All">("All")
   const [maskFilter, setMaskFilter] = useState<"All" | "Masked" | "Unmasked">("All")
@@ -920,12 +931,11 @@ export default function TransactionsPage() {
 
   return (
     <DashboardShell data-ui-version="transactions-boron-v1">
-
-      <main className="w-full px-6 md:px-8 py-8 space-y-6">
+      <main className="w-full px-6 md:px-8 py-8 space-y-6" data-ui-version="transactions-i18n-vi-phase3">
         <DashboardPageHeader
-  title="Transaction Ledger"
-  description="Monitor payment activity, lifecycle status, account routing, captures, refunds, voids, and webhook delivery."
-  eyebrow="TRANSACTIONS"
+  title={t.title}
+  description={t.description}
+  eyebrow={t.eyebrow}
   action={
     <div className="flex items-center gap-2">
       <button
@@ -933,14 +943,14 @@ export default function TransactionsPage() {
         className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-[#151821] bg-[#FFD600] border border-[#FFD600] rounded-md hover:bg-[#e6c100] transition-colors"
       >
         <FlaskConical className="w-4 h-4" />
-        Test Mock Charge
+        {t.testMockCharge}
       </button>
       <button
         onClick={handleExportCsv}
         className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-[#e7edf8] bg-[#2a2d39] border border-[#343947] rounded-md hover:bg-[#343947] transition-colors"
       >
         <Download className="w-4 h-4" />
-        Export CSV
+        {t.exportCsv}
       </button>
     </div>
   }
@@ -950,10 +960,10 @@ export default function TransactionsPage() {
 
         <div className="grid gap-4 md:grid-cols-4">
           {[
-            { label: "Volume (Page)", value: fmt(totalVolume), sub: `${transactions.length} of ${totalCount} transactions`, color: "border-[#FFD600]/20", accent: "text-[#FFD600]" },
-            { label: "Platform Fees", value: fmt(totalFees), sub: "2.5% commission", color: "border-emerald-400/20", accent: "text-emerald-400" },
-            { label: "Completed", value: completedCount.toString(), sub: `${((completedCount / Math.max(transactions.length, 1)) * 100).toFixed(1)}% success rate`, color: "border-[#343947]", accent: "text-[#e7edf8]" },
-            { label: "Item Masking Active", value: maskedCount.toString(), sub: `${((maskedCount / Math.max(transactions.length, 1)) * 100).toFixed(0)}% of page`, color: "border-violet-400/20", accent: "text-violet-400" },
+            { label: t.volumePage, value: fmt(totalVolume), sub: `${transactions.length} ${t.ofTransactions} ${totalCount} ${t.transactionsLabel}`, color: "border-[#FFD600]/20", accent: "text-[#FFD600]" },
+            { label: t.platformFees, value: fmt(totalFees), sub: `2.5% ${t.commission}`, color: "border-emerald-400/20", accent: "text-emerald-400" },
+            { label: t.completed, value: completedCount.toString(), sub: `${((completedCount / Math.max(transactions.length, 1)) * 100).toFixed(1)}% ${t.successRate}`, color: "border-[#343947]", accent: "text-[#e7edf8]" },
+            { label: t.itemMaskingActive, value: maskedCount.toString(), sub: `${((maskedCount / Math.max(transactions.length, 1)) * 100).toFixed(0)}% ${t.ofPage}`, color: "border-violet-400/20", accent: "text-violet-400" },
           ].map((item) => (
             <div key={item.label} className={`bg-[#151821] border ${item.color} rounded-lg p-4 relative overflow-hidden`} data-ui-version="grid-background-v1">
               <GridBackground />
@@ -973,7 +983,7 @@ export default function TransactionsPage() {
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search order, PayPal ID, store, product, or email"
+                  placeholder={t.searchPlaceholder}
                   className="flex-1 bg-transparent text-sm text-[#e7edf8] placeholder:text-[#97a3b6] focus:outline-none"
                 />
                 {search && (
@@ -987,7 +997,7 @@ export default function TransactionsPage() {
                 <div className="flex flex-wrap gap-1">
                   {(["All", ...ALL_STATUSES] as const).map((status) => {
                     const active = statusFilter === status
-                    const cfg = status === "All" ? null : STATUS_CFG[status]
+                    const cfg = status === "All" ? null : getStatusCfg(t)[status]
                     return (
                       <button
                         key={status}
@@ -998,7 +1008,7 @@ export default function TransactionsPage() {
                             : "bg-transparent text-[#97a3b6] border-[#343947] hover:text-[#e7edf8]"
                         }`}
                       >
-                        {status}
+                        {status === "All" ? t.all : cfg?.label}
                       </button>
                     )
                   })}
@@ -1011,7 +1021,7 @@ export default function TransactionsPage() {
                   }`}
                 >
                   <Filter className="w-3.5 h-3.5" />
-                  Filters
+                  {t.filters}
                 </button>
               </div>
             </div>
@@ -1028,14 +1038,14 @@ export default function TransactionsPage() {
                           maskFilter === value ? "bg-violet-400/10 text-violet-400" : "text-[#97a3b6] hover:text-[#e7edf8]"
                         }`}
                       >
-                        {value}
+                        {value === "All" ? t.all : value === "Masked" ? t.masked : t.unmasked}
                       </button>
                     ))}
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <p className="text-xs font-mono text-[#97a3b6] uppercase tracking-wider">From</p>
+                  <p className="text-xs font-mono text-[#97a3b6] uppercase tracking-wider">{t.from}</p>
                   <input
                     type="date"
                     value={dateFrom}
@@ -1045,7 +1055,7 @@ export default function TransactionsPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <p className="text-xs font-mono text-[#97a3b6] uppercase tracking-wider">To</p>
+                  <p className="text-xs font-mono text-[#97a3b6] uppercase tracking-wider">{t.to}</p>
                   <input
                     type="date"
                     value={dateTo}
@@ -1059,7 +1069,7 @@ export default function TransactionsPage() {
                     onClick={() => { setMaskFilter("All"); setDateFrom(""); setDateTo(""); setPage(1) }}
                     className="px-3 py-1.5 text-xs font-mono text-[#97a3b6] hover:text-[#e7edf8] border border-[#343947] rounded-md transition-colors"
                   >
-                    Clear Filters
+                    {t.clearFilters}
                   </button>
                 </div>
               </div>
@@ -1070,15 +1080,15 @@ export default function TransactionsPage() {
             <table className="w-full text-left text-sm">
               <thead className="bg-[#2a2d39]/30 border-b border-[#343947]">
                 <tr className="text-xs uppercase tracking-[0.22em] text-[#97a3b6]">
-                  <th className="px-4 py-3 font-medium">Date</th>
-                  <th className="px-4 py-3 font-medium">Order ID</th>
-                  <th className="px-4 py-3 font-medium">Store</th>
-                  <th className="px-4 py-3 font-medium">Original Product</th>
-                  <th className="px-4 py-3 font-medium">Masked Product</th>
-                  <th className="px-4 py-3 font-medium">PayPal Account</th>
-                  <th className="px-4 py-3 font-medium">Amount</th>
-                  <th className="px-4 py-3 font-medium">Payment Method</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium">{t.thDate}</th>
+                  <th className="px-4 py-3 font-medium">{t.thOrderId}</th>
+                  <th className="px-4 py-3 font-medium">{t.thStore}</th>
+                  <th className="px-4 py-3 font-medium">{t.thOriginalProduct}</th>
+                  <th className="px-4 py-3 font-medium">{t.thMaskedProduct}</th>
+                  <th className="px-4 py-3 font-medium">{t.thAccount}</th>
+                  <th className="px-4 py-3 font-medium">{t.thAmount}</th>
+                  <th className="px-4 py-3 font-medium">{t.thPaymentMethod}</th>
+                  <th className="px-4 py-3 font-medium">{t.thStatus}</th>
                 </tr>
               </thead>
               <tbody className="text-xs font-mono">
@@ -1087,7 +1097,7 @@ export default function TransactionsPage() {
                 ) : error ? (
                   <tr>
                     <td colSpan={9} className="px-4 py-10 text-center text-red-400">
-                      Failed to load transactions.
+                      {t.failedToLoadTx}
                     </td>
                   </tr>
                 ) : transactions.length === 0 ? (
@@ -1095,19 +1105,19 @@ export default function TransactionsPage() {
                     <td colSpan={9}>
                       <div className="flex flex-col items-center justify-center py-16 text-[#97a3b6]">
                         <ArrowRightLeft className="w-8 h-8 mb-3 opacity-30" />
-                        <p className="text-sm font-mono">No transactions match your filters</p>
+                        <p className="text-sm font-mono">{t.noTxMatch}</p>
                         <button
                           onClick={() => { setSearch(""); setStatusFilter("All"); setMaskFilter("All"); setDateFrom(""); setDateTo("") }}
                           className="mt-3 text-xs font-mono text-[#FFD600] hover:text-[#e6c100] transition-colors"
                         >
-                          Clear all filters
+                          {t.clearAllFilters}
                         </button>
                       </div>
                     </td>
                   </tr>
                 ) : (
                   transactions.map((tx) => {
-                    const cfg = STATUS_CFG[tx.status]
+                    const cfg = getStatusCfg(t)[tx.status]
                     const isSelected = selectedTx?.id === tx.id
                     return (
                       <Fragment key={tx.id}>
@@ -1143,7 +1153,7 @@ export default function TransactionsPage() {
                                 <span className="text-violet-400 truncate" title={tx.maskedProduct}>{tx.maskedProduct}</span>
                               </div>
                             ) : (
-                              <span className="text-[#97a3b6] text-xs">— not masked</span>
+                              <span className="text-[#97a3b6] text-xs">— {t.notMasked}</span>
                             )}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
@@ -1179,7 +1189,7 @@ export default function TransactionsPage() {
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-4 py-3 border-t border-[#343947]">
               <p className="text-xs font-mono text-[#97a3b6]">
-                Page {page} of {totalPages} {isValidating ? "· refreshing" : ""}
+                {t.page} {page} {t.of} {totalPages} {isValidating ? `· ${t.refreshing}` : ""}
               </p>
               <div className="flex items-center gap-1">
                 <button
@@ -1187,7 +1197,7 @@ export default function TransactionsPage() {
                   disabled={page === 1}
                   className="px-3 py-1.5 text-xs font-mono border border-[#343947] text-[#97a3b6] hover:text-[#e7edf8] disabled:opacity-40 disabled:cursor-not-allowed rounded-md transition-colors"
                 >
-                  Prev
+                  {t.prev}
                 </button>
                 {Array.from({ length: Math.min(7, totalPages) }, (_, index) => {
                   const targetPage = totalPages <= 7
@@ -1215,7 +1225,7 @@ export default function TransactionsPage() {
                   disabled={page === totalPages}
                   className="px-3 py-1.5 text-xs font-mono border border-[#343947] text-[#97a3b6] hover:text-[#e7edf8] disabled:opacity-40 disabled:cursor-not-allowed rounded-md transition-colors"
                 >
-                  Next
+                  {t.next}
                 </button>
               </div>
             </div>

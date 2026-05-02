@@ -23,6 +23,8 @@ import {
   Package,
   Tag
 } from "lucide-react"
+import { useLanguage } from "@/components/i18n/LanguageProvider"
+import { settingsCopy } from "@/lib/i18n/settings"
 import { validateProfileField } from "@/lib/profile-validation"
 import { SuperAdminDisplayProfiles } from "@/components/dashboard/SuperAdminDisplayProfiles"
 import { SuperAdminDescriptorTemplates } from "@/components/dashboard/SuperAdminDescriptorTemplates"
@@ -133,6 +135,9 @@ function Toast({ type, message, onDismiss }: { type: "success" | "error"; messag
 // ─── Payment Display Profile Component ────────────────────────────────────────
 
 function StorePaymentDisplayProfile({ storeId, storeName }: { storeId: string; storeName: string }) {
+  const { language } = useLanguage()
+  const t = settingsCopy[language]
+
   const { data, isLoading, mutate } = useSWR(`/api/merchant/stores/display-profile?storeId=${storeId}`, fetcher)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
@@ -194,9 +199,9 @@ function StorePaymentDisplayProfile({ storeId, storeName }: { storeId: string; s
         return
       }
       const data = await res.json()
-      setPreviewName(data.previewName || "Preview unavailable")
+      setPreviewName(data.previewName || t.networkError)
     } catch {
-      setPreviewName("Error loading preview")
+      setPreviewName(t.networkError)
     } finally {
       setPreviewLoading(false)
     }
@@ -229,13 +234,13 @@ function StorePaymentDisplayProfile({ storeId, storeName }: { storeId: string; s
       })
       const resData = await res.json()
       if (res.ok) {
-        setSuccess(resData.message || "Profile saved!")
+        setSuccess(resData.message || t.saved)
         mutate()
       } else {
-        setError(resData.error || "Failed to save profile")
+        setError(resData.error || t.networkError)
       }
     } catch {
-      setError("Network error")
+      setError(t.networkError)
     } finally {
       setSaving(false)
     }
@@ -248,47 +253,47 @@ function StorePaymentDisplayProfile({ storeId, storeName }: { storeId: string; s
   return (
     <div className="space-y-4 pt-6 mt-6 border-t border-[#343947]">
       <div className="flex items-center gap-2">
-        <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Payment Display Profile</label>
+        <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.paymentDisplayProfile}</label>
         {saving && <Loader2 className="w-3 h-3 text-[#FFD600] animate-spin" />}
       </div>
       
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Industry Vertical */}
         <div className="space-y-2.5">
-          <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Industry Vertical</label>
+          <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.industryVertical}</label>
           <select 
             value={form.industryVertical} 
             onChange={(e) => update({ industryVertical: e.target.value })}
             className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2.5 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
           >
-            <option value="automotive_tires">Automotive / Tires</option>
-            <option value="electronics">Electronics</option>
-            <option value="home_goods">Home Goods</option>
-            <option value="toys">Toys & Gifts</option>
-            <option value="beauty">Beauty / Fragrance</option>
-            <option value="apparel">Apparel</option>
-            <option value="generic_ecommerce">Generic Ecommerce</option>
+            <option value="automotive_tires">{t.indAuto}</option>
+            <option value="electronics">{t.indElectronics}</option>
+            <option value="home_goods">{t.indHome}</option>
+            <option value="toys">{t.indToys}</option>
+            <option value="beauty">{t.indBeauty}</option>
+            <option value="apparel">{t.indApparel}</option>
+            <option value="generic_ecommerce">{t.indGeneric}</option>
           </select>
         </div>
 
         {/* Display Mode */}
         <div className="space-y-2.5">
-          <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Display Mode</label>
+          <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.displayMode}</label>
           <select 
             value={form.displayMode} 
             onChange={(e) => update({ displayMode: e.target.value })}
             className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2.5 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
           >
-            <option value="BRAND_SEMANTIC">Brand + Semantic Order</option>
-            <option value="SEMANTIC_ORDER">Semantic Order Only</option>
-            <option value="REAL_SANITIZED">Sanitized Real Product Name</option>
-            <option value="LEGACY_GENERIC">Deprecated: Legacy Generic</option>
+            <option value="BRAND_SEMANTIC">{t.modeBrandSemantic}</option>
+            <option value="SEMANTIC_ORDER">{t.modeSemantic}</option>
+            <option value="REAL_SANITIZED">{t.modeSanitized}</option>
+            <option value="LEGACY_GENERIC">{t.modeLegacy}</option>
           </select>
         </div>
 
         {/* Public Brand Name */}
         <div className="space-y-2.5">
-          <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Public Brand Name</label>
+          <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.publicBrandName}</label>
           <input 
             value={form.publicBrandName} 
             onChange={(e) => update({ publicBrandName: e.target.value })}
@@ -299,7 +304,7 @@ function StorePaymentDisplayProfile({ storeId, storeName }: { storeId: string; s
 
         {/* Descriptor Prefix */}
         <div className="space-y-2.5">
-          <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Descriptor Prefix</label>
+          <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.descriptorPrefix}</label>
           <input 
             value={form.descriptorPrefix} 
             onChange={(e) => update({ descriptorPrefix: e.target.value })}
@@ -310,15 +315,15 @@ function StorePaymentDisplayProfile({ storeId, storeName }: { storeId: string; s
 
         {/* Line Item Policy */}
         <div className="space-y-2.5 sm:col-span-2">
-          <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Line Item Policy</label>
+          <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.lineItemPolicy}</label>
           <select 
             value={form.lineItemPolicy} 
             onChange={(e) => update({ lineItemPolicy: e.target.value })}
             className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2.5 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
           >
-            <option value="SINGLE_SEMANTIC_ITEM">Single Order Summary</option>
-            <option value="REAL_CART_ITEMS">Real Cart Items</option>
-            <option value="LEGACY_RANDOM_SPLIT">Legacy Random Split</option>
+            <option value="SINGLE_SEMANTIC_ITEM">{t.policySingle}</option>
+            <option value="REAL_CART_ITEMS">{t.policyReal}</option>
+            <option value="LEGACY_RANDOM_SPLIT">{t.policyLegacy}</option>
           </select>
         </div>
       </div>
@@ -326,21 +331,21 @@ function StorePaymentDisplayProfile({ storeId, storeName }: { storeId: string; s
       {/* Warnings */}
       {form.displayMode === "LEGACY_GENERIC" && form.industryVertical !== "generic_ecommerce" && (
         <div className="bg-[#4a3908]/50 border border-[#ca8a04]/50 text-[#facc15] text-[11px] font-mono px-4 py-3 rounded-md border-l-[3px] border-l-[#ca8a04]">
-          Generic service descriptors may confuse buyers. Recommended: Brand + Semantic Order.
+          {t.legacyModeWarning}
         </div>
       )}
       {form.lineItemPolicy === "LEGACY_RANDOM_SPLIT" && (
         <div className="bg-[#4a3908]/50 border border-[#ca8a04]/50 text-[#facc15] text-[11px] font-mono px-4 py-3 rounded-md border-l-[3px] border-l-[#ca8a04]">
-          This may create multiple PayPal line items that do not match the buyer&apos;s cart. Recommended: Single Order Summary.
+          {t.legacyPolicyWarning}
         </div>
       )}
 
       {/* Live Preview Box */}
       <div className="bg-[#1f222c] border border-[#343947] rounded-md p-5 space-y-3 mt-4 shadow-inner">
-        <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Live Preview</p>
+        <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.livePreview}</p>
         <div className="flex flex-col gap-1.5 text-[12px] font-mono text-[#e7edf8]">
-          <p>Buyer may see: <span className="text-[#FFD600] font-bold text-sm bg-[#151821] px-2 py-1 rounded">{previewLoading ? "Loading..." : previewName}</span></p>
-          <p className="text-[#6b7280] mt-2 text-[10px]">Your store receipt will still show the real product details.</p>
+          <p>{t.buyerMaySee}<span className="text-[#FFD600] font-bold text-sm bg-[#151821] px-2 py-1 rounded">{previewLoading ? t.loading : previewName}</span></p>
+          <p className="text-[#6b7280] mt-2 text-[10px]">{t.previewFooter}</p>
         </div>
       </div>
 
@@ -352,7 +357,7 @@ function StorePaymentDisplayProfile({ storeId, storeName }: { storeId: string; s
             saving ? "bg-[#FFD600]/50 text-black cursor-not-allowed" : "bg-[#FFD600] text-black hover:bg-[#e6c100]"
           }`}
         >
-          {saving ? "Saving..." : "Save Profile"}
+          {saving ? t.saving : t.saveProfile}
         </button>
         {success && <span className="text-sm font-medium text-emerald-400 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> {success}</span>}
         {error && <span className="text-sm font-medium text-red-400 flex items-center gap-1"><XCircle className="w-3 h-3" /> {error}</span>}
@@ -364,6 +369,9 @@ function StorePaymentDisplayProfile({ storeId, storeName }: { storeId: string; s
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
+  const { language } = useLanguage()
+  const t = settingsCopy[language]
+
   const { data: session } = useSession()
   const role = (session?.user?.role as "SUPER_ADMIN" | "MERCHANT") ?? "MERCHANT"
   const isSuperAdmin = role === "SUPER_ADMIN"
@@ -496,11 +504,11 @@ export default function SettingsPage() {
   // ── Password change ────────────────────────────────────────────────────────
   const handlePasswordChange = async () => {
     if (!settings.currentPassword || !settings.newPassword) {
-      setPwToast({ type: "error", message: "Both fields are required" })
+      setPwToast({ type: "error", message: t.bothFieldsRequired })
       return
     }
     if (settings.newPassword.length < 12) {
-      setPwToast({ type: "error", message: "New password must be at least 12 characters" })
+      setPwToast({ type: "error", message: t.passwordLengthWarning })
       return
     }
     setPwChanging(true)
@@ -522,7 +530,7 @@ export default function SettingsPage() {
         setPwToast({ type: "error", message: data.error ?? "Failed to change password" })
       }
     } catch {
-      setPwToast({ type: "error", message: "Network error" })
+      setPwToast({ type: "error", message: t.networkError })
     } finally {
       setPwChanging(false)
     }
@@ -531,7 +539,7 @@ export default function SettingsPage() {
   // ── Email change (request) ─────────────────────────────────────────────────
   const handleEmailRequest = async () => {
     if (!newEmailInput || !newEmailInput.includes("@")) {
-      setEmailToast({ type: "error", message: "Enter a valid email address" })
+      setEmailToast({ type: "error", message: t.invalidEmail })
       return
     }
     setEmailChanging(true)
@@ -559,7 +567,7 @@ export default function SettingsPage() {
   // ── Email change (verify) ─────────────────────────────────────────────────
   const handleEmailVerify = async () => {
     if (emailCode.length !== 6) {
-      setEmailToast({ type: "error", message: "Enter the 6-digit code" })
+      setEmailToast({ type: "error", message: t.enter6Digit })
       return
     }
     setEmailChanging(true)
@@ -633,7 +641,7 @@ export default function SettingsPage() {
         setSaveError(data.error ?? "Failed to update capture mode")
       }
     } catch {
-      setSaveError("Network error")
+      setSaveError(t.networkError)
     } finally {
       setCaptureSaving(null)
     }
@@ -675,7 +683,7 @@ export default function SettingsPage() {
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch {
-      setSaveError("Network error")
+      setSaveError(t.networkError)
     } finally {
       setCheckoutFlowSaving(null)
     }
@@ -747,19 +755,19 @@ export default function SettingsPage() {
   // ─── MERCHANT VIEW ──────────────────────────────────────────────────────────
   if (!isSuperAdmin) {
     return (
-      <DashboardShell>
+      <DashboardShell data-ui-version="settings-i18n-vi-phase8">
         <main className="px-4 md:px-8 py-8 w-full max-w-7xl mx-auto space-y-8">
 
           <DashboardPageHeader 
-            eyebrow="CONFIGURATION"
-            title="Settings"
-            description="Manage your stores, notifications, and account security"
+            eyebrow={t.eyebrow}
+            title={t.title}
+            description={t.description}
           />
 
           {/* Personalized badge */}
           <div className="flex items-center gap-2 text-sm font-medium text-emerald-400 bg-emerald-400/5 border border-emerald-400/20 rounded-md px-3 py-2">
             <Shield className="w-3.5 h-3.5 shrink-0" />
-            Personalized Security & Alerts — your configuration is isolated to your tenant
+            {t.personalizedSecurity}
           </div>
 
           {/* Save error */}
@@ -767,7 +775,7 @@ export default function SettingsPage() {
             <div className="flex items-start gap-3 bg-red-400/5 border border-red-400/20 rounded-lg px-4 py-3">
               <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
               <div className="text-xs font-mono">
-                <span className="text-red-400 font-semibold">Save failed: </span>
+                <span className="text-red-400 font-semibold">{t.saveFailed}</span>
                 <span className="text-[#97a3b6]">{saveError}</span>
               </div>
             </div>
@@ -788,8 +796,8 @@ export default function SettingsPage() {
             <div className={SECTION_CLASSES}>
               <div className="flex flex-col items-center justify-center py-16 gap-3 text-[#97a3b6]">
                 <Store className="w-8 h-8 opacity-30" />
-                <p className="text-sm font-mono">No stores configured yet</p>
-                <p className="text-xs font-mono">Create a store from the Stores page to get started</p>
+                <p className="text-sm font-mono">{t.noStoresConfigured}</p>
+                <p className="text-xs font-mono">{t.createStorePrompt}</p>
               </div>
             </div>
           ) : (
@@ -803,35 +811,35 @@ export default function SettingsPage() {
                     <p className="text-sm font-semibold text-[#e7edf8]">{store.name}</p>
                     <p className="text-sm leading-6 text-[#aab4c5]">
                       {store.isActive ? (
-                        <span className="text-emerald-400">● Active</span>
+                        <span className="text-emerald-400">● {t.active}</span>
                       ) : (
-                        <span className="text-red-400">● Inactive</span>
+                        <span className="text-red-400">● {t.inactive}</span>
                       )}
                     </p>
                   </div>
                 </div>
                 <div className={SECTION_BODY}>
                   <div className="space-y-2.5">
-                    <label className={LABEL}>API Key Hash</label>
+                    <label className={LABEL}>{t.apiKeyHash}</label>
                     <div className="flex items-center gap-2 bg-[#151821] border border-[#343947] rounded-md px-3 py-2">
                       <Key className="w-3.5 h-3.5 text-[#97a3b6] shrink-0" />
                       <code className="text-xs font-mono text-[#97a3b6] break-all">{store.apiKeyHash.substring(0, 32)}...</code>
                     </div>
                     <p className="text-sm leading-6 text-[#aab4c5]">
-                      Your API key was shown once at creation. Contact admin if you need it regenerated.
+                      {t.apiKeyDesc}
                     </p>
                   </div>
                   <div className="space-y-2.5">
-                    <label className={LABEL}>Webhook URL</label>
+                    <label className={LABEL}>{t.webhookUrl}</label>
                     <input
                       type="url"
                       value={store.webhookUrl ?? ""}
                       readOnly
                       className={`${INPUT} cursor-default`}
-                      placeholder="Not configured"
+                      placeholder={t.notConfigured}
                     />
                     <p className="text-sm leading-6 text-[#aab4c5]">
-                      Gateway sends IPN notifications to this URL. Update via the Stores page.
+                      {t.webhookDesc}
                     </p>
                   </div>
 
@@ -839,13 +847,13 @@ export default function SettingsPage() {
                   <div className="flex items-start justify-between gap-4 pt-2 border-t border-[#343947]">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <label className={LABEL}>Manual Capture (Delayed)</label>
+                        <label className={LABEL}>{t.manualCapture}</label>
                         {captureSaving === store.id && (
                           <Loader2 className="w-3 h-3 text-[#FFD600] animate-spin" />
                         )}
                       </div>
                       <p className="text-sm leading-6 text-[#aab4c5] max-w-md">
-                        If enabled, payments will be Authorized only. You must manually capture them from the Transaction Log within 7 days.
+                        {t.manualCaptureDesc}
                       </p>
                     </div>
                     <Toggle
@@ -857,7 +865,7 @@ export default function SettingsPage() {
 
                   <div className="space-y-3 pt-2 border-t border-[#343947]">
                     <div className="flex items-center gap-2">
-                      <label className={LABEL}>Checkout Experience</label>
+                      <label className={LABEL}>{t.checkoutExperience}</label>
                       {checkoutFlowSaving === store.id && (
                         <Loader2 className="w-3 h-3 text-[#FFD600] animate-spin" />
                       )}
@@ -874,30 +882,34 @@ export default function SettingsPage() {
                       >
                         <div className="flex items-center gap-2 mb-1">
                           <span className={`w-3 h-3 rounded-full border-2 flex-shrink-0 ${!store.checkoutFlowOverride ? "border-[#FFD600] bg-[#FFD600]" : "border-[#343947]"}`} />
-                          <span className="text-base font-semibold text-[#e7edf8]">Use Platform Default</span>
+                          <span className="text-base font-semibold text-[#e7edf8]">{t.usePlatformDefault}</span>
                         </div>
                         <p className="text-sm text-[#aab4c5] leading-6 pl-4">
-                          Currently using {store.checkoutFlow === "POPUP_BRIDGE" ? "Popup + Shield Bridge" : "Classic Redirect"}.
+                          {t.currentlyUsing} {store.checkoutFlow === "POPUP_BRIDGE" ? t.popupBridge : t.classicRedirect}.
                         </p>
                       </button>
-                      {CHECKOUT_FLOW_OPTIONS.map((option) => (
-                        <button
-                          key={option.value}
-                          onClick={() => handleCheckoutFlowChange(store, option.value)}
-                          disabled={checkoutFlowSaving === store.id}
-                          className={`text-left p-3 rounded-lg border transition-all disabled:opacity-60 ${
-                            store.checkoutFlowOverride && store.checkoutFlow === option.value
-                              ? "border-[#FFD600]/40 bg-[#FFD600]/5 text-[#e7edf8]"
-                              : "border-[#343947] bg-[#151821] text-[#97a3b6] hover:border-[#343947]/80 hover:text-[#e7edf8]"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className={`w-3 h-3 rounded-full border-2 flex-shrink-0 ${store.checkoutFlowOverride && store.checkoutFlow === option.value ? "border-[#FFD600] bg-[#FFD600]" : "border-[#343947]"}`} />
-                            <span className="text-base font-semibold text-[#e7edf8]">{option.label}</span>
-                          </div>
-                          <p className="text-sm text-[#aab4c5] leading-6 pl-4">{option.desc}</p>
-                        </button>
-                      ))}
+                      {CHECKOUT_FLOW_OPTIONS.map((option) => {
+                        const label = option.value === "POPUP_BRIDGE" ? t.popupBridge : t.classicRedirect
+                        const desc = option.value === "POPUP_BRIDGE" ? t.popupBridgeDesc : t.classicRedirectDesc
+                        return (
+                          <button
+                            key={option.value}
+                            onClick={() => handleCheckoutFlowChange(store, option.value)}
+                            disabled={checkoutFlowSaving === store.id}
+                            className={`text-left p-3 rounded-lg border transition-all disabled:opacity-60 ${
+                              store.checkoutFlowOverride && store.checkoutFlow === option.value
+                                ? "border-[#FFD600]/40 bg-[#FFD600]/5 text-[#e7edf8]"
+                                : "border-[#343947] bg-[#151821] text-[#97a3b6] hover:border-[#343947]/80 hover:text-[#e7edf8]"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`w-3 h-3 rounded-full border-2 flex-shrink-0 ${store.checkoutFlowOverride && store.checkoutFlow === option.value ? "border-[#FFD600] bg-[#FFD600]" : "border-[#343947]"}`} />
+                              <span className="text-base font-semibold text-[#e7edf8]">{label}</span>
+                            </div>
+                            <p className="text-sm text-[#aab4c5] leading-6 pl-4">{desc}</p>
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
                   
@@ -914,15 +926,15 @@ export default function SettingsPage() {
                 <Bell className="w-3.5 h-3.5 text-amber-400" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-[#e7edf8]">Notifications</p>
-                <p className="text-sm leading-6 text-[#aab4c5]">Receive Telegram alerts for every successful payment</p>
+                <p className="text-sm font-semibold text-[#e7edf8]">{t.notifications}</p>
+                <p className="text-sm leading-6 text-[#aab4c5]">{t.telegramDesc}</p>
               </div>
             </div>
             <div className={SECTION_BODY}>
               <div className="flex items-start gap-3 bg-amber-400/5 border border-amber-400/20 rounded-md px-3 py-2.5">
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
                 <p className="text-sm leading-6 text-[#aab4c5]">
-                  Create a bot via <span className="text-amber-400">@BotFather</span> on Telegram, add it to your group, and paste the credentials below.
+                  {t.botFatherInstructions}
                 </p>
               </div>
               {merchantTgLoading ? (
@@ -934,7 +946,7 @@ export default function SettingsPage() {
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div className="space-y-2.5">
-                      <label className={LABEL}>Telegram Bot Token</label>
+                      <label className={LABEL}>{t.telegramBotToken}</label>
                       <input
                         type="password"
                         value={settings.telegramToken}
@@ -945,7 +957,7 @@ export default function SettingsPage() {
                       />
                     </div>
                     <div className="space-y-2.5">
-                      <label className={LABEL}>Chat ID</label>
+                      <label className={LABEL}>{t.chatId}</label>
                       <input
                         value={settings.chatId}
                         onChange={e => update({ chatId: e.target.value })}
@@ -967,7 +979,7 @@ export default function SettingsPage() {
                       }`}
                     >
                       {saved ? <CheckCircle2 className="w-3 h-3" /> : saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-                      {saved ? "Saved" : saving ? "Saving..." : "Save Telegram Config"}
+                      {saved ? t.saved : saving ? t.saving : t.saveTelegramConfig}
                     </button>
                     <button
                       onClick={handleMerchantTelegramTest}
@@ -975,7 +987,7 @@ export default function SettingsPage() {
                       className="flex items-center gap-2 text-xs font-mono text-[#FFD600] border border-[#FFD600]/30 hover:bg-[#FFD600]/10 rounded-md px-3 py-1.5 transition-colors disabled:opacity-50"
                     >
                       {telegramTesting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
-                      {telegramTesting ? "Sending..." : "Send Test Alert"}
+                      {telegramTesting ? t.sending : t.sendTestAlert}
                     </button>
                     {telegramToast && (
                       <Toast type={telegramToast.type} message={telegramToast.message} onDismiss={() => setTelegramToast(null)} />
@@ -985,7 +997,7 @@ export default function SettingsPage() {
               )}
               <div className="flex items-center gap-2 text-sm leading-6 text-[#aab4c5] bg-[#2a2d39]/50 rounded-md px-3 py-2">
                 <Bell className="w-3 h-3 text-amber-400 shrink-0" />
-                You&#39;ll receive: 💰 Success! Received $X from [Store]. Account: [PP-ID].
+                {t.telegramExample}
               </div>
             </div>
           </div>
@@ -997,14 +1009,14 @@ export default function SettingsPage() {
                 <Lock className="w-3.5 h-3.5 text-violet-400" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-[#e7edf8]">Change Password</p>
-                <p className="text-sm leading-6 text-[#aab4c5]">Update your dashboard login password</p>
+                <p className="text-sm font-semibold text-[#e7edf8]">{t.changePassword}</p>
+                <p className="text-sm leading-6 text-[#aab4c5]">{t.changePasswordDesc}</p>
               </div>
             </div>
             <div className={SECTION_BODY}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div className="space-y-2.5">
-                  <label className={LABEL}>Current Password</label>
+                  <label className={LABEL}>{t.currentPassword}</label>
                   <div className="relative">
                     <input
                       type={showPassword ? "text" : "password"}
@@ -1023,14 +1035,14 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 <div className="space-y-2.5">
-                  <label className={LABEL}>New Password</label>
+                  <label className={LABEL}>{t.newPassword}</label>
                   <div className="relative">
                     <input
                       type={showNewPassword ? "text" : "password"}
                       value={settings.newPassword}
                       onChange={e => update({ newPassword: e.target.value })}
                       className={`${INPUT} pr-10`}
-                      placeholder="Min 12 characters"
+                      placeholder={t.min12Chars}
                       autoComplete="new-password"
                     />
                     <button
@@ -1045,7 +1057,7 @@ export default function SettingsPage() {
               {settings.newPassword && settings.newPassword.length < 12 && (
                 <div className="flex items-center gap-2 text-sm font-medium text-red-400">
                   <AlertTriangle className="w-3 h-3" />
-                  Password must be at least 12 characters
+                  {t.passwordLengthWarning}
                 </div>
               )}
               <div className="flex items-center gap-3">
@@ -1055,7 +1067,7 @@ export default function SettingsPage() {
                   className="flex items-center gap-2 px-3 py-1.5 text-xs font-mono rounded-md border border-violet-400/30 text-violet-400 hover:bg-violet-400/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {pwChanging ? <Loader2 className="w-3 h-3 animate-spin" /> : <Lock className="w-3 h-3" />}
-                  {pwChanging ? "Updating..." : "Update Password"}
+                  {pwChanging ? t.updating : t.updatePassword}
                 </button>
                 {pwToast && (
                   <Toast type={pwToast.type} message={pwToast.message} onDismiss={() => setPwToast(null)} />
@@ -1063,7 +1075,7 @@ export default function SettingsPage() {
               </div>
               <div className="flex items-center gap-2 text-sm leading-6 text-[#aab4c5] bg-[#2a2d39]/50 rounded-md px-3 py-2">
                 <Lock className="w-3 h-3 text-emerald-400 shrink-0" />
-                Passwords are hashed with bcrypt (12 rounds) and never stored in plain text
+                {t.bcryptDesc}
               </div>
             </div>
           </div>
@@ -1075,15 +1087,15 @@ export default function SettingsPage() {
                 <Mail className="w-3.5 h-3.5 text-sky-400" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-[#e7edf8]">Change Email</p>
-                <p className="text-sm leading-6 text-[#aab4c5]">Update your login email — requires OTP verification</p>
+                <p className="text-sm font-semibold text-[#e7edf8]">{t.changeEmail}</p>
+                <p className="text-sm leading-6 text-[#aab4c5]">{t.changeEmailDesc}</p>
               </div>
             </div>
             <div className={SECTION_BODY}>
               {emailStep === "idle" && (
                 <>
                   <div className="space-y-2.5">
-                    <label className={LABEL}>Current Email</label>
+                    <label className={LABEL}>{t.currentEmail}</label>
                     <input
                       type="email"
                       value={session?.user?.email ?? ""}
@@ -1092,7 +1104,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div className="space-y-2.5">
-                    <label className={LABEL}>New Email Address</label>
+                    <label className={LABEL}>{t.newEmailAddress}</label>
                     <input
                       type="email"
                       value={newEmailInput}
@@ -1108,7 +1120,7 @@ export default function SettingsPage() {
                       className="flex items-center gap-2 px-3 py-1.5 text-xs font-mono rounded-md border border-sky-400/30 text-sky-400 hover:bg-sky-400/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {emailChanging ? <Loader2 className="w-3 h-3 animate-spin" /> : <Mail className="w-3 h-3" />}
-                      {emailChanging ? "Sending..." : "Send Verification Code"}
+                      {emailChanging ? t.sending : t.sendVerificationCode}
                     </button>
                     {emailToast && (
                       <Toast type={emailToast.type} message={emailToast.message} onDismiss={() => setEmailToast(null)} />
@@ -1116,7 +1128,7 @@ export default function SettingsPage() {
                   </div>
                   <div className="flex items-center gap-2 text-sm leading-6 text-[#aab4c5] bg-[#2a2d39]/50 rounded-md px-3 py-2">
                     <Shield className="w-3 h-3 text-sky-400 shrink-0" />
-                    A 6-digit code will be sent to your <strong>current</strong> email for verification. Code expires in 10 minutes.
+                    {t.otpInstructions}
                   </div>
                 </>
               )}
@@ -1124,13 +1136,13 @@ export default function SettingsPage() {
               {emailStep === "verify" && (
                 <>
                   <div className="bg-sky-400/5 border border-sky-400/20 rounded-md px-4 py-3 space-y-2">
-                    <p className="text-xs font-mono text-sky-400 font-semibold">Enter Verification Code</p>
+                    <p className="text-xs font-mono text-sky-400 font-semibold">{t.enterVerificationCode}</p>
                     <p className="text-sm leading-6 text-[#aab4c5]">
-                      A 6-digit code has been sent to your current email. Enter it below to confirm the change.
+                      {t.otpSentMsg}
                     </p>
                   </div>
                   <div className="space-y-2.5">
-                    <label className={LABEL}>6-Digit Code</label>
+                    <label className={LABEL}>{t.sixDigitCode}</label>
                     <input
                       type="text"
                       value={emailCode}
@@ -1148,13 +1160,13 @@ export default function SettingsPage() {
                       className="flex items-center gap-2 px-3 py-1.5 text-xs font-mono rounded-md bg-sky-400 text-[#151821] hover:bg-sky-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {emailChanging ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
-                      {emailChanging ? "Verifying..." : "Verify & Update Email"}
+                      {emailChanging ? t.verifying : t.verifyUpdateEmail}
                     </button>
                     <button
                       onClick={() => { setEmailStep("idle"); setEmailCode(""); setEmailToast(null) }}
                       className="px-3 py-1.5 text-xs font-mono text-[#97a3b6] hover:text-[#e7edf8] border border-[#343947] rounded-md transition-colors"
                     >
-                      Cancel
+                      {t.cancel}
                     </button>
                     {emailToast && (
                       <Toast type={emailToast.type} message={emailToast.message} onDismiss={() => setEmailToast(null)} />

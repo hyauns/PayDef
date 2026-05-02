@@ -2,6 +2,8 @@
 
 import Link from "next/link"
 import { useState, useCallback, useId, useEffect } from "react"
+import { useLanguage } from "@/components/i18n/LanguageProvider"
+import { storesCopy } from "@/lib/i18n/stores"
 import {
   Plus,
   Eye,
@@ -252,6 +254,9 @@ function ApiKeyCell({
   apiKey: string
   onRegenerate: () => void
 }) {
+  const { language } = useLanguage()
+  const t = storesCopy[language]
+
   const [revealed, setRevealed] = useState(() => canRevealApiKey(apiKey))
   const [copied, setCopied] = useState(false)
   const [regenConfirm, setRegenConfirm] = useState(false)
@@ -278,12 +283,12 @@ function ApiKeyCell({
   return (
     <div className="flex items-center gap-1.5 min-w-[300px]">
       <code className="font-mono text-sm text-[#FFD600] flex-1 truncate max-w-[220px]">
-        {hasLiveKey ? (revealed ? apiKey : maskKey(apiKey)) : "Regenerate to reveal a new key"}
+        {hasLiveKey ? (revealed ? apiKey : maskKey(apiKey)) : t.regenToReveal}
       </code>
       <div className="flex items-center gap-0.5 shrink-0">
         <button
           onClick={() => hasLiveKey && setRevealed((v) => !v)}
-          title={hasLiveKey ? (revealed ? "Hide key" : "Reveal key") : "Stored keys cannot be revealed. Regenerate to view a new key once."}
+          title={hasLiveKey ? (revealed ? t.tooltipHide : t.tooltipReveal) : t.tooltipCannotReveal}
           disabled={!hasLiveKey}
           className="p-1 text-[#97a3b6] hover:text-[#e7edf8] transition-colors rounded disabled:opacity-40 disabled:cursor-not-allowed"
         >
@@ -291,7 +296,7 @@ function ApiKeyCell({
         </button>
         <button
           onClick={handleCopy}
-          title={hasLiveKey ? "Copy key" : "Stored keys cannot be copied. Regenerate to get a new key once."}
+          title={hasLiveKey ? t.tooltipCopy : t.tooltipCannotCopy}
           disabled={!hasLiveKey}
           className="p-1 text-[#97a3b6] hover:text-[#e7edf8] transition-colors rounded disabled:opacity-40 disabled:cursor-not-allowed"
         >
@@ -303,7 +308,7 @@ function ApiKeyCell({
         </button>
         <button
           onClick={handleRegen}
-          title={regenConfirm ? "Click again to confirm" : "Regenerate key"}
+          title={regenConfirm ? t.tooltipConfirmRegen : t.tooltipRegen}
           className={`p-1 transition-colors rounded ${
             regenConfirm
               ? "text-amber-400 hover:text-amber-300"
@@ -419,6 +424,9 @@ function IntegrationSummary({
   revealedWebhookSecret?: string | null
   webhookBusy?: boolean
 }) {
+  const { language } = useLanguage()
+  const t = storesCopy[language]
+
   const gatewayBaseUrl = getGatewayBaseUrl()
   const checkoutEndpoint = `${gatewayBaseUrl}/api/gateway/checkout`
 
@@ -426,9 +434,9 @@ function IntegrationSummary({
     <div className="space-y-3 border border-[#343947] rounded-lg p-4 bg-[#1a1d24]">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">Integration</p>
+          <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">{t.integration}</p>
           <p className="text-sm font-mono text-[#97a3b6] mt-1">
-            Copy these values into the merchant store. Webhook signing uses HMAC-SHA256.
+            {t.integrationDesc}
           </p>
         </div>
         <span className={`inline-flex items-center gap-1.5 text-xs font-mono px-2 py-0.5 rounded-full border ${
@@ -437,28 +445,28 @@ function IntegrationSummary({
             : "bg-amber-400/10 text-amber-400 border-amber-400/20"
         }`}>
           <span className={`w-1.5 h-1.5 rounded-full ${store.hasWebhookSecret ? "bg-emerald-400" : "bg-amber-400"}`} />
-          {store.hasWebhookSecret ? "Webhook Signed" : "Secret Missing"}
+          {store.hasWebhookSecret ? t.webhookSigned : t.secretMissing}
         </span>
       </div>
 
       <div className="grid grid-cols-1 gap-3">
         <IntegrationField
-          label="Gateway Checkout Endpoint"
+          label={t.endpointCheckout}
           value={checkoutEndpoint}
           copyKey="checkout"
           copied={copied}
           onCopy={onCopy}
         />
         <IntegrationField
-          label="Store Webhook URL"
-          value={store.webhookUrl || "Set your webhook URL first"}
+          label={t.endpointWebhook}
+          value={store.webhookUrl || t.setWebhookUrlFirst}
           copyKey="webhookUrl"
           copied={copied}
           onCopy={onCopy}
         />
         {store.shieldDomain && (
           <IntegrationField
-            label="Assigned Shield Domain"
+            label={t.assignedShield}
             value={store.shieldDomain}
             copyKey="webhookUrl"
             copied={copied}
@@ -467,7 +475,7 @@ function IntegrationSummary({
         )}
         {store.successReturnUrl && (
           <IntegrationField
-            label="Success Return URL"
+            label={t.labelSuccessReturn}
             value={store.successReturnUrl}
             copyKey="webhookUrl"
             copied={copied}
@@ -476,7 +484,7 @@ function IntegrationSummary({
         )}
         {store.cancelReturnUrl && (
           <IntegrationField
-            label="Cancel Return URL"
+            label={t.labelCancelReturn}
             value={store.cancelReturnUrl}
             copyKey="webhookUrl"
             copied={copied}
@@ -491,22 +499,22 @@ function IntegrationSummary({
           className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-mono rounded-md border border-[#343947] text-[#e7edf8] hover:bg-[#2a2d39] transition-colors"
         >
           <ExternalLink className="w-3.5 h-3.5" />
-          Shield Domain Guide
+          {t.btnShieldGuide}
         </Link>
         <Link
           href="/docs/api"
           className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-mono rounded-md border border-[#FFD600]/30 text-[#FFD600] hover:bg-[#FFD600]/10 transition-colors"
         >
           <ExternalLink className="w-3.5 h-3.5" />
-          Open API Docs
+          {t.btnOpenApiDocs}
         </Link>
       </div>
 
       <div className="flex items-center justify-between gap-3 rounded-md border border-[#343947] bg-[#2a2d39]/30 px-3 py-2">
         <div>
-          <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">Webhook Secret</p>
+          <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">{t.webhookSecret}</p>
           <p className="text-sm font-mono text-[#97a3b6] mt-1">
-            Regenerate to reveal a new signing secret once, then copy it into the merchant store.
+            {t.webhookSecretDesc}
           </p>
         </div>
         <button
@@ -515,13 +523,13 @@ function IntegrationSummary({
           className="flex items-center gap-2 px-3 py-1.5 text-xs font-mono rounded-md border border-[#FFD600]/30 text-[#FFD600] hover:bg-[#FFD600]/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {webhookBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-          {store.hasWebhookSecret ? "Regenerate" : "Generate"}
+          {store.hasWebhookSecret ? t.btnRegenerate : t.btnGenerate}
         </button>
       </div>
 
       {revealedWebhookSecret && (
         <IntegrationField
-          label="Latest Webhook Secret"
+          label={t.latestSecret}
           value={revealedWebhookSecret}
           copyKey="secret"
           copied={copied}
@@ -530,7 +538,7 @@ function IntegrationSummary({
       )}
 
       <div className="space-y-2">
-        <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">Webhook Events</p>
+        <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">{t.webhookEvents}</p>
         <div className="flex flex-wrap gap-2">
           {STORE_WEBHOOK_EVENTS.map((eventName) => (
             <span
@@ -554,6 +562,9 @@ interface CreateModalProps {
 }
 
 function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
+  const { language } = useLanguage()
+  const t = storesCopy[language]
+
   const formId = useId()
   const [name, setName] = useState("")
   const [platform, setPlatform] = useState("Shopify")
@@ -642,8 +653,8 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
                 <StoreIcon className="w-3.5 h-3.5 text-[#FFD600]" />
               </div>
               <div>
-                <h2 className="text-sm font-semibold font-mono text-[#e7edf8]">Create New Store</h2>
-                <p className="text-sm font-mono text-[#97a3b6]">Generate credentials for a new client</p>
+                <h2 className="text-sm font-semibold font-mono text-[#e7edf8]">{t.modalCreateTitle}</h2>
+                <p className="text-sm font-mono text-[#97a3b6]">{t.modalCreateDesc}</p>
               </div>
             </div>
             <button
@@ -659,7 +670,7 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
             {/* Store Name */}
             <div className="space-y-1.5">
               <label htmlFor={`${formId}-name`} className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">
-                Store Name
+                {t.labelStoreName}
               </label>
               <input
                 id={`${formId}-name`}
@@ -673,7 +684,7 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
             {/* Platform */}
             <div className="space-y-1.5">
               <label htmlFor={`${formId}-platform`} className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">
-                Platform
+                {t.labelPlatform}
               </label>
               <select
                 id={`${formId}-platform`}
@@ -689,7 +700,7 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
 
             <div className="space-y-1.5">
               <label htmlFor={`${formId}-provider`} className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">
-                Payment Provider
+                {t.labelProvider}
               </label>
               <select
                 id={`${formId}-provider`}
@@ -698,18 +709,20 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
                 className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
               >
                 {PROVIDER_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
+                  <option key={option.value} value={option.value}>
+                    {option.value === "PAYPAL" ? "PayPal" : option.value === "STRIPE" ? "Stripe" : "Custom Mock"}
+                  </option>
                 ))}
               </select>
               <p className="text-xs font-mono text-[#97a3b6]">
-                {PROVIDER_OPTIONS.find((option) => option.value === providerType)?.description}
+                {providerType === "PAYPAL" ? t.providerPaypal : providerType === "STRIPE" ? t.providerStripe : t.providerCustomMock}
               </p>
             </div>
 
             {/* Webhook URL */}
             <div className="space-y-1.5">
               <label htmlFor={`${formId}-webhook`} className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">
-                Webhook URL <span className="text-[#97a3b6]/50">(optional)</span>
+                {t.labelWebhookUrl} <span className="text-[#97a3b6]/50">{t.optional}</span>
               </label>
               <input
                 id={`${formId}-webhook`}
@@ -722,7 +735,7 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
 
             {/* Credentials info */}
             <div className="space-y-2">
-              <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">Credentials</p>
+              <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">{t.modalCredentials}</p>
 
               {error && (
                 <div className="flex items-center gap-2 text-xs font-mono text-red-400 bg-red-400/5 border border-red-400/20 rounded-md px-3 py-2">
@@ -735,7 +748,7 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
                 <div className="bg-[#1a1d24] border border-emerald-400/20 rounded-md p-3 space-y-2.5">
                   {/* Store ID */}
                   <div>
-                    <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider mb-1">Store ID</p>
+                    <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider mb-1">{t.thStoreID}</p>
                     <div className="flex items-center gap-2">
                       <code className="font-mono text-xs text-[#e7edf8] flex-1 truncate">{generated.id}</code>
                       <button
@@ -748,7 +761,7 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
                   </div>
                   {/* API Key */}
                   <div>
-                    <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider mb-1">API Key</p>
+                    <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider mb-1">{t.labelApiKey}</p>
                     <div className="flex items-center gap-2">
                       <code className="font-mono text-xs text-[#FFD600] flex-1 truncate">{generated.key}</code>
                       <button
@@ -760,7 +773,7 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
                     </div>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider mb-1">Webhook Secret</p>
+                    <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider mb-1">{t.webhookSecret}</p>
                     <div className="flex items-center gap-2">
                       <code className="font-mono text-xs text-amber-400 flex-1 truncate">{generated.secret}</code>
                       <button
@@ -772,21 +785,21 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
                     </div>
                   </div>
                   <IntegrationField
-                    label="Gateway Checkout Endpoint"
+                    label={t.endpointCheckout}
                     value={`${getGatewayBaseUrl()}/api/gateway/checkout`}
                     copyKey="checkout"
                     copied={copied}
                     onCopy={handleCopy}
                   />
                   <p className="text-xs font-mono text-amber-400/80">
-                    ⚠ Copy the API key now — it cannot be retrieved again after you close this modal.
+                    {t.warningCopyNow}
                   </p>
                 </div>
               ) : (
                 <div className="bg-[#2a2d39]/40 border border-dashed border-[#343947] rounded-md px-4 py-5 text-center">
                   <Key className="w-5 h-5 text-[#97a3b6] mx-auto mb-2" />
                   <p className="text-xs font-mono text-[#97a3b6]">
-                    Store ID, API Key, and Webhook Secret are generated automatically when you click &quot;Create Store&quot;
+                    {t.placeholderAutoGenerate}
                   </p>
                 </div>
               )}
@@ -799,7 +812,7 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
               onClick={onClose}
               className="flex-1 px-4 py-2 text-xs font-mono text-[#97a3b6] border border-[#343947] rounded-md hover:bg-[#2a2d39] transition-colors"
             >
-              Cancel
+              {t.btnCancel}
             </button>
             <button
               onClick={handleCreate}
@@ -807,7 +820,7 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
               className="flex-1 px-4 py-2 text-xs font-mono text-background bg-[#FFD600] hover:bg-[#e6c100] rounded-md transition-colors font-semibold disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
             >
               {saving && <Loader2 className="w-3 h-3 animate-spin" />}
-              {generated && generated.id !== "(auto-generated)" ? "Done — Close" : saving ? "Creating..." : "Create Store"}
+              {generated && generated.id !== "(auto-generated)" ? t.btnDoneClose : saving ? t.btnCreating : t.btnCreateStoreAction}
             </button>
           </div>
         </div>
@@ -828,6 +841,9 @@ interface SlideOverProps {
 }
 
 function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, onRegenerateWebhookSecret }: SlideOverProps) {
+  const { language } = useLanguage()
+  const t = storesCopy[language]
+
   const [draft, setDraft] = useState<Store | null>(store)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -900,7 +916,7 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
           <div className="flex items-center gap-3">
             <ChevronRight className="w-4 h-4 text-[#97a3b6]" />
             <div>
-              <p className="text-sm font-mono text-[#97a3b6]">Editing Store</p>
+              <p className="text-sm font-mono text-[#97a3b6]">{t.slideEditingStore}</p>
               <h2 className="text-sm font-semibold font-mono text-[#e7edf8]">{draft.name}</h2>
             </div>
           </div>
@@ -924,9 +940,9 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
           {/* Quick stats */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: "Volume", value: `$${(draft.totalProcessed / 1000).toFixed(1)}k` },
-              { label: "Transactions", value: draft.txCount.toLocaleString() },
-              { label: "Success Rate", value: `${draft.successRate}%` },
+              { label: t.statVolume, value: `$${(draft.totalProcessed / 1000).toFixed(1)}k` },
+              { label: t.statTransactions, value: draft.txCount.toLocaleString() },
+              { label: t.statSuccessRate, value: `${draft.successRate}%` },
             ].map((s) => (
               <div key={s.label} className="bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2.5 text-center">
                 <p className="font-mono text-sm font-semibold text-[#e7edf8]">{s.value}</p>
@@ -937,7 +953,7 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
 
           {/* Store Name */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">Store Name</label>
+            <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">{t.labelStoreName}</label>
             <input
               value={draft.name}
               onChange={(e) => update({ name: e.target.value })}
@@ -947,7 +963,7 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
 
           {/* Platform */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">Platform</label>
+            <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">{t.labelPlatform}</label>
             <select
               value={draft.platform}
               onChange={(e) => update({ platform: e.target.value })}
@@ -960,24 +976,26 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">Payment Provider</label>
+            <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">{t.labelProvider}</label>
             <select
               value={draft.providerType}
               onChange={(e) => update({ providerType: e.target.value as ProviderType })}
               className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
             >
               {PROVIDER_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
+                <option key={option.value} value={option.value}>
+                  {option.value === "PAYPAL" ? "PayPal" : option.value === "STRIPE" ? "Stripe" : "Custom Mock"}
+                </option>
               ))}
             </select>
             <p className="text-xs font-mono text-[#97a3b6]">
-              {PROVIDER_OPTIONS.find((option) => option.value === draft.providerType)?.description}
+              {draft.providerType === "PAYPAL" ? t.providerPaypal : draft.providerType === "STRIPE" ? t.providerStripe : t.providerCustomMock}
             </p>
           </div>
 
           {/* Webhook URL */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">Webhook URL</label>
+            <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">{t.labelWebhookUrl}</label>
             <div className="flex items-center gap-2">
               <input
                 value={draft.webhookUrl}
@@ -998,28 +1016,28 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">Shield Domain</label>
+            <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">{t.labelShieldDomain}</label>
             <select
               value={draft.shieldDomain}
               onChange={(e) => update({ shieldDomain: e.target.value })}
               className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
             >
-              <option value="">No shield domain assigned</option>
+              <option value="">{t.noShieldDomain}</option>
               {selectableShieldDomains.map((domain) => (
                 <option key={domain} value={domain}>
                   {domain}
-                  {domain === draft.shieldDomain && !readyShieldDomains.includes(domain) ? " (current assignment needs attention)" : ""}
+                  {domain === draft.shieldDomain && !readyShieldDomains.includes(domain) ? t.shieldDomainWarning : ""}
                 </option>
               ))}
             </select>
             <p className="text-xs font-mono text-[#97a3b6]">
-              Only active domains with a healthy popup bridge are offered here.
+              {t.shieldDomainDesc}
             </p>
           </div>
 
           <div className="grid grid-cols-1 gap-3">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">Success Return URL</label>
+              <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">{t.labelSuccessReturn}</label>
               <input
                 value={draft.successReturnUrl}
                 onChange={(e) => update({ successReturnUrl: e.target.value })}
@@ -1027,12 +1045,12 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
                 className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
               />
               <p className="text-xs font-mono text-[#97a3b6]">
-                Buyers return here after a confirmed shield-domain success flow.
+                {t.successReturnDesc}
               </p>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">Cancel Return URL</label>
+              <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">{t.labelCancelReturn}</label>
               <input
                 value={draft.cancelReturnUrl}
                 onChange={(e) => update({ cancelReturnUrl: e.target.value })}
@@ -1040,24 +1058,24 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
                 className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
               />
               <p className="text-xs font-mono text-[#97a3b6]">
-                Optional fallback for buyer-canceled or expired checkout returns.
+                {t.cancelReturnDesc}
               </p>
             </div>
           </div>
 
           {/* API Key (read-only in panel, managed via table) */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">API Key</label>
+            <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">{t.labelApiKey}</label>
             <div className="flex items-center gap-2 bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2">
               <code className="flex-1 font-mono text-sm text-[#FFD600] truncate">{maskKey(draft.apiKey)}</code>
               <Key className="w-3.5 h-3.5 text-[#97a3b6] shrink-0" />
             </div>
-            <p className="text-xs font-mono text-[#97a3b6]">Use the Regenerate button in the table to rotate this key.</p>
+            <p className="text-xs font-mono text-[#97a3b6]">{t.regenApiKeyDesc}</p>
           </div>
 
           {/* Status */}
           <div className="space-y-2">
-            <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">Status</label>
+            <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">{t.labelStatus}</label>
             <div className="grid grid-cols-3 gap-2">
               {statuses.map((s) => {
                 const c = statusConfig[s]
@@ -1073,7 +1091,7 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
                     }`}
                   >
                     <span className={`w-2 h-2 rounded-full ${active ? c.dot : "bg-border"}`} />
-                    {s}
+                    {s === "Active" ? t.filterActive : s === "Trial" ? t.filterTrial : t.filterSuspended}
                   </button>
                 )
               })}
@@ -1083,16 +1101,16 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
           {/* Gateway Access toggle */}
           <div className="flex items-center justify-between border border-[#343947] rounded-md px-4 py-3 bg-[#1a1d24]">
             <div>
-              <p className="text-xs font-mono font-medium text-[#e7edf8]">Gateway Access</p>
+              <p className="text-xs font-mono font-medium text-[#e7edf8]">{t.labelGatewayAccess}</p>
               <p className="text-sm font-mono text-[#97a3b6] mt-0.5">
-                {draft.enabled ? "Store can route payments through the gateway" : "Store is blocked from the gateway"}
+                {draft.enabled ? t.gatewayEnabled : t.gatewayDisabled}
               </p>
             </div>
             <ToggleSwitch enabled={draft.enabled} onChange={(v) => update({ enabled: v })} />
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">Checkout Experience</label>
+            <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider">{t.labelCheckoutExp}</label>
             <div className="grid grid-cols-1 gap-2">
               {CHECKOUT_FLOW_OPTIONS.map((option) => {
                 const active = draft.checkoutFlow === option.value
@@ -1108,19 +1126,19 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
                   >
                     <div className="flex items-center gap-2 mb-1">
                       <span className={`w-2 h-2 rounded-full border-2 flex-shrink-0 ${active ? "border-[#FFD600] bg-[#FFD600]" : "border-[#97a3b6]"}`} />
-                      <span className="text-xs font-mono font-semibold">{option.label}</span>
+                      <span className="text-xs font-mono font-semibold">{option.value === "REDIRECT" ? t.classicRedirectLabel : t.popupBridgeLabel}</span>
                     </div>
-                    <p className="text-xs font-mono leading-relaxed pl-4">{option.desc}</p>
+                    <p className="text-xs font-mono leading-relaxed pl-4">{option.value === "REDIRECT" ? t.classicRedirectDesc : t.popupBridgeDesc}</p>
                   </button>
                 )
               })}
             </div>
             <p className="text-xs font-mono text-[#97a3b6]">
-              Existing API clients remain compatible because the gateway still returns the classic <code>approvalUrl</code>.
+              {t.checkoutExpDesc}
             </p>
             {draft.checkoutFlow === "POPUP_BRIDGE" && !draft.successReturnUrl && !draft.cancelReturnUrl && (
               <p className="text-xs font-mono text-amber-400">
-                Add at least one return URL to send buyers back to the merchant storefront after shield-domain completion.
+                {t.checkoutExpWarning}
               </p>
             )}
           </div>
@@ -1137,20 +1155,20 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
           {/* Metadata */}
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2.5">
-              <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider mb-1">Created</p>
+              <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider mb-1">{t.labelCreated}</p>
               <p className="text-xs font-mono text-[#e7edf8]">{draft.createdAt}</p>
             </div>
             <div className="bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2.5">
-              <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider mb-1">Last Ping</p>
+              <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase tracking-wider mb-1">{t.labelLastPing}</p>
               <p className="text-xs font-mono text-[#e7edf8]">{draft.lastPing}</p>
             </div>
           </div>
 
           {/* Danger zone */}
           <div className="border border-red-500/20 rounded-lg p-4 space-y-2 bg-red-500/5">
-            <p className="text-xs font-mono text-red-400 uppercase tracking-wider font-semibold">Danger Zone</p>
+            <p className="text-xs font-mono text-red-400 uppercase tracking-wider font-semibold">{t.dangerZone}</p>
             <p className="text-sm font-mono text-[#97a3b6]">
-              Permanently removes this store and invalidates all API credentials. This cannot be undone.
+              {t.dangerDesc}
             </p>
             <button
               onClick={async () => {
@@ -1169,7 +1187,7 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
               className="flex items-center gap-2 text-xs font-mono text-red-400 border border-red-500/30 hover:bg-red-500/10 rounded-md px-3 py-1.5 transition-colors"
             >
               {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-              {deleting ? "Deleting..." : "Delete Store"}
+              {deleting ? t.btnDeleting : t.btnDeleteStore}
             </button>
           </div>
         </div>
@@ -1180,14 +1198,14 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
             onClick={onClose}
             className="flex-1 px-4 py-2 text-xs font-mono text-[#97a3b6] border border-[#343947] rounded-md hover:bg-[#2a2d39] transition-colors"
           >
-            Cancel
+            {t.btnCancel}
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
             className="flex-1 px-4 py-2 text-xs font-mono text-background bg-[#FFD600] hover:bg-[#e6c100] rounded-md transition-colors font-semibold"
           >
-            {saving ? "Saving..." : "Save Changes"}
+            {saving ? t.btnSaving : t.btnSaveChanges}
           </button>
         </div>
       </aside>
@@ -1208,6 +1226,9 @@ function RowMenu({
   onToggle: () => void | Promise<void>
   onDelete: () => void | Promise<void>
 }) {
+  const { language } = useLanguage()
+  const t = storesCopy[language]
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -1221,18 +1242,18 @@ function RowMenu({
       <DropdownMenuContent align="end" className="w-44 font-mono z-50">
         <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit() }}>
           <ChevronRight className="w-3.5 h-3.5 mr-2" />
-          Edit Details
+          {t.menuEdit}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={(e) => { e.stopPropagation(); void onToggle() }}>
           {store.enabled ? (
             <>
               <AlertTriangle className="w-3.5 h-3.5 mr-2" />
-              Disable Access
+              {t.menuDisable}
             </>
           ) : (
             <>
               <ShieldCheck className="w-3.5 h-3.5 mr-2" />
-              Enable Access
+              {t.menuEnable}
             </>
           )}
         </DropdownMenuItem>
@@ -1241,7 +1262,7 @@ function RowMenu({
           onClick={(e) => { e.stopPropagation(); void onDelete() }}
         >
           <Trash2 className="w-3.5 h-3.5 mr-2" />
-          Delete Store
+          {t.menuDelete}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -1251,6 +1272,9 @@ function RowMenu({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function StoresPage() {
+  const { language } = useLanguage()
+  const t = storesCopy[language]
+
   const [stores, setStores] = useState<Store[]>([])
   const [selectedStore, setSelectedStore] = useState<Store | null>(null)
   const [showCreate, setShowCreate] = useState(false)
@@ -1448,21 +1472,21 @@ export default function StoresPage() {
   }, [])
 
   return (
-    <DashboardShell data-ui-version="stores-dashboard-shell-v2">
+    <DashboardShell data-ui-version="stores-i18n-vi-phase7">
       <main className="w-full px-6 md:px-8 py-8 space-y-5 w-full">
 
         {/* Page header */}
         <DashboardPageHeader
-  title="Connected Stores"
-  description="Manage ecommerce stores, API access, webhook endpoints, and gateway configuration."
-  eyebrow="STORES"
+  title={t.title}
+  description={t.description}
+  eyebrow={t.eyebrow}
   action={
     <button
       onClick={() => setShowCreate(true)}
       className="flex items-center gap-2 text-sm font-semibold text-[#151821] bg-[#FFD600] hover:bg-[#e6c100] transition-colors rounded-md px-4 py-2.5"
     >
       <Plus className="w-4 h-4" />
-      Create New Store
+      {t.btnCreateStore}
     </button>
   }
 />
@@ -1471,30 +1495,30 @@ export default function StoresPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
             {
-              label: "Total Connected Stores",
+              label: t.statTotalStores,
               value: stores.length.toString(),
-              sub: `${activeCount} active`,
+              sub: `${activeCount} ${t.statActive}`,
               accent: "text-[#e7edf8]",
               border: "border-[#343947]",
             },
             {
-              label: "Total Processed",
+              label: t.statTotalProcessed,
               value: `$${(totalVolume / 1000).toFixed(1)}k`,
-              sub: "across all stores",
+              sub: t.statAcrossStores,
               accent: "text-[#FFD600]",
               border: "border-[#FFD600]/20",
             },
             {
-              label: "Active Stores",
+              label: t.statActiveStores,
               value: activeCount.toString(),
-              sub: `${trialCount} on trial`,
+              sub: `${trialCount} ${t.statOnTrial}`,
               accent: "text-emerald-400",
               border: "border-emerald-400/20",
             },
             {
-              label: "Suspended",
+              label: t.statSuspended,
               value: suspendedCount.toString(),
-              sub: "access revoked",
+              sub: t.statAccessRevoked,
               accent: "text-red-400",
               border: "border-red-500/20",
             },
@@ -1528,7 +1552,7 @@ export default function StoresPage() {
                       : "text-[#97a3b6] hover:text-[#e7edf8] hover:bg-[#2a2d39]/50"
                   }`}
                 >
-                  {f}
+                  {f === "All" ? t.filterAll : f === "Active" ? t.filterActive : f === "Trial" ? t.filterTrial : t.filterSuspended}
                   {f !== "All" && (
                     <span className="ml-1.5 text-xs text-[#97a3b6]">
                       {stores.filter((s) => s.status === f).length}
@@ -1538,7 +1562,7 @@ export default function StoresPage() {
               ))}
             </div>
             <p className="text-xs font-mono text-[#97a3b6]">
-              {filtered.length} store{filtered.length !== 1 ? "s" : ""}
+              {filtered.length} {t.stores}
             </p>
           </div>
 
@@ -1548,13 +1572,13 @@ export default function StoresPage() {
               <thead>
                 <tr className="border-b border-[#343947]">
                   {[
-                    "Store",
-                    "Store ID",
-                    "API Key",
-                    "Webhook URL",
-                    "Volume",
-                    "Status",
-                    "Access",
+                    t.thStore,
+                    t.thStoreID,
+                    t.thApiKey,
+                    t.thWebhookUrl,
+                    t.thVolume,
+                    t.thStatus,
+                    t.thAccess,
                     "",
                   ].map((h) => (
                     <th
@@ -1626,7 +1650,7 @@ export default function StoresPage() {
                           ${store.totalProcessed.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                         </p>
                         <p className="font-mono text-xs text-[#97a3b6]">
-                          {store.txCount.toLocaleString()} txns
+                          {store.txCount.toLocaleString()} {t.txns}
                         </p>
                       </div>
                     </td>
@@ -1644,7 +1668,7 @@ export default function StoresPage() {
                           onChange={() => handleToggle(store.id)}
                         />
                         <span className="text-xs font-mono text-[#97a3b6]">
-                          {store.enabled ? "On" : "Off"}
+                          {store.enabled ? t.toggleOn : t.toggleOff}
                         </span>
                       </div>
                     </td>
@@ -1666,7 +1690,7 @@ export default function StoresPage() {
             {filtered.length === 0 && (
               <div className="py-16 text-center">
                 <StoreIcon className="w-8 h-8 text-[#343947] mx-auto mb-3" />
-                <p className="text-sm font-mono text-[#97a3b6]">No stores match this filter.</p>
+                <p className="text-sm font-mono text-[#97a3b6]">{t.noStoresMatch}</p>
               </div>
             )}
           </div>
@@ -1674,10 +1698,10 @@ export default function StoresPage() {
           {/* Table footer */}
           <div className="px-4 py-2.5 border-t border-[#343947] flex items-center justify-between">
             <p className="text-xs font-mono text-[#97a3b6]">
-              Showing {filtered.length} of {stores.length} stores
+              {t.showing} {filtered.length} {t.of} {stores.length} {t.stores}
             </p>
             <p className="text-xs font-mono text-[#97a3b6]">
-              Last updated: just now
+              {t.lastUpdated}
             </p>
           </div>
         </div>
@@ -1706,6 +1730,9 @@ export default function StoresPage() {
 // ─── Tiny inline copy button ──────────────────────────────────────────────────
 
 function CopyButton({ value }: { value: string }) {
+  const { language } = useLanguage()
+  const t = storesCopy[language]
+
   const [copied, setCopied] = useState(false)
   return (
     <button
@@ -1716,7 +1743,7 @@ function CopyButton({ value }: { value: string }) {
         setTimeout(() => setCopied(false), 2000)
       }}
       className="p-1 text-[#97a3b6] hover:text-[#e7edf8] transition-colors rounded shrink-0"
-      title="Copy full ID"
+      title={t.copyFullId}
     >
       {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
     </button>

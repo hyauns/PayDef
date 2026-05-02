@@ -9,15 +9,20 @@ import { ConnectedStores } from "@/components/dashboard/connected-stores"
 import { TransactionFeed } from "@/components/dashboard/transaction-feed"
 import { ShieldDomains } from "@/components/dashboard/shield-domains"
 import { RotationLogic } from "@/components/dashboard/rotation-logic"
+import { useLanguage } from "@/components/i18n/LanguageProvider"
+import { dashboardCopy } from "@/lib/i18n/dashboard"
 
 export default function DashboardPage() {
+    const { language } = useLanguage()
+    const t = dashboardCopy[language]
+
     return (
         <DashboardShell>
-            <div className="w-full px-6 md:px-8 py-8 space-y-6">
+            <div data-ui-version="dashboard-i18n-vi-phase1" className="w-full px-6 md:px-8 py-8 space-y-6">
                 <DashboardPageHeader 
-                    eyebrow="Overview"
-                    title="Dashboard"
-                    description="Real-time performance and system health across all merchant accounts."
+                    eyebrow={t.overview}
+                    title={t.title}
+                    description={t.description}
                 />
                 <GlobalMetrics />
                 <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-6">

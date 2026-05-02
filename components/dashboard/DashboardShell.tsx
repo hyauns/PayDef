@@ -4,7 +4,6 @@ import { useState } from "react"
 import { useSession } from "next-auth/react"
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar"
 import { DashboardTopbar } from "@/components/dashboard/DashboardTopbar"
-
 type Role = "SUPER_ADMIN" | "MERCHANT"
 
 interface DashboardShellProps {
@@ -48,23 +47,23 @@ export function DashboardShell({ children }: DashboardShellProps) {
 
   return (
     <div className="flex h-dvh bg-[#151821] overflow-hidden">
-      {/* Sidebar */}
-      <DashboardSidebar
-        role={role}
-        open={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-      />
+        {/* Sidebar */}
+        <DashboardSidebar
+          role={role}
+          open={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+        />
 
-      {/* Main area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Topbar */}
-        <DashboardTopbar onMenuToggle={() => setSidebarOpen(o => !o)} />
+        {/* Main area */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          {/* Topbar */}
+          <DashboardTopbar onMenuToggle={() => setSidebarOpen(o => !o)} />
 
-        {/* Page content — scrollable */}
-        <main className="flex-1 overflow-y-auto w-full">
-          {children}
-        </main>
+          {/* Page content — scrollable */}
+          <main className="flex-1 overflow-y-auto w-full">
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
   )
 }

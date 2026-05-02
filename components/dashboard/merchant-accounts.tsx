@@ -5,6 +5,8 @@ import { MoreHorizontal, Pause, Play, RefreshCw, Loader2 } from "lucide-react"
 import { SectionCard } from "./SectionCard"
 import { DataTableShell } from "./DataTableShell"
 import { StatusBadge } from "./StatusBadge"
+import { useLanguage } from "@/components/i18n/LanguageProvider"
+import { dashboardCopy } from "@/lib/i18n/dashboard"
 
 type Status = "Active" | "Limited" | "Paused" | "Warm-up" | "Suspended"
 
@@ -34,18 +36,9 @@ interface MerchantApiRow {
   isLimited?: boolean | null
 }
 
-function mapDbStatus(dbStatus: string, isLimited?: boolean): Status {
-  if (isLimited) return "Limited"
-  switch (dbStatus) {
-    case "ACTIVE": return "Active"
-    case "WARMING_UP": return "Warm-up"
-    case "PAUSED": return "Paused"
-    case "SUSPENDED": return "Suspended"
-    default: return "Active"
-  }
-}
+// mapDbStatus moved to MerchantAccounts to use translation
 
-function VolumeBar({ current, soft, limit }: { current: number; soft: number; limit: number }) {
+function VolumeBar({ current, soft, limit, t }: { current: number; soft: number; limit: number; t: any }) {
   const pct = Math.min((current / limit) * 100, 100)
   const isZero = current === 0
   const color = pct > 90 ? "bg-red-500" : pct > 70 ? "bg-amber-400" : "bg-emerald-400"
@@ -68,13 +61,27 @@ function VolumeBar({ current, soft, limit }: { current: number; soft: number; li
         <span className="font-bold text-[#e7edf8]">${current.toLocaleString()}</span>
         <span className="text-[#6b7280]">/</span>
         <span className="font-medium text-[#97a3b6]">${limit.toLocaleString()}</span>
-        {isZero && <span className="ml-2 text-[10px] text-[#6b7280] uppercase tracking-wider bg-[#2a2d39] group-hover:bg-[#1f222c] px-1.5 py-0.5 rounded transition-colors">0% Used</span>}
+        {isZero && <span className="ml-2 text-[10px] text-[#6b7280] uppercase tracking-wider bg-[#2a2d39] group-hover:bg-[#1f222c] px-1.5 py-0.5 rounded transition-colors">0% {t.used}</span>}
       </div>
     </div>
   )
 }
 
 export function MerchantAccounts() {
+  const { language } = useLanguage()
+  const t = dashboardCopy[language]
+
+  function mapDbStatus(dbStatus: string, isLimited?: boolean): Status {
+    if (isLimited) return t.limitedStatus as Status
+    switch (dbStatus) {
+      case "ACTIVE": return t.activeStatus as Status
+      case "WARMING_UP": return t.warmupStatus as Status
+      case "PAUSED": return t.pausedStatus as Status
+      case "SUSPENDED": return t.suspendedStatus as Status
+      default: return t.activeStatus as Status
+    }
+  }
+
   const [merchants, setMerchants] = useState<Merchant[]>([])
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
@@ -138,8 +145,8 @@ export function MerchantAccounts() {
 
   return (
     <SectionCard
-      title="Merchant Accounts"
-      description={`PayPal account rotator — ${merchants.length} accounts configured`}
+      title={t.merchantAccounts}
+      description={`${t.paypalAccountRotator} ${merchants.length} ${t.accountsConfigured}`}
       noPadding
       action={
         <button
@@ -148,26 +155,26 @@ export function MerchantAccounts() {
           className="flex items-center gap-1.5 text-xs font-semibold text-[#97a3b6] hover:text-[#e7edf8] transition-colors border border-[#343947] bg-[#222530] rounded-md px-3 py-1.5 disabled:opacity-50"
         >
           {syncing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-          {syncing ? "Syncing..." : "Sync"}
+          {syncing ? t.syncing : t.sync}
         </button>
       }
     >
       {loading ? (
         <div className="flex items-center justify-center py-12 gap-2 text-[#97a3b6]">
           <Loader2 className="w-4 h-4 animate-spin" />
-          <span className="text-sm font-semibold">Loading accounts...</span>
+          <span className="text-sm font-semibold">{t.loadingAccounts}</span>
         </div>
       ) : merchants.length === 0 ? (
         <div className="py-12 text-center">
-          <p className="font-mono text-sm text-[#97aac1]">No merchant accounts configured yet.</p>
+          <p className="font-mono text-sm text-[#97aac1]">{t.noMerchantAccounts}</p>
         </div>
       ) : (
         <DataTableShell>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[#343947] bg-[#1f222c]">
-                {["Account", "PayPal Email", "Shield Domain", "Daily Volume", "Tx Count", "Status", ""].map((h) => (
-                  <th key={h} className="px-5 py-4 text-left text-xs font-bold text-[#97a3b6] uppercase tracking-wider whitespace-nowrap">
+                {[t.account, t.paypalEmail, t.shieldDomain, t.dailyVolume, t.txCount, t.status, ""].map((h, index) => (
+                  <th key={index} className="px-5 py-4 text-left text-xs font-bold text-[#97a3b6] uppercase tracking-wider whitespace-nowrap">
                     {h}
                   </th>
                 ))}
@@ -189,7 +196,7 @@ export function MerchantAccounts() {
                     <span className="font-mono text-sm font-medium text-[#97a3b6]">{m.shieldDomain}</span>
                   </td>
                   <td className="px-5 py-4 min-w-[220px]">
-                    <VolumeBar current={m.currentVolume} soft={m.softLimit} limit={m.dailyLimit} />
+                    <VolumeBar current={m.currentVolume} soft={m.softLimit} limit={m.dailyLimit} t={t} />
                   </td>
                   <td className="px-5 py-4">
                     <span className="font-mono text-sm font-semibold text-[#e7edf8]">{m.txCount}</span>
@@ -206,19 +213,19 @@ export function MerchantAccounts() {
                     </button>
                     {openMenu === m.id && (
                       <div className="absolute right-6 top-8 z-10 bg-[#222530] border border-[#343947] rounded-md shadow-xl text-xs font-semibold min-w-[140px]">
-                        {m.status !== "Paused" ? (
+                        {m.status !== t.pausedStatus ? (
                           <button
                             onClick={() => toggleStatus(m.id, "pause")}
                             className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-[#2a2d39] text-amber-400 transition-colors"
                           >
-                            <Pause className="w-3 h-3" /> Pause Account
+                            <Pause className="w-3 h-3" /> {t.pauseAccount}
                           </button>
                         ) : (
                           <button
                             onClick={() => toggleStatus(m.id, "resume")}
                             className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-[#2a2d39] text-emerald-400 transition-colors"
                           >
-                            <Play className="w-3 h-3" /> Resume Account
+                            <Play className="w-3 h-3" /> {t.resumeAccount}
                           </button>
                         )}
                       </div>

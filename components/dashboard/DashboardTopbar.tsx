@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { NotificationBell } from "@/components/nav/notification-bell"
+import { useLanguage } from "@/components/i18n/LanguageProvider"
 
 type Role = "SUPER_ADMIN" | "MERCHANT"
 
@@ -47,6 +48,7 @@ export function DashboardTopbar({ onMenuToggle }: TopbarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { data: session } = useSession()
+  const useLanguageHook = useLanguage()
 
   const role = (session?.user?.role as Role) ?? "MERCHANT"
   const userName = session?.user?.name ?? session?.user?.email?.split("@")[0] ?? "User"
@@ -89,6 +91,30 @@ export function DashboardTopbar({ onMenuToggle }: TopbarProps) {
 
       {/* Right: controls */}
       <div className="flex items-center gap-2">
+        {/* Language Switcher */}
+        <div className="hidden sm:flex items-center bg-[#2a2d39] border border-[#303442] rounded-md p-0.5">
+          <button
+            onClick={() => useLanguageHook.setLanguage("en")}
+            className={`px-2 py-1 text-[11px] font-semibold rounded-[4px] transition-colors ${
+              useLanguageHook.language === "en"
+                ? "bg-[#343947] text-white shadow-sm"
+                : "text-[#97aac1] hover:text-[#e2eeff]"
+            }`}
+          >
+            EN
+          </button>
+          <button
+            onClick={() => useLanguageHook.setLanguage("vi")}
+            className={`px-2 py-1 text-[11px] font-semibold rounded-[4px] transition-colors ${
+              useLanguageHook.language === "vi"
+                ? "bg-[#343947] text-white shadow-sm"
+                : "text-[#97aac1] hover:text-[#e2eeff]"
+            }`}
+          >
+            VI
+          </button>
+        </div>
+
         {/* Role badge */}
         <span className={`hidden sm:inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-md border ${
           role === "SUPER_ADMIN"

@@ -22,6 +22,8 @@ import {
 import { DashboardShell } from "@/components/dashboard/DashboardShell"
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader"
 import { GridBackground } from "@/components/ui/grid-background"
+import { useLanguage } from "@/components/i18n/LanguageProvider"
+import { domainsCopy } from "@/lib/i18n/domains"
 
 type Role = "SUPER_ADMIN" | "MERCHANT"
 
@@ -105,15 +107,15 @@ type DomainApiResponse = {
 
 const CARD = "bg-[#151821] border border-[#343947] rounded-lg"
 
-function timeAgo(iso: string | null): string {
-  if (!iso) return "Never"
+function timeAgo(iso: string | null, t: any): string {
+  if (!iso) return t.never
   const diff = Date.now() - new Date(iso).getTime()
   const mins = Math.floor(diff / 60_000)
-  if (mins < 1) return "just now"
-  if (mins < 60) return `${mins}m ago`
+  if (mins < 1) return t.justNow
+  if (mins < 60) return `${mins}${t.mAgo}`
   const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  return `${Math.floor(hrs / 24)}d ago`
+  if (hrs < 24) return `${hrs}${t.hAgo}`
+  return `${Math.floor(hrs / 24)}${t.dAgo}`
 }
 
 function dnsTone(status: VercelState["dnsStatus"]) {
@@ -164,11 +166,13 @@ function AddDomainModal({
   allowTenantAssignment,
   onClose,
   onConfirm,
+  t,
 }: {
   tenants: TenantOption[]
   allowTenantAssignment: boolean
   onClose: () => void
   onConfirm: (domain: string, tenantId: string | null) => void
+  t: any
 }) {
   const [domain, setDomain] = useState("")
   const [tenantId, setTenantId] = useState<string | null>(null)
@@ -177,11 +181,11 @@ function AddDomainModal({
   const handleSubmit = () => {
     const normalized = domain.trim().toLowerCase()
     if (!normalized) {
-      setError("Domain is required.")
+      setError(t.domainRequired)
       return
     }
     if (!/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/.test(normalized)) {
-      setError("Invalid domain format.")
+      setError(t.invalidDomain)
       return
     }
 
@@ -193,9 +197,9 @@ function AddDomainModal({
       <div className="bg-[#151821] border border-[#343947] rounded-lg w-full max-w-md p-5 space-y-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-[#e7edf8]">Add Shield Domain</h3>
+            <h3 className="text-sm font-semibold text-[#e7edf8]">{t.addDomainTitle}</h3>
             <p className="text-xs text-[#97a3b6] mt-0.5">
-              The domain will be added to your rotation pool and synced to Vercel when integration is configured.
+              {t.addDomainDesc}
             </p>
           </div>
           <button onClick={onClose} className="text-[#97a3b6] hover:text-[#e7edf8]">
@@ -205,7 +209,7 @@ function AddDomainModal({
 
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <label className="text-xs font-mono text-[#97a3b6]">Domain</label>
+            <label className="text-xs font-mono text-[#97a3b6]">{t.domainLabel}</label>
             <input
               value={domain}
               onChange={(event) => {
@@ -220,15 +224,15 @@ function AddDomainModal({
           {allowTenantAssignment ? (
             <div className="space-y-2 border border-[#FFD600]/20 bg-[#FFD600]/5 rounded-md p-3">
               <div>
-                <label className="text-xs font-semibold font-mono text-[#FFD600]">Tenant Assignment</label>
-                <p className="text-[10px] text-[#97a3b6] mt-0.5 leading-tight">Super Admins can assign this domain to a tenant or keep it in the shared pool.</p>
+                <label className="text-xs font-semibold font-mono text-[#FFD600]">{t.tenantAssignment}</label>
+                <p className="text-[10px] text-[#97a3b6] mt-0.5 leading-tight">{t.tenantAssignmentDesc}</p>
               </div>
               <select
                 value={tenantId ?? ""}
                 onChange={(event) => setTenantId(event.target.value || null)}
                 className="w-full bg-[#151821] border border-[#343947] rounded-md px-3 py-2 text-xs font-mono text-[#e7edf8] focus:outline-none focus:border-[#FFD600]/50"
               >
-                <option value="">Shared Pool (all tenants)</option>
+                <option value="">{t.sharedPoolAll}</option>
                 {tenants.map((tenant) => (
                   <option key={tenant.id} value={tenant.id}>
                     {tenant.name}
@@ -238,7 +242,7 @@ function AddDomainModal({
             </div>
           ) : (
             <div className="rounded-md border border-[#FFD600]/20 bg-[#FFD600]/5 px-3 py-2 text-sm font-mono text-[#FFD600]">
-              Domains added here are automatically assigned to your merchant tenant.
+              {t.merchantAutoAssigned}
             </div>
           )}
 
@@ -255,14 +259,14 @@ function AddDomainModal({
             onClick={onClose}
             className="px-3 py-1.5 text-xs font-mono text-[#97a3b6] bg-[#2a2d39] border border-[#343947] rounded-md hover:text-[#e7edf8] transition-colors"
           >
-            Cancel
+            {t.cancel}
           </button>
           <button
             onClick={handleSubmit}
             className="px-3 py-1.5 text-xs font-mono text-background bg-[#FFD600] border border-[#FFD600] rounded-md hover:bg-[#e6c100] transition-colors flex items-center gap-1.5"
           >
             <Plus className="w-3 h-3" />
-            Add Domain
+            {t.addDomain}
           </button>
         </div>
       </div>
@@ -274,10 +278,12 @@ function DeleteModal({
   domain,
   onClose,
   onConfirm,
+  t,
 }: {
   domain: ShieldDomain
   onClose: () => void
   onConfirm: () => void
+  t: any
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
@@ -285,9 +291,9 @@ function DeleteModal({
         <div className="flex items-start gap-3">
           <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-semibold font-mono text-[#e7edf8]">Delete Shield Domain</p>
+            <p className="text-sm font-semibold font-mono text-[#e7edf8]">{t.deleteDomainTitle}</p>
             <p className="text-xs font-mono text-[#97a3b6] mt-1">
-              Remove <span className="text-[#e7edf8] font-semibold">{domain.domain}</span> from the rotation pool? This cannot be undone.
+              {t.deleteDomainDesc1} <span className="text-[#e7edf8] font-semibold">{domain.domain}</span> {t.deleteDomainDesc2}
             </p>
           </div>
         </div>
@@ -296,13 +302,13 @@ function DeleteModal({
             onClick={onClose}
             className="px-4 py-1.5 text-xs font-mono bg-[#2a2d39] border border-[#343947] rounded-md text-[#e7edf8] hover:bg-[#2a2d39]/80 transition-colors"
           >
-            Cancel
+            {t.cancel}
           </button>
           <button
             onClick={onConfirm}
             className="px-4 py-1.5 text-xs font-mono bg-red-500/10 border border-red-500/30 rounded-md text-red-400 hover:bg-red-500/20 transition-colors"
           >
-            Delete
+            {t.deleteDomainBtn}
           </button>
         </div>
       </div>
@@ -316,12 +322,14 @@ function AssignStoreModal({
   onClose,
   onAssign,
   onUnassign,
+  t,
 }: {
   domain: ShieldDomain
   stores: DomainStoreOption[]
   onClose: () => void
   onAssign: (storeId: string) => void
   onUnassign: (storeId: string) => void
+  t: any
 }) {
   const eligibleStores = stores.filter((store) => {
     if (domain.tenantId && store.tenantId !== domain.tenantId) return false
@@ -336,9 +344,9 @@ function AssignStoreModal({
       <div className="bg-[#151821] border border-[#343947] rounded-lg w-full max-w-lg p-5 space-y-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-[#e7edf8]">Assign Domain to Store</h3>
+            <h3 className="text-sm font-semibold text-[#e7edf8]">{t.assignStoreTitle}</h3>
             <p className="text-xs text-[#97a3b6] mt-0.5">
-              Link <span className="text-[#e7edf8]">{domain.domain}</span> to one or more stores so storefront settings stay aligned with the shield facade.
+              {t.assignStoreDesc1} <span className="text-[#e7edf8]">{domain.domain}</span> {t.assignStoreDesc2}
             </p>
           </div>
           <button onClick={onClose} className="text-[#97a3b6] hover:text-[#e7edf8]">
@@ -348,9 +356,9 @@ function AssignStoreModal({
 
         <div className="space-y-3">
           <div className="rounded-md border border-[#343947] bg-[#2a2d39]/30 px-3 py-2">
-            <p className="text-xs font-mono text-[#97a3b6] uppercase tracking-wider">Current Assignments</p>
+            <p className="text-xs font-mono text-[#97a3b6] uppercase tracking-wider">{t.currentAssignments}</p>
             {domain.assignedStores.length === 0 ? (
-              <p className="text-xs font-mono text-[#97a3b6] mt-2">No stores linked yet.</p>
+              <p className="text-xs font-mono text-[#97a3b6] mt-2">{t.noStoresLinkedYet}</p>
             ) : (
               <div className="space-y-2 mt-2">
                 {domain.assignedStores.map((store) => (
@@ -365,7 +373,7 @@ function AssignStoreModal({
                       onClick={() => onUnassign(store.id)}
                       className="px-2 py-1 text-xs font-mono text-red-400 border border-red-400/20 rounded-md hover:bg-red-400/10 transition-colors"
                     >
-                      Unassign
+                      {t.unassign}
                     </button>
                   </div>
                 ))}
@@ -374,14 +382,14 @@ function AssignStoreModal({
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-mono text-[#97a3b6]">Add Store</label>
+            <label className="text-xs font-mono text-[#97a3b6]">{t.addStore}</label>
             <div className="flex gap-2">
               <select
                 value={storeId}
                 onChange={(event) => setStoreId(event.target.value)}
                 className="w-full bg-[#2a2d39] border border-[#343947] rounded-md px-3 py-2 text-xs font-mono text-[#e7edf8] focus:outline-none focus:border-[#FFD600]/50"
               >
-                <option value="">Select a store</option>
+                <option value="">{t.selectStore}</option>
                 {assignableStores.map((store) => (
                   <option key={store.id} value={store.id}>
                     {store.name}{store.tenantName ? ` • ${store.tenantName}` : ""}
@@ -396,7 +404,7 @@ function AssignStoreModal({
                 disabled={!storeId}
                 className="px-3 py-1.5 text-xs font-mono text-background bg-[#FFD600] border border-[#FFD600] rounded-md hover:bg-[#e6c100] transition-colors disabled:opacity-50"
               >
-                Assign
+                {t.assign}
               </button>
             </div>
           </div>
@@ -410,46 +418,48 @@ function OnboardingChecklist({
   isAdmin,
   integration,
   domains,
+  t,
 }: {
   isAdmin: boolean
   integration: IntegrationInfo
   domains: ShieldDomain[]
+  t: any
 }) {
   const steps = [
     {
-      label: "Connect Vercel project",
+      label: t.step1Label,
       done: integration.enabled,
       detail: integration.enabled
-        ? `Project ${integration.projectRef} is linked for live domain onboarding.`
-        : "Add VERCEL_API_TOKEN and VERCEL_PROJECT_ID, then restart the app.",
+        ? t.step1Done(integration.projectRef)
+        : t.step1Pending,
     },
     {
-      label: "Add a shield domain",
+      label: t.step2Label,
       done: domains.length > 0,
       detail: domains.length > 0
-        ? `${domains.length} domain${domains.length !== 1 ? "s" : ""} currently in the rotation pool.`
-        : "Use Add Domain to insert the hostname into your shield pool.",
+        ? t.step2Done(domains.length)
+        : t.step2Pending,
     },
     {
-      label: "Point DNS to Vercel",
+      label: t.step3Label,
       done: domains.some((domain) => domain.vercel.domainAdded),
       detail: domains.some((domain) => domain.vercel.requiredRecordType)
-        ? "Use Sync / Verify DNS to confirm the recommended Vercel record is in place."
-        : "After adding the domain, configure the DNS record Vercel returns.",
+        ? t.step3Done
+        : t.step3Pending,
     },
     {
-      label: "Verify popup bridge",
+      label: t.step4Label,
       done: domains.some((domain) => domain.vercel.bridgeOk),
       detail: domains.some((domain) => domain.vercel.bridgeHealthy === false)
-        ? "At least one domain reaches DNS Ready but its /checkout/popup health check is failing."
-        : "When DNS turns Ready, the dashboard auto-checks /checkout/popup health.",
+        ? t.step4Done
+        : t.step4Pending,
     },
     {
-      label: "Assign to store",
+      label: t.step5Label,
       done: domains.some((domain) => domain.assignedStores.length > 0),
       detail: isAdmin
-        ? "Map each ready domain to the right tenant store from the Domains table."
-        : "Link the domain to the store that should expose the matching shield facade.",
+        ? t.step5DoneAdmin
+        : t.step5DoneMerchant,
     },
   ]
 
@@ -458,11 +468,9 @@ function OnboardingChecklist({
       <div className="px-4 py-3 border-b border-[#343947] flex items-center gap-2">
         <Shield className="w-3.5 h-3.5 text-[#FFD600]" />
         <div>
-          <h2 className="text-sm font-semibold text-[#e7edf8]">Onboarding Checklist</h2>
+          <h2 className="text-sm font-semibold text-[#e7edf8]">{t.onboardingTitle}</h2>
           <p className="text-xs text-[#97a3b6] mt-0.5">
-            {isAdmin
-              ? "Use this sequence to add, verify, and hand off shield domains safely."
-              : "Follow this flow to bring a domain live without leaving the dashboard."}
+            {isAdmin ? t.onboardingDescAdmin : t.onboardingDescMerchant}
           </p>
         </div>
       </div>
@@ -497,6 +505,9 @@ export function ShieldDomainsManagerPage() {
   const role = (session?.user?.role as Role | undefined) ?? null
   const isAdmin = role === "SUPER_ADMIN"
   const apiBase = isAdmin ? "/api/admin/shield-domains" : "/api/merchant/shield-domains"
+
+  const { language } = useLanguage()
+  const t = domainsCopy[language]
 
   const [domains, setDomains] = useState<ShieldDomain[]>([])
   const [stores, setStores] = useState<DomainStoreOption[]>([])
@@ -555,14 +566,14 @@ export function ShieldDomainsManagerPage() {
       })
       const data = await res.json()
       if (!res.ok) {
-        alert(data.error ?? "Failed to add domain.")
+        alert(data.error ?? t.errAddDomain)
         return
       }
 
       setShowAdd(false)
       await fetchDomains()
     } catch {
-      alert("Network error.")
+      alert(t.errNetwork)
     }
   }
 
@@ -576,7 +587,7 @@ export function ShieldDomainsManagerPage() {
       })
       if (!res.ok) {
         const data = await res.json()
-        alert(data.error ?? "Failed to update domain.")
+        alert(data.error ?? t.errUpdateDomain)
         return
       }
       await fetchDomains()
@@ -595,7 +606,7 @@ export function ShieldDomainsManagerPage() {
       })
       if (!res.ok) {
         const data = await res.json()
-        alert(data.error ?? "Failed to sync domain with Vercel.")
+        alert(data.error ?? t.errSyncDomain)
         return
       }
       await fetchDomains()
@@ -614,7 +625,7 @@ export function ShieldDomainsManagerPage() {
       })
       if (!res.ok) {
         const data = await res.json()
-        alert(data.error ?? "Failed to verify DNS.")
+        alert(data.error ?? t.errVerifyDns)
         return
       }
       await fetchDomains()
@@ -633,7 +644,7 @@ export function ShieldDomainsManagerPage() {
       })
       const data = await res.json()
       if (!res.ok) {
-        alert(data.error ?? "Failed to assign store.")
+        alert(data.error ?? t.errAssignStore)
         return
       }
 
@@ -654,7 +665,7 @@ export function ShieldDomainsManagerPage() {
       })
       const data = await res.json()
       if (!res.ok) {
-        alert(data.error ?? "Failed to unassign store.")
+        alert(data.error ?? t.errUnassignStore)
         return
       }
 
@@ -673,7 +684,7 @@ export function ShieldDomainsManagerPage() {
       const res = await fetch(`${apiBase}?id=${deleteTarget.id}`, { method: "DELETE" })
       if (!res.ok) {
         const data = await res.json()
-        alert(data.error ?? "Failed to delete domain.")
+        alert(data.error ?? t.errDeleteDomain)
         return
       }
       setDeleteTarget(null)
@@ -713,6 +724,7 @@ export function ShieldDomainsManagerPage() {
           allowTenantAssignment={isAdmin}
           onClose={() => setShowAdd(false)}
           onConfirm={handleAdd}
+          t={t}
         />
       )}
 
@@ -721,6 +733,7 @@ export function ShieldDomainsManagerPage() {
           domain={deleteTarget}
           onClose={() => setDeleteTarget(null)}
           onConfirm={handleDelete}
+          t={t}
         />
       )}
 
@@ -731,20 +744,21 @@ export function ShieldDomainsManagerPage() {
           onClose={() => setAssignTarget(null)}
           onAssign={(storeId) => handleAssignStore(assignTarget.id, storeId)}
           onUnassign={(storeId) => handleUnassignStore(assignTarget.id, storeId)}
+          t={t}
         />
       )}
 
-      <main className="w-full px-6 md:px-8 py-8 space-y-6 w-full">
+      <main className="w-full px-6 md:px-8 py-8 space-y-6 w-full" data-ui-version="domains-i18n-vi-phase4">
         <DashboardPageHeader
-  title="Domain Rotation Pool"
-  description={isAdmin ? "Manage shared and tenant-specific shield domains, then verify DNS directly against Vercel." : "Manage your shield domains and verify popup bridge readiness before assigning them to stores."}
+  title={isAdmin ? t.superAdminTitle : t.merchantTitle}
+  description={isAdmin ? t.superAdminDesc : t.merchantDesc}
   eyebrow={
     isAdmin ? (
       <div className="flex items-center gap-2">
-        <span className="bg-[#FFD600]/10 text-[#FFD600] border border-[#FFD600]/20 px-2 py-0.5 rounded text-[10px] font-bold tracking-wider">SUPER ADMIN</span>
-        <span>SHIELD DOMAINS</span>
+        <span className="bg-[#FFD600]/10 text-[#FFD600] border border-[#FFD600]/20 px-2 py-0.5 rounded text-[10px] font-bold tracking-wider">{t.superAdminBadge}</span>
+        <span>{t.superAdminEyebrow}</span>
       </div>
-    ) : "MERCHANT / SHIELD DOMAINS"
+    ) : t.merchantEyebrow
   }
   action={
     <div className="flex items-center gap-2">
@@ -753,14 +767,14 @@ export function ShieldDomainsManagerPage() {
         className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-[#e7edf8] bg-[#2a2d39] border border-[#343947] rounded-md hover:bg-[#343947] transition-colors"
       >
         <ExternalLink className="w-4 h-4" />
-        Shield Guide
+        {t.shieldGuide}
       </a>
       <button
         onClick={() => setShowAdd(true)}
         className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-[#151821] bg-[#FFD600] border border-[#FFD600] rounded-md hover:bg-[#e6c100] transition-colors"
       >
         <Plus className="w-4 h-4" />
-        Add Domain
+        {t.addDomain}
       </button>
     </div>
   }
@@ -772,9 +786,9 @@ export function ShieldDomainsManagerPage() {
             <div className="relative z-10 px-5 py-4 flex items-start gap-3 bg-[#1f222c]/80 backdrop-blur-sm">
               <Shield className="w-5 h-5 text-[#FFD600] mt-0.5 shrink-0" />
               <div>
-                <h2 className="text-sm font-semibold text-[#e7edf8]">Super Admin Domain Control</h2>
+                <h2 className="text-sm font-semibold text-[#e7edf8]">{t.saDomainControl}</h2>
                 <p className="text-xs text-[#97a3b6] mt-0.5">
-                  Manage shield domains across tenants, shared pools, store assignments, DNS verification, and routing ownership.
+                  {t.saDomainControlDesc}
                 </p>
               </div>
             </div>
@@ -788,38 +802,38 @@ export function ShieldDomainsManagerPage() {
               <Activity className={`w-4 h-4 mt-0.5 ${integration.enabled ? "text-[#FFD600]" : "text-amber-400"}`} />
               <div>
                 <p className="text-xs font-semibold text-[#e7edf8]">
-                  {integration.enabled ? "Vercel Project Connected" : "Vercel API Integration Required"}
+                  {integration.enabled ? t.vercelConnected : t.vercelRequired}
                 </p>
                 <p className="text-sm text-[#97a3b6]">
                   {integration.enabled
-                    ? `Domains sync against project ${integration.projectRef}${integration.teamContext ? ` (${integration.teamContext})` : ""}.`
-                    : "Set VERCEL_API_TOKEN and VERCEL_PROJECT_ID in Vercel project settings, then restart the app to enable live add, sync, and DNS verification."}
+                    ? t.vercelConnectedDesc(integration.projectRef ?? "", integration.teamContext)
+                    : t.vercelRequiredDesc}
                 </p>
               </div>
             </div>
             <div className="text-sm font-mono text-[#97a3b6]">
-              Popup bridge target: <span className="text-[#e7edf8]">/checkout/popup</span>
+              {t.popupBridgeTarget} <span className="text-[#e7edf8]">/checkout/popup</span>
             </div>
           </div>
         </div>
 
-        <OnboardingChecklist isAdmin={isAdmin} integration={integration} domains={domains} />
+        <OnboardingChecklist isAdmin={isAdmin} integration={integration} domains={domains} t={t} />
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className={`${CARD} px-4 py-3 flex flex-col gap-0.5`}>
-            <span className="text-xs font-mono text-[#97a3b6] uppercase tracking-wider">Total Domains</span>
+            <span className="text-xs font-mono text-[#97a3b6] uppercase tracking-wider">{t.totalDomains}</span>
             <span className="text-xl font-mono font-bold text-[#e7edf8]">{domains.length}</span>
           </div>
           <div className={`${CARD} px-4 py-3 flex flex-col gap-0.5`}>
-            <span className="text-xs font-mono text-[#97a3b6] uppercase tracking-wider">Active</span>
+            <span className="text-xs font-mono text-[#97a3b6] uppercase tracking-wider">{t.activeCount}</span>
             <span className="text-xl font-mono font-bold text-emerald-400">{activeCount}</span>
           </div>
           <div className={`${CARD} px-4 py-3 flex flex-col gap-0.5`}>
-            <span className="text-xs font-mono text-[#97a3b6] uppercase tracking-wider">Bridge Ready</span>
+            <span className="text-xs font-mono text-[#97a3b6] uppercase tracking-wider">{t.bridgeReady}</span>
             <span className="text-xl font-mono font-bold text-[#FFD600]">{readyCount}</span>
           </div>
           <div className={`${CARD} px-4 py-3 flex flex-col gap-0.5`}>
-            <span className="text-xs font-mono text-[#97a3b6] uppercase tracking-wider">Needs Action</span>
+            <span className="text-xs font-mono text-[#97a3b6] uppercase tracking-wider">{t.needsAction}</span>
             <span className="text-xl font-mono font-bold text-amber-400">{needsActionCount}</span>
           </div>
         </div>
@@ -831,7 +845,7 @@ export function ShieldDomainsManagerPage() {
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search domains..."
+                placeholder={t.searchPlaceholder}
                 className="bg-transparent text-xs font-mono text-[#e7edf8] placeholder:text-[#97a3b6] focus:outline-none w-full"
               />
               {search && (
@@ -855,13 +869,20 @@ export function ShieldDomainsManagerPage() {
                       : "bg-[#2a2d39] border-[#343947] text-[#97a3b6] hover:text-[#e7edf8]"
                   }`}
                 >
-                  {option === "shared" ? "Shared Pool" : option === "tenant" ? "Tenant Domains" : option}
+                  {option === "all" ? t.filterAll :
+                   option === "active" ? t.filterActive :
+                   option === "inactive" ? t.filterInactive :
+                   option === "shared" ? t.filterShared :
+                   option === "tenant" ? t.filterTenant :
+                   option === "verified" ? t.filterVerified :
+                   option === "pending" ? t.filterPending :
+                   option === "failed" ? t.filterFailed : option}
                 </button>
               ))}
             </div>
 
             <div className="ml-auto text-xs font-mono text-[#97a3b6]">
-              {filtered.length} domain{filtered.length !== 1 ? "s" : ""}
+              {t.domainsCount(filtered.length)}
             </div>
           </div>
 
@@ -869,14 +890,14 @@ export function ShieldDomainsManagerPage() {
             <table className="w-full text-xs font-mono border-collapse">
               <thead>
                 <tr className="border-b border-[#343947] bg-[#2a2d39]/50">
-                  <th className="text-left px-4 py-2.5 text-[#97a3b6] font-medium">Domain</th>
-                  <th className="text-left px-4 py-2.5 text-[#97a3b6] font-medium">Status</th>
-                  <th className="text-left px-4 py-2.5 text-[#97a3b6] font-medium">Vercel</th>
-                  <th className="text-left px-4 py-2.5 text-[#97a3b6] font-medium">DNS</th>
-                  <th className="text-left px-4 py-2.5 text-[#97a3b6] font-medium">Bridge</th>
-                  <th className="text-left px-4 py-2.5 text-[#97a3b6] font-medium">Assigned To</th>
-                  <th className="text-left px-4 py-2.5 text-[#97a3b6] font-medium">Added</th>
-                  <th className="text-right px-4 py-2.5 text-[#97a3b6] font-medium pr-6">Actions</th>
+                  <th className="text-left px-4 py-2.5 text-[#97a3b6] font-medium">{t.thDomain}</th>
+                  <th className="text-left px-4 py-2.5 text-[#97a3b6] font-medium">{t.thStatus}</th>
+                  <th className="text-left px-4 py-2.5 text-[#97a3b6] font-medium">{t.thVercel}</th>
+                  <th className="text-left px-4 py-2.5 text-[#97a3b6] font-medium">{t.thDns}</th>
+                  <th className="text-left px-4 py-2.5 text-[#97a3b6] font-medium">{t.thBridge}</th>
+                  <th className="text-left px-4 py-2.5 text-[#97a3b6] font-medium">{t.thAssignedTo}</th>
+                  <th className="text-left px-4 py-2.5 text-[#97a3b6] font-medium">{t.thAdded}</th>
+                  <th className="text-right px-4 py-2.5 text-[#97a3b6] font-medium pr-6">{t.thActions}</th>
                 </tr>
               </thead>
               <tbody>
@@ -893,8 +914,8 @@ export function ShieldDomainsManagerPage() {
                   <tr>
                     <td colSpan={8} className="px-4 py-12 text-center text-[#97a3b6]">
                       {domains.length === 0
-                        ? 'No shield domains configured yet. Click "Add Domain" to get started.'
-                        : "No domains match your search."}
+                        ? t.noDomainsYet
+                        : t.noDomainsMatch}
                     </td>
                   </tr>
                 )}
@@ -920,7 +941,7 @@ export function ShieldDomainsManagerPage() {
                               </a>
                             </div>
                             <div className="text-xs text-[#97a3b6] mt-0.5">
-                              Popup bridge: {domain.vercel.bridgeUrl}
+                              {t.popupBridge} {domain.vercel.bridgeUrl}
                             </div>
                           </div>
                         </div>
@@ -935,23 +956,31 @@ export function ShieldDomainsManagerPage() {
                           }`}
                         >
                           {domain.isActive ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                          {domain.isActive ? "Active" : "Inactive"}
+                          {domain.isActive ? t.active : t.inactive}
                         </span>
-                        <div className="text-xs text-[#97a3b6] mt-1">Checked {timeAgo(domain.lastCheck)}</div>
+                        <div className="text-xs text-[#97a3b6] mt-1">{t.checked} {timeAgo(domain.lastCheck, t)}</div>
                       </td>
 
                       <td className="px-4 py-3 align-top">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-sm font-semibold ${vercelTone(domain.vercel.projectStatus)}`}>
-                          {domain.vercel.projectStatus}
+                          {domain.vercel.projectStatus === "Integration Off" ? t.vIntegrationOff :
+                           domain.vercel.projectStatus === "Error" ? t.vError :
+                           domain.vercel.projectStatus === "Linked" ? t.vLinked :
+                           domain.vercel.projectStatus === "Not Linked" ? t.vNotLinked : domain.vercel.projectStatus}
                         </span>
                         <div className="text-xs text-[#97a3b6] mt-1">
-                          {domain.vercel.configuredBy ? `Configured by ${domain.vercel.configuredBy}` : domain.vercel.statusMessage}
+                          {domain.vercel.configuredBy ? `${t.configuredBy} ${domain.vercel.configuredBy}` : domain.vercel.statusMessage}
                         </div>
                       </td>
 
                       <td className="px-4 py-3 align-top">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-sm font-semibold ${dnsTone(domain.vercel.dnsStatus)}`}>
-                          {domain.vercel.dnsStatus}
+                          {domain.vercel.dnsStatus === "Ready" ? t.vReady :
+                           domain.vercel.dnsStatus === "Verification Required" ? t.vVerificationRequired :
+                           domain.vercel.dnsStatus === "Needs DNS" ? t.vNeedsDns :
+                           domain.vercel.dnsStatus === "Integration Off" ? t.vIntegrationOff :
+                           domain.vercel.dnsStatus === "Error" ? t.vError :
+                           domain.vercel.dnsStatus === "Not Linked" ? t.vNotLinked : domain.vercel.dnsStatus}
                         </span>
                         {shouldShowDnsRecord(domain.vercel) ? (
                           <div className="text-xs text-[#97a3b6] mt-1 max-w-[220px] break-all">
@@ -965,15 +994,15 @@ export function ShieldDomainsManagerPage() {
                       <td className="px-4 py-3 align-top">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-sm font-semibold ${bridgeTone(domain.vercel.bridgeHealthy)}`}>
                           {domain.vercel.bridgeHealthy === true
-                            ? "Healthy"
+                            ? t.healthy
                             : domain.vercel.bridgeHealthy === false
-                              ? "Failed"
-                              : "Pending"}
+                              ? t.failed
+                              : t.pending}
                         </span>
                         <div className="text-xs text-[#97a3b6] mt-1">
                           {domain.vercel.bridgeCheckedAt
-                            ? `Popup checked ${timeAgo(domain.vercel.bridgeCheckedAt)}${domain.vercel.bridgeStatusCode ? ` • HTTP ${domain.vercel.bridgeStatusCode}` : ""}`
-                            : domain.vercel.bridgeMessage || "Bridge health runs automatically once DNS is ready."}
+                            ? `${t.popupChecked} ${timeAgo(domain.vercel.bridgeCheckedAt, t)}${domain.vercel.bridgeStatusCode ? ` • ${t.http} ${domain.vercel.bridgeStatusCode}` : ""}`
+                            : domain.vercel.bridgeMessage || t.bridgeHealthAuto}
                         </div>
                         {domain.vercel.bridgeMessage && domain.vercel.bridgeCheckedAt ? (
                           <div className="text-xs text-[#97a3b6] mt-1 max-w-[240px] break-words">
@@ -992,7 +1021,7 @@ export function ShieldDomainsManagerPage() {
                           ) : (
                             <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-sky-400/20 bg-sky-400/10 text-sky-400 text-[11px] font-semibold w-fit">
                               <Shield className="w-3 h-3" />
-                              Shared Pool
+                              {t.sharedPool}
                             </span>
                           )}
 
@@ -1004,11 +1033,11 @@ export function ShieldDomainsManagerPage() {
                               </div>
                             ))
                           ) : (
-                            <div className="text-xs text-[#97a3b6]">No store linked</div>
+                            <div className="text-xs text-[#97a3b6]">{t.noStoreLinked}</div>
                           )}
                           {domain.assignedStores.length > 2 && (
                             <div className="text-xs text-[#97a3b6]">
-                              +{domain.assignedStores.length - 2} more
+                              {t.moreStores(domain.assignedStores.length - 2)}
                             </div>
                           )}
                         </div>
@@ -1025,7 +1054,7 @@ export function ShieldDomainsManagerPage() {
                               <button
                                 onClick={() => setAssignTarget(domain)}
                                 disabled={busyKey === `assign-${domain.id}`}
-                                title="Assign to store"
+                                title={t.assignToStore}
                                 className="p-1.5 rounded-md border border-[#343947] text-[#97a3b6] hover:text-[#FFD600] hover:border-[#FFD600]/30 hover:bg-[#FFD600]/10 transition-colors disabled:opacity-50"
                               >
                                 <Link2 className="w-3.5 h-3.5" />
@@ -1033,7 +1062,7 @@ export function ShieldDomainsManagerPage() {
                               <button
                                 onClick={() => handleSync(domain.id)}
                                 disabled={busyKey === `sync-${domain.id}`}
-                                title="Sync with Vercel"
+                                title={t.syncWithVercel}
                                 className="p-1.5 rounded-md border border-[#343947] text-[#97a3b6] hover:text-[#FFD600] hover:border-[#FFD600]/30 hover:bg-[#FFD600]/10 transition-colors disabled:opacity-50"
                               >
                                 <RefreshCw className={`w-3.5 h-3.5 ${busyKey === `sync-${domain.id}` ? "animate-spin" : ""}`} />
@@ -1042,7 +1071,7 @@ export function ShieldDomainsManagerPage() {
                                 <button
                                   onClick={() => handleVerify(domain.id)}
                                   disabled={busyKey === `verify-${domain.id}` || !integration.enabled}
-                                  title="Verify DNS"
+                                  title={t.verifyDns}
                                   className="p-1.5 rounded-md border border-[#343947] text-[#97a3b6] hover:text-emerald-400 hover:border-emerald-400/30 hover:bg-emerald-400/10 transition-colors disabled:opacity-50"
                                 >
                                   <Activity className={`w-3.5 h-3.5 ${busyKey === `verify-${domain.id}` ? "animate-pulse" : ""}`} />
@@ -1051,7 +1080,7 @@ export function ShieldDomainsManagerPage() {
                               <button
                                 onClick={() => handleToggle(domain.id, domain.isActive)}
                                 disabled={busyKey === `toggle-${domain.id}`}
-                                title={domain.isActive ? "Deactivate" : "Activate"}
+                                title={domain.isActive ? t.deactivate : t.activate}
                                 className={`p-1.5 rounded-md border transition-colors disabled:opacity-50 ${
                                   domain.isActive
                                     ? "border-[#343947] text-[#97a3b6] hover:text-amber-400 hover:border-amber-400/30 hover:bg-amber-400/10"
@@ -1063,14 +1092,14 @@ export function ShieldDomainsManagerPage() {
                               <button
                                 onClick={() => setDeleteTarget(domain)}
                                 disabled={busyKey === `delete-${domain.id}`}
-                                title="Delete domain"
+                                title={t.deleteDomain}
                                 className="p-1.5 rounded-md border border-[#343947] text-[#97a3b6] hover:text-red-400 hover:border-red-400/30 hover:bg-red-400/10 transition-colors disabled:opacity-50"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </>
                           )}
-                          {!domain.canManage && <span className="text-xs text-[#97a3b6]">Read only</span>}
+                          {!domain.canManage && <span className="text-xs text-[#97a3b6]">{t.readOnly}</span>}
                         </div>
                       </td>
                     </tr>

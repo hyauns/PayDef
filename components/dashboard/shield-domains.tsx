@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react"
 import { Shield, Wifi, WifiOff, AlertTriangle, RefreshCw, ExternalLink, Loader2 } from "lucide-react"
 import { SectionCard } from "./SectionCard"
+import { useLanguage } from "@/components/i18n/LanguageProvider"
+import { dashboardCopy } from "@/lib/i18n/dashboard"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -32,53 +34,54 @@ interface DomainApiRow {
   }
 }
 
-// ─── Status config ────────────────────────────────────────────────────────────
-
-const statusConfig: Record<DomainStatus, {
-  icon: typeof Shield
-  iconColor: string
-  border: string
-  bg: string
-  label: string
-  labelColor: string
-  labelBg: string
-  dot: string
-}> = {
-  Healthy: {
-    icon: Wifi,
-    iconColor: "text-emerald-400",
-    border: "border-emerald-400/20",
-    bg: "bg-emerald-400/5",
-    label: "Healthy",
-    labelColor: "text-emerald-400",
-    labelBg: "bg-emerald-400/10",
-    dot: "bg-emerald-400",
-  },
-  Degraded: {
-    icon: AlertTriangle,
-    iconColor: "text-amber-400",
-    border: "border-amber-400/20",
-    bg: "bg-amber-400/5",
-    label: "Degraded",
-    labelColor: "text-amber-400",
-    labelBg: "bg-amber-400/10",
-    dot: "bg-amber-400",
-  },
-  Down: {
-    icon: WifiOff,
-    iconColor: "text-red-400",
-    border: "border-red-400/20",
-    bg: "bg-red-400/5",
-    label: "Down",
-    labelColor: "text-red-400",
-    labelBg: "bg-red-400/10",
-    dot: "bg-red-400",
-  },
-}
-
-// ─── Main Export ──────────────────────────────────────────────────────────────
+// statusConfig moved into component
 
 export function ShieldDomains() {
+  const { language } = useLanguage()
+  const t = dashboardCopy[language]
+
+  const statusConfig: Record<DomainStatus, {
+    icon: typeof Shield
+    iconColor: string
+    border: string
+    bg: string
+    label: string
+    labelColor: string
+    labelBg: string
+    dot: string
+  }> = {
+    Healthy: {
+      icon: Wifi,
+      iconColor: "text-emerald-400",
+      border: "border-emerald-400/20",
+      bg: "bg-emerald-400/5",
+      label: t.healthy,
+      labelColor: "text-emerald-400",
+      labelBg: "bg-emerald-400/10",
+      dot: "bg-emerald-400",
+    },
+    Degraded: {
+      icon: AlertTriangle,
+      iconColor: "text-amber-400",
+      border: "border-amber-400/20",
+      bg: "bg-amber-400/5",
+      label: t.degraded,
+      labelColor: "text-amber-400",
+      labelBg: "bg-amber-400/10",
+      dot: "bg-amber-400",
+    },
+    Down: {
+      icon: WifiOff,
+      iconColor: "text-red-400",
+      border: "border-red-400/20",
+      bg: "bg-red-400/5",
+      label: t.down,
+      labelColor: "text-red-400",
+      labelBg: "bg-red-400/10",
+      dot: "bg-red-400",
+    },
+  }
+
   const [domains, setDomains] = useState<Domain[]>([])
   const [loading, setLoading] = useState(true)
   const [testing, setTesting] = useState<string | null>(null)
@@ -129,7 +132,7 @@ export function ShieldDomains() {
                 latency: data.latencyMs ?? null,
                 ssl: data.sslValid ?? false,
                 status: (data.health as DomainStatus) ?? "Down",
-                lastChecked: "just now",
+                lastChecked: t.justNow,
                 healthOk: data.health === "Healthy",
               }
             : d
@@ -139,7 +142,7 @@ export function ShieldDomains() {
       setDomains(prev =>
         prev.map(d =>
           d.id === id
-            ? { ...d, status: "Down", latency: null, lastChecked: "just now" }
+            ? { ...d, status: "Down", latency: null, lastChecked: t.justNow }
             : d
         )
       )
@@ -154,20 +157,20 @@ export function ShieldDomains() {
 
   return (
     <SectionCard
-      title="Shield Domain Health"
-      description={loading ? "Loading…" : `${healthyCnt} of ${domains.length} domains operational`}
+      title={t.shieldDomainHealth}
+      description={loading ? t.loadingDomains : `${healthyCnt} ${t.of} ${domains.length} ${t.operational}`}
       noPadding
       action={
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-4 text-xs font-bold text-[#97a3b6]">
             <span className="flex items-center gap-1.5 text-emerald-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />{healthyCnt} Healthy
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />{healthyCnt} {t.healthy}
             </span>
             <span className="flex items-center gap-1.5 text-amber-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />{degradedCnt} Degraded
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />{degradedCnt} {t.degraded}
             </span>
             <span className="flex items-center gap-1.5 text-red-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-400" />{downCnt} Down
+              <span className="w-1.5 h-1.5 rounded-full bg-red-400" />{downCnt} {t.down}
             </span>
           </div>
         </div>
@@ -179,7 +182,7 @@ export function ShieldDomains() {
         </div>
       ) : domains.length === 0 ? (
         <div className="py-12 text-center text-sm font-semibold text-[#97a3b6]">
-          No shield domains configured
+          {t.noDomainsConfigured}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 p-5">
@@ -212,19 +215,19 @@ export function ShieldDomains() {
 
                 <div className="grid grid-cols-3 gap-2 text-xs font-mono mt-1">
                   <div>
-                    <p className="text-[#97a3b6] uppercase tracking-wider text-[10px] mb-0.5">Latency</p>
+                    <p className="text-[#97a3b6] uppercase tracking-wider text-[10px] mb-0.5">{t.latency}</p>
                     <p className={`font-semibold ${d.latency ? (d.latency > 200 ? "text-amber-400" : "text-emerald-400") : "text-[#97a3b6]"}`}>
                       {d.latency ? `${d.latency}ms` : "—"}
                     </p>
                   </div>
                   <div>
-                    <p className="text-[#97a3b6] uppercase tracking-wider text-[10px] mb-0.5">SSL</p>
+                    <p className="text-[#97a3b6] uppercase tracking-wider text-[10px] mb-0.5">{t.ssl}</p>
                     <p className={d.ssl ? "text-emerald-400 font-semibold" : "text-red-400 font-semibold"}>
-                      {d.latency !== null ? (d.ssl ? "Valid" : "Invalid") : "—"}
+                      {d.latency !== null ? (d.ssl ? t.valid : t.invalid) : "—"}
                     </p>
                   </div>
                   <div>
-                    <p className="text-[#97a3b6] uppercase tracking-wider text-[10px] mb-0.5">Checked</p>
+                    <p className="text-[#97a3b6] uppercase tracking-wider text-[10px] mb-0.5">{t.checked}</p>
                     <p className="text-[#e7edf8]">{d.lastChecked}</p>
                   </div>
                 </div>
@@ -236,7 +239,7 @@ export function ShieldDomains() {
                     className="flex items-center gap-1.5 text-xs font-semibold text-[#97a3b6] hover:text-[#e7edf8] border border-[#343947] hover:border-[#404656] bg-[#222530] hover:bg-[#3a4050] rounded-md px-3 py-1.5 transition-colors disabled:opacity-50 flex-1 justify-center"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${isTest ? "animate-spin" : ""}`} />
-                    {isTest ? "Testing..." : "Test Connectivity"}
+                    {isTest ? t.testing : t.testConnectivity}
                   </button>
                   <a
                     href={`https://${d.domain}`}

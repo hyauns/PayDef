@@ -7,6 +7,8 @@ import { DashboardShell } from "@/components/dashboard/DashboardShell"
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader"
 import { StatCard } from "@/components/dashboard/StatCard"
 import { SectionCard } from "@/components/dashboard/SectionCard"
+import { useLanguage } from "@/components/i18n/LanguageProvider"
+import { analyticsCopy } from "@/lib/i18n/analytics"
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -78,22 +80,26 @@ function fmtFull(v: number) {
 // ─── Custom Tooltips ──────────────────────────────────────────────────────────
 
 function RevenueTooltip({ active, payload, label }: ChartTooltipProps) {
+  const { language } = useLanguage()
+  const t = analyticsCopy[language]
   if (!active || !payload?.length) return null
   return (
     <div className="bg-[#222530] border border-[#343947] rounded-lg px-3 py-2 text-xs font-mono shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
       <p className="text-[#97a3b6] mb-1">{label}</p>
-      <p className="text-cyan-400 font-bold">Revenue: {fmtFull(payload[0]?.value ?? 0)}</p>
-      <p className="text-emerald-400 font-bold">Txns: {payload[1]?.value ?? 0}</p>
+      <p className="text-cyan-400 font-bold">{t.tooltipRevenue} {fmtFull(payload[0]?.value ?? 0)}</p>
+      <p className="text-emerald-400 font-bold">{t.tooltipTxns} {payload[1]?.value ?? 0}</p>
     </div>
   )
 }
 
 function BarTooltip({ active, payload, label }: ChartTooltipProps) {
+  const { language } = useLanguage()
+  const t = analyticsCopy[language]
   if (!active || !payload?.length) return null
   return (
     <div className="bg-[#222530] border border-[#343947] rounded-lg px-3 py-2 text-xs font-mono shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
       <p className="text-[#e7edf8] font-bold mb-1">{label}</p>
-      <p className="text-cyan-400 font-bold">Volume: {fmtFull(payload[0]?.value ?? 0)}</p>
+      <p className="text-cyan-400 font-bold">{t.tooltipVolume} {fmtFull(payload[0]?.value ?? 0)}</p>
     </div>
   )
 }
@@ -137,6 +143,9 @@ function SkeletonChart({ height = 280 }: { height?: number }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function AnalyticsPage() {
+  const { language } = useLanguage()
+  const t = analyticsCopy[language]
+
   const [range, setRange] = useState<Range>("7d")
 
   const { data, error, isLoading } = useSWR<AnalyticsResponse>(
@@ -146,9 +155,9 @@ export default function AnalyticsPage() {
   )
 
   const RANGES: { key: Range; label: string }[] = [
-    { key: "24h", label: "Last 24h" },
-    { key: "7d",  label: "7 Days"   },
-    { key: "30d", label: "30 Days"  },
+    { key: "24h", label: t.last24h },
+    { key: "7d",  label: t.last7d },
+    { key: "30d", label: t.last30d },
   ]
 
   const s = data?.summary
@@ -159,12 +168,12 @@ export default function AnalyticsPage() {
 
   return (
     <DashboardShell>
-      <main className="w-full px-6 md:px-8 py-8 space-y-6">
+      <main className="w-full px-6 md:px-8 py-8 space-y-6" data-ui-version="analytics-i18n-vi-phase2">
         <div className="flex items-center justify-between">
           <DashboardPageHeader
-            eyebrow="Gateway Analytics"
-            title="Performance Overview"
-            description="Transaction performance and volume analytics across all connected stores and merchant accounts."
+            eyebrow={t.gatewayAnalytics}
+            title={t.performanceOverview}
+            description={t.description}
           />
           <div className="flex items-center gap-1 bg-[#222530] border border-[#343947] rounded-lg p-1.5 shadow-sm">
             {RANGES.map((r) => (
@@ -188,8 +197,8 @@ export default function AnalyticsPage() {
           <div className="flex items-start gap-3 bg-red-400/5 border border-red-400/20 rounded-lg px-4 py-3">
             <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
             <div className="text-xs font-mono">
-              <span className="text-red-400 font-semibold">Failed to load analytics data.</span>
-              <span className="text-[#97aac1]"> Please check your connection and try again.</span>
+              <span className="text-red-400 font-semibold">{t.failedToLoad}</span>
+              <span className="text-[#97aac1]"> {t.checkConnection}</span>
             </div>
           </div>
         )}
@@ -202,42 +211,42 @@ export default function AnalyticsPage() {
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
             <StatCard
-              label="Total Revenue"
+              label={t.totalRevenue}
               value={fmtK(s.totalRevenue)}
-              helper={`${s.totalTransactions.toLocaleString()} transactions`}
+              helper={`${s.totalTransactions.toLocaleString()} ${t.transactions}`}
               icon={DollarSign}
             />
             <StatCard
-              label="Success Rate"
+              label={t.successRate}
               value={`${s.successRate}%`}
-              helper={`${s.completedCount} completed`}
+              helper={`${s.completedCount} ${t.completed}`}
               trend={s.successRate >= 95 ? "up" : "down"}
-              trendValue={s.successRate >= 95 ? "Healthy" : "Below target"}
+              trendValue={s.successRate >= 95 ? t.healthy : t.belowTarget}
             />
             <StatCard
-              label="Avg Transaction"
+              label={t.avgTransaction}
               value={`$${s.avgTransaction.toFixed(2)}`}
-              helper={`${s.totalTransactions} total`}
+              helper={`${s.totalTransactions} ${t.total}`}
               icon={Activity}
             />
             <StatCard
-              label="Dispute Rate"
+              label={t.disputeRate}
               value={`${s.disputeRate}%`}
-              helper={`${s.disputedCount} disputes`}
+              helper={`${s.disputedCount} ${t.disputes}`}
               trend={s.disputeRate <= 0.5 ? "up" : "down"}
-              trendValue={s.disputeRate <= 0.5 ? "Within threshold" : "Elevated"}
+              trendValue={s.disputeRate <= 0.5 ? t.withinThreshold : t.elevated}
             />
             <StatCard
-              label="Refund Rate"
+              label={t.refundRate}
               value={`${s.refundRate}%`}
-              helper={`${s.refundedCount} refunded · ${s.voidedCount} voided`}
+              helper={`${s.refundedCount} ${t.refunded} · ${s.voidedCount} ${t.voided}`}
               trend={s.refundRate <= 2 ? "up" : "down"}
-              trendValue={s.refundRate <= 2 ? "Normal" : "Elevated"}
+              trendValue={s.refundRate <= 2 ? t.normal : t.elevated}
             />
             <StatCard
-              label="Active Accounts"
+              label={t.activeAccounts}
               value={`${s.activeAccounts} / ${s.totalAccounts}`}
-              helper={`${s.totalAccounts - s.activeAccounts} paused or warm-up`}
+              helper={`${s.totalAccounts - s.activeAccounts} ${t.pausedOrWarmUp}`}
               active={s.activeAccounts > 0}
             />
           </div>
@@ -248,13 +257,13 @@ export default function AnalyticsPage() {
           <SkeletonChart />
         ) : (
           <SectionCard
-            title="Revenue vs. Time"
-            description={`Showing ${range === "24h" ? "hourly" : "daily"} breakdown`}
+            title={t.revenueVsTime}
+            description={range === "24h" ? t.showingHourly : t.showingDaily}
           >
             {timeSeries.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-[#6b7280] gap-2">
                 <BarChart2 className="w-8 h-8 opacity-30" />
-                <p className="text-sm font-mono">No transaction data for this period</p>
+                <p className="text-sm font-mono">{t.noTransactionData}</p>
               </div>
             ) : (
               <>
@@ -321,11 +330,11 @@ export default function AnalyticsPage() {
                 <div className="flex items-center gap-6 mt-4 pl-2">
                   <div className="flex items-center gap-2">
                     <span className="w-6 h-0.5 bg-cyan-400 inline-block rounded" />
-                    <span className="text-[10px] font-mono text-[#97aac1]">Revenue (USD)</span>
+                    <span className="text-[10px] font-mono text-[#97aac1]">{t.revenueUsd}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="w-6 h-0.5 bg-emerald-400 inline-block rounded border-dashed" />
-                    <span className="text-[10px] font-mono text-[#97aac1]">Transactions</span>
+                    <span className="text-[10px] font-mono text-[#97aac1]">{t.chartTransactions}</span>
                   </div>
                 </div>
               </>
@@ -344,13 +353,13 @@ export default function AnalyticsPage() {
 
             {/* Volume per Merchant — Bar Chart */}
             <SectionCard
-              title="Volume per Merchant Account"
-              description="Total USD processed by each PayPal account"
+              title={t.volumePerMerchant}
+              description={t.merchantDesc}
             >
               {merchantData.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-[#6b7280] gap-2">
                   <BarChart2 className="w-6 h-6 opacity-30" />
-                  <p className="text-xs font-mono">No merchant volume data</p>
+                  <p className="text-xs font-mono">{t.noMerchantData}</p>
                 </div>
               ) : (
                 <>
@@ -400,7 +409,7 @@ export default function AnalyticsPage() {
                             <span className="text-[#e7edf8] font-semibold">{m.name}</span>
                           </div>
                           <div className="flex items-center gap-4">
-                            <span className="text-[#97a3b6] font-semibold">{m.txCount} txns</span>
+                            <span className="text-[#97a3b6] font-semibold">{m.txCount} {t.txns}</span>
                             <span className="text-cyan-400 font-bold">{fmtFull(m.volume)}</span>
                           </div>
                         </div>
@@ -412,13 +421,13 @@ export default function AnalyticsPage() {
 
             {/* Volume per Store — Pie Chart */}
             <SectionCard
-              title="Volume per Store"
-              description="Share of total gateway traffic by client store"
+              title={t.volumePerStore}
+              description={t.storeDesc}
             >
               {storeData.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-[#6b7280] gap-2">
                   <DollarSign className="w-6 h-6 opacity-30" />
-                  <p className="text-xs font-mono">No store volume data</p>
+                  <p className="text-xs font-mono">{t.noStoreData}</p>
                 </div>
               ) : (
                 <div className="flex items-center gap-6">
@@ -467,7 +476,7 @@ export default function AnalyticsPage() {
                         )
                       })}
                     <div className="pt-2 mt-2 border-t border-[#242833] flex items-center justify-between text-xs font-mono">
-                      <span className="text-[#97aac1]">Total</span>
+                      <span className="text-[#97aac1]">{t.chartTotal}</span>
                       <span className="text-[#e2eeff] font-semibold">{fmtFull(storeTotal)}</span>
                     </div>
                   </div>
@@ -488,7 +497,7 @@ export default function AnalyticsPage() {
                 <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                 <div className="text-xs font-mono">
                   <span className="text-amber-400 font-semibold">{top.name}</span>
-                  <span className="text-[#97aac1]"> is carrying {topPct}% of total network volume — consider rebalancing rotation weights to reduce concentration risk.</span>
+                  <span className="text-[#97aac1]"> {t.concentrationRisk1} {topPct}{t.concentrationRisk2}</span>
                 </div>
               </div>
             )

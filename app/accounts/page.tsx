@@ -2,6 +2,8 @@
 "use client"
 
 import { useState, useCallback, useEffect } from "react"
+import { useLanguage } from "@/components/i18n/LanguageProvider"
+import { accountsCopy } from "@/lib/i18n/accounts"
 import {
   Plus,
   ExternalLink,
@@ -296,6 +298,9 @@ interface SlideOverProps {
 }
 
 function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose, onSave }: SlideOverProps) {
+  const { language } = useLanguage()
+  const t = accountsCopy[language]
+
   const [draft, setDraft] = useState<Merchant | null>(merchant)
   const [activeTab, setActiveTab] = useState<"overview" | "credentials" | "routing" | "domain" | "display" | "legacy">("overview")
   const fallbackPlatformDomain = verifiedPlatformDomains[0] ?? ""
@@ -357,7 +362,7 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
               </button>
               <div>
                 <div className="flex items-center gap-2">
-                  <p className="text-xs font-mono text-[#97a3b6] uppercase tracking-[0.08em]">Editing</p>
+                  <p className="text-xs font-mono text-[#97a3b6] uppercase tracking-[0.08em]">{t.editing}</p>
                   <StatusBadge status={draft.status} />
                 </div>
                 <h2 className="text-xl font-semibold text-[#e7edf8] mt-0.5">{draft.accountName}</h2>
@@ -370,12 +375,12 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
           </div>
           <div className="flex items-center gap-8 px-6 overflow-x-auto">
             {[
-              { id: "overview", label: "Overview" },
-              { id: "credentials", label: "Credentials" },
-              { id: "routing", label: "Routing & Limits" },
-              { id: "domain", label: "Domain & Proxy" },
-              { id: "display", label: "Display Profile" },
-              { id: "legacy", label: "Legacy" },
+              { id: "overview", label: t.tabOverview },
+              { id: "credentials", label: t.tabCredentials },
+              { id: "routing", label: t.tabRouting },
+              { id: "domain", label: t.tabDomain },
+              { id: "display", label: t.tabDisplay },
+              { id: "legacy", label: t.tabLegacy },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -397,9 +402,9 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="grid grid-cols-3 gap-4">
                 {[
-                  { label: "Transactions", value: draft.txCount.toString() },
-                  { label: "Success Rate", value: `${draft.successRate}%` },
-                  { label: "Last Active", value: draft.lastActive },
+                  { label: t.statTransactions, value: draft.txCount.toString() },
+                  { label: t.statSuccessRate, value: `${draft.successRate}%` },
+                  { label: t.statLastActive, value: draft.lastActive },
                 ].map((s) => (
                   <div key={s.label} className="bg-[#151821] border border-[#343947] rounded-md px-4 py-3 text-center">
                     <p className="font-mono text-base font-semibold text-[#e7edf8]">{s.value}</p>
@@ -409,7 +414,7 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Account Name</label>
+                <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelAccountName}</label>
                 <input
                   value={draft.accountName}
                   onChange={(e) => update({ accountName: e.target.value })}
@@ -418,7 +423,7 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">PayPal Email</label>
+                <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelEmail}</label>
                 <input
                   value={draft.email}
                   onChange={(e) => update({ email: e.target.value })}
@@ -433,13 +438,13 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
               <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
                 <div className="flex items-center gap-2">
                   <Lock className="w-4 h-4 text-[#FFD600]" />
-                  <p className="text-base font-semibold text-[#e7edf8]">PayPal API Credentials</p>
+                  <p className="text-base font-semibold text-[#e7edf8]">{t.paypalApiCredentials}</p>
                 </div>
                 <p className="text-sm text-[#aab4c5] leading-6">
-                  Enter your PayPal REST API Client ID and Secret from the PayPal Developer Dashboard.
+                  {t.paypalApiDesc}
                 </p>
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Client ID</label>
+                  <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelClientId}</label>
                   <input
                     value={draft.clientId}
                     onChange={(e) => update({ clientId: e.target.value })}
@@ -448,11 +453,11 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
                   />
                 </div>
                 <div className="space-y-2">
-                  <MaskedField value={draft.clientSecret} label="Client Secret" />
+                  <MaskedField value={draft.clientSecret} label={t.labelClientSecret} />
                 </div>
                 <div className="flex items-center gap-2 text-sm text-[#aab4c5] leading-6 bg-[#2a2d39]/50 rounded-md px-4 py-3">
                   <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                  Credentials are encrypted at rest with AES-256 and never logged
+                  {t.credsEncrypted}
                 </div>
               </div>
             </div>
@@ -461,7 +466,7 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
           {activeTab === "routing" && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="space-y-3">
-                <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Status</label>
+                <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelStatus}</label>
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                   {(["Active", "Warm-up", "Limited", "Paused", "Suspended"] as Status[]).map((s) => {
                     const c = statusConfig[s]
@@ -477,7 +482,7 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
                         }`}
                       >
                         <span className={`w-2.5 h-2.5 rounded-full ${active ? c.dot : "bg-border"}`} />
-                        {s}
+                        {s === "Active" ? t.filterActive : s === "Limited" ? t.filterLimited : s === "Warm-up" ? t.filterWarmUp : s === "Paused" ? t.filterPaused : s === "Suspended" ? t.filterSuspended : s}
                       </button>
                     )
                   })}
@@ -486,10 +491,10 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
                   <div className="flex items-start gap-2 mt-3 px-4 py-3 rounded-md bg-sky-400/5 border border-sky-400/20">
                     <Info className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
                     <div className="text-sm text-sky-300/80 leading-6">
-                      <p className="font-semibold text-sky-400 mb-1">Warm-up Mode Active</p>
-                      <p>• Max <span className="text-sky-400">$50</span> per transaction to build account trust</p>
-                      <p>• Progressive daily cap: <span className="text-sky-400">$100</span> (Day 1) → <span className="text-sky-400">$500</span> (Day 7+)</p>
-                      <p>• Account is deprioritised for orders over $100</p>
+                      <p className="font-semibold text-sky-400 mb-1">{t.warmupModeActive}</p>
+                      <p>{t.warmupDescEdit1}<span className="text-sky-400">{t.warmupDescEdit1Val}</span>{t.warmupDescEdit1End}</p>
+                      <p>{t.warmupDescEdit2}<span className="text-sky-400">{t.warmupDescEdit2Val1}</span>{t.warmupDescEdit2Day1}<span className="text-sky-400">{t.warmupDescEdit2Val2}</span>{t.warmupDescEdit2Day7}</p>
+                      <p>{t.warmupDescEdit3}</p>
                     </div>
                   </div>
                 )}
@@ -497,7 +502,7 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
                   <div className="flex items-start gap-2 mt-3 px-4 py-3 rounded-md bg-red-500/5 border border-red-500/20">
                     <Ban className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
                     <p className="text-sm text-red-300/80 leading-6">
-                      Suspended accounts are excluded from the rotation pool entirely. No transactions will be routed to this account.
+                      {t.suspendedDesc}
                     </p>
                   </div>
                 )}
@@ -505,7 +510,7 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
 
               <div className="space-y-3">
                 <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">
-                  Rotation Priority — {draft.priority}/5
+                  {t.labelPriority} — {draft.priority}/5
                 </label>
                 <div className="flex items-center gap-1">
                   {Array.from({ length: 5 }, (_, i) => (
@@ -519,32 +524,32 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
               <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
                 <div className="flex items-center gap-2">
                   <SlidersHorizontal className="w-4 h-4 text-[#FFD600]" />
-                  <p className="text-base font-semibold text-[#e7edf8]">Adaptive Volume Limits</p>
+                  <p className="text-base font-semibold text-[#e7edf8]">{t.adaptiveLimits}</p>
                 </div>
                 <p className="text-sm text-[#aab4c5] leading-6">
-                  Instead of a hard cutoff, the rotator shifts away from this account when it nears the soft limit, and locks it out at the hard limit.
+                  {t.adaptiveLimitsDescEdit}
                 </p>
 
                 <div className="grid grid-cols-2 gap-5">
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Soft Limit ($)</label>
+                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelSoftLimit}</label>
                     <input
                       type="number"
                       value={draft.softLimit}
                       onChange={(e) => update({ softLimit: Number(e.target.value) })}
                       className="w-full bg-[#222530] border border-[#343947] rounded-md px-4 py-3 text-base font-mono text-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400/40 focus:border-amber-400/40 transition-colors"
                     />
-                    <p className="text-sm text-[#aab4c5] leading-6">Begin de-weighting</p>
+                    <p className="text-sm text-[#aab4c5] leading-6">{t.descSoftLimit}</p>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Hard Limit ($)</label>
+                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelHardLimit}</label>
                     <input
                       type="number"
                       value={draft.hardLimit}
                       onChange={(e) => update({ hardLimit: Number(e.target.value) })}
                       className="w-full bg-[#222530] border border-[#343947] rounded-md px-4 py-3 text-base font-mono text-red-400 focus:outline-none focus:ring-1 focus:ring-red-400/40 focus:border-red-400/40 transition-colors"
                     />
-                    <p className="text-sm text-[#aab4c5] leading-6">Full lockout threshold</p>
+                    <p className="text-sm text-[#aab4c5] leading-6">{t.descHardLimit}</p>
                   </div>
                 </div>
 
@@ -568,50 +573,50 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
               <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
                 <div className="flex items-center gap-2">
                   <Globe className="w-4 h-4 text-[#FFD600]" />
-                  <p className="text-base font-semibold text-[#e7edf8]">Shield Domain</p>
+                  <p className="text-base font-semibold text-[#e7edf8]">{t.shieldDomain}</p>
                 </div>
                 <div className="flex rounded-md overflow-hidden border border-[#343947]">
-                  {(["platform", "custom"] as DomainType[]).map((t) => (
+                  {(["platform", "custom"] as DomainType[]).map((type) => (
                     <button
-                      key={t}
-                      onClick={() => update({ domainType: t, shieldDomain: t === "platform" ? fallbackPlatformDomain : "" })}
+                      key={type}
+                      onClick={() => update({ domainType: type, shieldDomain: type === "platform" ? fallbackPlatformDomain : "" })}
                       className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold transition-colors ${
-                        draft.domainType === t ? "bg-[#FFD600]/10 text-[#FFD600] border-r border-[#343947]" : "text-[#97a3b6] hover:text-[#e7edf8] bg-transparent"
+                        draft.domainType === type ? "bg-[#FFD600]/10 text-[#FFD600] border-r border-[#343947]" : "text-[#97a3b6] hover:text-[#e7edf8] bg-transparent"
                       }`}
                     >
-                      {t === "platform" ? <Lock className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
-                      {t === "platform" ? "Platform Domain" : "Custom Domain"}
+                      {type === "platform" ? <Lock className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
+                      {type === "platform" ? t.btnPlatformDomain : t.btnCustomDomain}
                     </button>
                   ))}
                 </div>
                 {draft.domainType === "platform" ? (
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Select Platform Domain</label>
+                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelSelectPlatform}</label>
                     <select
                       value={verifiedPlatformDomains.includes(draft.shieldDomain) ? draft.shieldDomain : ""}
                       onChange={(e) => update({ shieldDomain: e.target.value })}
                       disabled={!verifiedPlatformDomains.length}
                       className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors appearance-none"
                     >
-                      <option value="" disabled>{verifiedPlatformDomains.length ? "Select a verified platform domain" : "No verified platform domains available"}</option>
+                      <option value="" disabled>{verifiedPlatformDomains.length ? t.selectVerifiedPlaceholder : t.noVerifiedPlaceholder}</option>
                       {verifiedPlatformDomains.map((d) => (<option key={d} value={d}>{d}</option>))}
                     </select>
-                    <p className="text-sm text-[#aab4c5] leading-6">Managed and monitored by Gateway Central</p>
-                    {!verifiedPlatformDomains.length && <p className="text-sm text-[#aab4c5] leading-6 text-amber-400">Verify a domain in Domains before assigning it to an account.</p>}
+                    <p className="text-sm text-[#aab4c5] leading-6">{t.platformManagedBy}</p>
+                    {!verifiedPlatformDomains.length && <p className="text-sm text-[#aab4c5] leading-6 text-amber-400">{t.platformVerifyFirst}</p>}
                     {!!draft.shieldDomain && !verifiedPlatformDomains.includes(draft.shieldDomain) && verifiedPlatformDomains.length > 0 && (
-                      <p className="text-sm text-[#aab4c5] leading-6 text-amber-400">The current platform domain is no longer verified. Select another verified domain before saving.</p>
+                      <p className="text-sm text-[#aab4c5] leading-6 text-amber-400">{t.platformNoLongerVerified}</p>
                     )}
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Custom Domain</label>
+                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelCustomDomain}</label>
                     <input
                       value={draft.shieldDomain}
                       onChange={(e) => update({ shieldDomain: e.target.value })}
                       placeholder="e.g. my-payment-shield.com"
                       className="w-full bg-[#222530] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#97a3b6]/50 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
                     />
-                    <p className="text-sm text-[#aab4c5] leading-6 text-amber-400">You are responsible for DNS configuration and SSL</p>
+                    <p className="text-sm text-[#aab4c5] leading-6 text-amber-400">{t.customDomainWarning}</p>
                   </div>
                 )}
                 {draft.shieldDomain && (
@@ -625,13 +630,13 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
               <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
                 <div className="flex items-center gap-2">
                   <Wifi className="w-4 h-4 text-orange-400" />
-                  <p className="text-base font-semibold text-[#e7edf8]">Proxy Configuration</p>
+                  <p className="text-base font-semibold text-[#e7edf8]">{t.staticProxy}</p>
                 </div>
                 <p className="text-sm text-[#aab4c5] leading-6">
-                  Route PayPal API calls through a proxy to diversify IP origins. Supports HTTP, HTTPS, and SOCKS5 protocols.
+                  {t.proxyDescEdit}
                 </p>
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Proxy URL</label>
+                  <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelProxyOptional}</label>
                   {draft.proxyUrl ? (
                     <MaskedField value={draft.proxyUrl} label="" />
                   ) : (
@@ -644,13 +649,13 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
                   )}
                   {draft.proxyUrl && (
                     <button onClick={() => update({ proxyUrl: "" })} className="text-sm font-semibold text-red-400 hover:text-red-300 transition-colors mt-2">
-                      Remove Proxy
+                      {t.btnRemoveProxy}
                     </button>
                   )}
                 </div>
                 <div className="flex items-center gap-2 text-sm text-[#aab4c5] leading-6 bg-[#2a2d39]/50 rounded-md px-4 py-3">
                   <ShieldCheck className="w-4 h-4 text-orange-400 shrink-0" />
-                  Proxy URL may contain credentials — it is masked in the UI and never logged
+                  {t.proxyHiddenWarning}
                 </div>
               </div>
             </div>
@@ -661,17 +666,17 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
               <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
                 <div className="flex items-center gap-2">
                   <Package className="w-4 h-4 text-[#FFD600]" />
-                  <p className="text-base font-semibold text-[#e7edf8]">Payment Display Profile</p>
+                  <p className="text-base font-semibold text-[#e7edf8]">{t.paymentDisplayProfile}</p>
                 </div>
                 <p className="text-sm text-[#aab4c5] leading-6">
-                  Select a preferred display profile to route transactions through this account when the store uses this profile.
+                  {t.displayProfileDescEdit}
                 </p>
                 <select
                   value={draft.displayProfileId || ""}
                   onChange={(e) => update({ displayProfileId: e.target.value || null })}
                   className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors appearance-none"
                 >
-                  <option value="">None (Use fallback accounts)</option>
+                  <option value="">{t.noneProfile}</option>
                   {displayProfiles.map((p) => (
                     <option key={p.id} value={p.id}>{p.profile_name}</option>
                   ))}
@@ -686,7 +691,7 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Package className="w-4 h-4 text-[#97a3b6]" />
-                    <p className="text-base font-semibold text-[#e7edf8]">Legacy Masking</p>
+                    <p className="text-base font-semibold text-[#e7edf8]">{t.legacyMasking}</p>
                   </div>
                   <button
                     onClick={() => update({ itemMasking: !draft.itemMasking })}
@@ -697,13 +702,13 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
                 </div>
 
                 <div className="bg-[#4a3908]/50 border border-[#ca8a04]/50 text-[#facc15] text-sm leading-6 px-4 py-3 rounded-md border-l-[3px] border-l-[#ca8a04]">
-                  Deprecated. New stores should use Payment Display Profiles. This legacy setting only controls the old fake_product_name override.
+                  {t.legacyDeprecated}
                 </div>
 
                 {draft.itemMasking && (
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Legacy Fake Product Name</label>
+                      <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelLegacyProduct}</label>
                       <input
                         value={draft.fakeProductName}
                         onChange={(e) => update({ fakeProductName: e.target.value })}
@@ -712,7 +717,7 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
                       />
                     </div>
                     <div className="space-y-2">
-                      <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Presets</p>
+                      <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelPresets}</p>
                       <div className="flex flex-wrap gap-2">
                         {FAKE_PRODUCT_PRESETS.map((preset) => (
                           <button
@@ -728,7 +733,7 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
                       </div>
                     </div>
                     <div className="bg-[#2a2d39]/50 rounded-md px-4 py-3 text-sm text-[#aab4c5] leading-6">
-                      <span className="text-[#97a3b6]">PayPal receipt will show: </span>
+                      <span className="text-[#97a3b6]">{t.receiptWillShow}</span>
                       <span className="text-violet-400 font-semibold">{draft.fakeProductName || "(empty)"}</span>
                     </div>
                   </div>
@@ -736,13 +741,13 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
               </div>
 
               <div className="border border-red-500/20 rounded-lg p-5 space-y-3 bg-red-500/5">
-                <p className="text-sm font-semibold uppercase tracking-[0.08em] text-red-400">Danger Zone</p>
+                <p className="text-sm font-semibold uppercase tracking-[0.08em] text-red-400">{t.dangerZone}</p>
                 <p className="text-sm text-[#aab4c5] leading-6">
-                  Permanently removes this account from the rotator. All routing will stop immediately.
+                  {t.dangerDesc}
                 </p>
                 <button className="flex items-center gap-2 text-sm font-semibold text-red-400 border border-red-500/30 hover:bg-red-500/10 rounded-md px-4 py-2 transition-colors">
                   <Trash2 className="w-4 h-4" />
-                  Remove Account
+                  {t.btnRemoveAccount}
                 </button>
               </div>
             </div>
@@ -753,7 +758,7 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
           {saveSuccess && (
             <div className="mb-4 flex items-center gap-2 text-sm text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-3 py-2 rounded-md transition-all">
               <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span>Account changes saved successfully.</span>
+              <span>{t.msgSavedSuccess}</span>
             </div>
           )}
           {saveError && (
@@ -764,7 +769,7 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
           )}
           <div className="flex items-center justify-between gap-4">
             <button onClick={onClose} className="flex-1 px-5 py-2.5 text-sm font-semibold text-[#97a3b6] border border-[#343947] rounded-md hover:bg-[#2a2d39] transition-colors">
-              Cancel
+              {t.btnCancel}
             </button>
             <button
               onClick={handleSave}
@@ -774,15 +779,15 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
               {isSaving ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Saving...
+                  {t.btnSaving}
                 </>
               ) : saveSuccess ? (
                 <>
                   <Check className="w-4 h-4" />
-                  Saved
+                  {t.btnSaved}
                 </>
               ) : (
-                "Save Changes"
+                t.btnSave
               )}
             </button>
           </div>
@@ -806,6 +811,9 @@ function AddMerchantModal({
   onClose: () => void
   onAdd: (m: Merchant) => void
 }) {
+  const { language } = useLanguage()
+  const t = accountsCopy[language]
+
   const fallbackPlatformDomain = verifiedPlatformDomains[0] ?? ""
   const [form, setForm] = useState({
     accountName: "",
@@ -950,8 +958,8 @@ function AddMerchantModal({
                 <ChevronRight className="w-4 h-4" />
               </button>
               <div>
-                <h2 className="text-xl font-semibold text-[#e7edf8] mt-0.5">Add Merchant Account</h2>
-                <p className="text-sm text-[#97a3b6] mt-0.5">Connect a payment provider account and configure routing.</p>
+                <h2 className="text-xl font-semibold text-[#e7edf8] mt-0.5">{t.addModalTitle}</h2>
+                <p className="text-sm text-[#97a3b6] mt-0.5">{t.addModalDesc}</p>
               </div>
             </div>
             <button onClick={onClose} className="p-1.5 text-[#97a3b6] hover:text-[#e7edf8] border border-[#343947] rounded-md transition-colors bg-[#151821] hover:bg-[#2a2d39]">
@@ -960,12 +968,12 @@ function AddMerchantModal({
           </div>
           <div className="flex items-center gap-8 px-6 overflow-x-auto">
             {[
-              { id: "info", label: "Account Info" },
-              { id: "credentials", label: "Credentials" },
-              { id: "routing", label: "Routing & Limits" },
-              { id: "domain", label: "Domain & Proxy" },
-              { id: "display", label: "Display Profile" },
-              { id: "review", label: "Review" },
+              { id: "info", label: t.tabInfo },
+              { id: "credentials", label: t.tabCredentials },
+              { id: "routing", label: t.tabRouting },
+              { id: "domain", label: t.tabDomain },
+              { id: "display", label: t.tabDisplay },
+              { id: "review", label: t.tabReview },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -987,7 +995,7 @@ function AddMerchantModal({
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Account Name <span className="text-red-400">*</span></label>
+                  <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelAccountName} <span className="text-red-400">*</span></label>
                   <input
                     value={form.accountName}
                     onChange={(e) => update({ accountName: e.target.value })}
@@ -996,7 +1004,7 @@ function AddMerchantModal({
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">PayPal Email <span className="text-red-400">*</span></label>
+                  <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelEmail} <span className="text-red-400">*</span></label>
                   <input
                     value={form.email}
                     onChange={(e) => update({ email: e.target.value })}
@@ -1005,7 +1013,7 @@ function AddMerchantModal({
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Initial Status</label>
+                  <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelInitialStatus}</label>
                   <div className="flex rounded-md overflow-hidden border border-[#343947]">
                     {(["Active", "Warm-up"] as Status[]).map((s) => (
                       <button
@@ -1016,7 +1024,7 @@ function AddMerchantModal({
                           form.status === s ? "bg-[#FFD600]/10 text-[#FFD600] border border-[#FFD600]" : "text-[#97a3b6] bg-[#2a2d39] border border-[#343947] hover:text-[#e7edf8]"
                         }`}
                       >
-                        {s}
+                        {s === "Active" ? t.filterActive : s === "Warm-up" ? t.filterWarmUp : s}
                       </button>
                     ))}
                   </div>
@@ -1030,13 +1038,13 @@ function AddMerchantModal({
               <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
                 <div className="flex items-center gap-2">
                   <Lock className="w-4 h-4 text-[#FFD600]" />
-                  <p className="text-base font-semibold text-[#e7edf8]">PayPal API Credentials</p>
+                  <p className="text-base font-semibold text-[#e7edf8]">{t.paypalApiCredentials}</p>
                 </div>
                 <p className="text-sm text-[#aab4c5] leading-6">
-                  Enter your PayPal REST API Client ID and Secret from the PayPal Developer Dashboard.
+                  {t.paypalApiDesc}
                 </p>
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Client ID <span className="text-red-400">*</span></label>
+                  <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelClientId} <span className="text-red-400">*</span></label>
                   <input
                     value={form.clientId}
                     onChange={(e) => update({ clientId: e.target.value })}
@@ -1045,7 +1053,7 @@ function AddMerchantModal({
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Client Secret <span className="text-red-400">*</span></label>
+                  <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelClientSecret} <span className="text-red-400">*</span></label>
                   <input
                     value={form.clientSecret}
                     onChange={(e) => update({ clientSecret: e.target.value })}
@@ -1056,7 +1064,7 @@ function AddMerchantModal({
                 </div>
                 <div className="flex items-center gap-2 text-sm text-[#aab4c5] leading-6 bg-[#2a2d39]/50 rounded-md px-4 py-3">
                   <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                  Credentials are encrypted at rest with AES-256 and never logged
+                  {t.credsEncrypted}
                 </div>
 
                 <button
@@ -1072,13 +1080,13 @@ function AddMerchantModal({
                     } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   {testing ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Testing connection...</>
+                    <><Loader2 className="w-4 h-4 animate-spin" /> {t.btnTesting}</>
                   ) : testResult?.ok ? (
                     <><CheckCircle2 className="w-4 h-4" /> {testResult.message}</>
                   ) : testResult && !testResult.ok ? (
                     <><XCircle className="w-4 h-4" /> {testResult.message}</>
                   ) : (
-                    <><Zap className="w-4 h-4 text-[#FFD600]" /> Test PayPal Connection</>
+                    <><Zap className="w-4 h-4 text-[#FFD600]" /> {t.btnTestPaypal}</>
                   )}
                 </button>
               </div>
@@ -1090,15 +1098,15 @@ function AddMerchantModal({
               <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
                 <div className="flex items-center gap-2">
                   <SlidersHorizontal className="w-4 h-4 text-[#FFD600]" />
-                  <p className="text-base font-semibold text-[#e7edf8]">Adaptive Volume Limits</p>
+                  <p className="text-base font-semibold text-[#e7edf8]">{t.adaptiveLimits}</p>
                 </div>
                 <p className="text-sm text-[#aab4c5] leading-6">
-                  Set soft and hard daily volume limits. The rotator shifts traffic away when nearing the soft limit.
+                  {t.adaptiveLimitsDescAdd}
                 </p>
 
                 <div className="grid grid-cols-2 gap-5">
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Soft Limit ($)</label>
+                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelSoftLimit}</label>
                     <input
                       type="number"
                       value={form.softLimit}
@@ -1107,7 +1115,7 @@ function AddMerchantModal({
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Hard Limit ($)</label>
+                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelHardLimit}</label>
                     <input
                       type="number"
                       value={form.hardLimit}
@@ -1121,7 +1129,7 @@ function AddMerchantModal({
                   <div className="flex items-start gap-2 px-4 py-3 rounded-md bg-sky-400/5 border border-sky-400/20 mt-4">
                     <Info className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
                     <p className="text-sm text-sky-300/80 leading-6">
-                      Warm-up mode ignores limits temporarily. It limits transactions to $50 each with a progressive daily cap ($100 → $500) over 7 days.
+                      {t.warmupDescAdd}
                     </p>
                   </div>
                 )}
@@ -1134,38 +1142,38 @@ function AddMerchantModal({
               <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
                 <div className="flex items-center gap-2">
                   <Globe className="w-4 h-4 text-[#FFD600]" />
-                  <p className="text-base font-semibold text-[#e7edf8]">Shield Domain</p>
+                  <p className="text-base font-semibold text-[#e7edf8]">{t.shieldDomain}</p>
                 </div>
                 <div className="flex rounded-md overflow-hidden border border-[#343947]">
-                  {(["platform", "custom"] as DomainType[]).map((t) => (
+                  {(["platform", "custom"] as DomainType[]).map((type) => (
                     <button
-                      key={t}
-                      onClick={() => update({ domainType: t, shieldDomain: t === "platform" ? fallbackPlatformDomain : "" })}
+                      key={type}
+                      onClick={() => update({ domainType: type, shieldDomain: type === "platform" ? fallbackPlatformDomain : "" })}
                       className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold transition-colors ${
-                        form.domainType === t ? "bg-[#FFD600]/10 text-[#FFD600] border border-[#FFD600]" : "text-[#97a3b6] hover:text-[#e7edf8] bg-[#2a2d39] border border-[#343947]"
+                        form.domainType === type ? "bg-[#FFD600]/10 text-[#FFD600] border border-[#FFD600]" : "text-[#97a3b6] hover:text-[#e7edf8] bg-[#2a2d39] border border-[#343947]"
                       }`}
                     >
-                      {t === "platform" ? <Lock className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
-                      {t === "platform" ? "Platform Domain" : "Custom Domain"}
+                      {type === "platform" ? <Lock className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
+                      {type === "platform" ? t.btnPlatformDomain : t.btnCustomDomain}
                     </button>
                   ))}
                 </div>
                 {form.domainType === "platform" ? (
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Select Platform Domain <span className="text-red-400">*</span></label>
+                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelSelectPlatform} <span className="text-red-400">*</span></label>
                     <select
                       value={verifiedPlatformDomains.includes(form.shieldDomain) ? form.shieldDomain : ""}
                       onChange={(e) => update({ shieldDomain: e.target.value })}
                       disabled={!verifiedPlatformDomains.length}
                       className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors appearance-none"
                     >
-                      <option value="" disabled>{verifiedPlatformDomains.length ? "Select a verified platform domain" : "No verified platform domains available"}</option>
+                      <option value="" disabled>{verifiedPlatformDomains.length ? t.selectVerifiedPlaceholder : t.noVerifiedPlaceholder}</option>
                       {verifiedPlatformDomains.map((d) => (<option key={d} value={d}>{d}</option>))}
                     </select>
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Custom Domain <span className="text-red-400">*</span></label>
+                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelCustomDomain} <span className="text-red-400">*</span></label>
                     <input
                       value={form.shieldDomain}
                       onChange={(e) => update({ shieldDomain: e.target.value })}
@@ -1179,17 +1187,17 @@ function AddMerchantModal({
               <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
                 <div className="flex items-center gap-2">
                   <Wifi className="w-4 h-4 text-[#FFD600]" />
-                  <p className="text-base font-semibold text-[#e7edf8]">Static Proxy</p>
+                  <p className="text-base font-semibold text-[#e7edf8]">{t.staticProxyAdd}</p>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Proxy URL (Optional)</label>
+                  <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelProxyOptional}</label>
                   <input
                     value={form.proxyUrl}
                     onChange={(e) => update({ proxyUrl: e.target.value })}
                     placeholder="http://user:pass@proxy.example.com:8080"
                     className="w-full bg-[#222530] border border-[#343947] rounded-md px-4 py-3 text-base font-mono text-orange-400 placeholder:text-[#97a3b6]/50 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
                   />
-                  <p className="text-sm text-[#aab4c5] leading-6">Supports HTTP, HTTPS, and SOCKS5.</p>
+                  <p className="text-sm text-[#aab4c5] leading-6">{t.proxyDescAdd}</p>
                 </div>
               </div>
             </div>
@@ -1200,17 +1208,17 @@ function AddMerchantModal({
               <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
                 <div className="flex items-center gap-2">
                   <Package className="w-4 h-4 text-[#FFD600]" />
-                  <p className="text-base font-semibold text-[#e7edf8]">Payment Display Profile</p>
+                  <p className="text-base font-semibold text-[#e7edf8]">{t.paymentDisplayProfile}</p>
                 </div>
                 <p className="text-sm text-[#aab4c5] leading-6">
-                  Optional. When assigned, this account is preferred for stores using the same Payment Display Profile.
+                  {t.displayProfileDescAdd}
                 </p>
                 <select
                   value={form.displayProfileId || ""}
                   onChange={(e) => update({ displayProfileId: e.target.value || "" })}
                   className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors appearance-none"
                 >
-                  <option value="">None (Use fallback accounts)</option>
+                  <option value="">{t.noneProfile}</option>
                   {displayProfiles.map((p) => (
                     <option key={p.id} value={p.id}>{p.profile_name}</option>
                   ))}
@@ -1222,16 +1230,16 @@ function AddMerchantModal({
           {activeTab === "review" && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
-                <p className="text-base font-semibold text-[#e7edf8]">Review Account Details</p>
+                <p className="text-base font-semibold text-[#e7edf8]">{t.reviewAccountDetails}</p>
                 <div className="space-y-3">
                   {[
-                    { label: "Account Name", value: form.accountName || "—" },
-                    { label: "PayPal Email", value: form.email || "—" },
-                    { label: "Initial Status", value: form.status },
-                    { label: "Shield Domain", value: form.shieldDomain || "—" },
-                    { label: "Display Profile", value: displayProfiles.find(p => p.id === form.displayProfileId)?.profile_name || "None" },
-                    { label: "Limits", value: `$${form.softLimit} soft / $${form.hardLimit} hard` },
-                    { label: "Proxy Configured", value: form.proxyUrl ? "Yes" : "No" },
+                    { label: t.reviewName, value: form.accountName || "—" },
+                    { label: t.reviewEmail, value: form.email || "—" },
+                    { label: t.reviewInitialStatus, value: form.status === "Active" ? t.filterActive : form.status === "Warm-up" ? t.filterWarmUp : form.status },
+                    { label: t.reviewShieldDomain, value: form.shieldDomain || "—" },
+                    { label: t.reviewProfile, value: displayProfiles.find(p => p.id === form.displayProfileId)?.profile_name || t.noneProfile },
+                    { label: t.reviewLimits, value: `$${form.softLimit}${t.softSuffix} / $${form.hardLimit}${t.hardSuffix}` },
+                    { label: t.reviewProxy, value: form.proxyUrl ? t.reviewProxyYes : t.reviewProxyNo },
                   ].map((s) => (
                     <div key={s.label} className="flex justify-between items-center py-2 border-b border-[#343947]/50 last:border-0">
                       <span className="text-sm text-[#97a3b6]">{s.label}</span>
@@ -1242,8 +1250,7 @@ function AddMerchantModal({
                 
                 <div className="bg-[#2a2d39]/50 rounded-md px-4 py-3 mt-4">
                   <p className="text-sm text-[#aab4c5] leading-6">
-                    Credentials have been entered and will be encrypted before storage.
-                    Client Secret is hidden for security.
+                    {t.reviewEncryptedWarning}
                   </p>
                 </div>
               </div>
@@ -1261,12 +1268,12 @@ function AddMerchantModal({
           {success && (
             <div className="mb-4 flex items-center gap-2 text-sm text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-3 py-2 rounded-md transition-all">
               <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span>Account created successfully.</span>
+              <span>{t.msgCreatedSuccess}</span>
             </div>
           )}
           <div className="flex items-center justify-between gap-4">
             <button onClick={onClose} className="flex-1 px-5 py-2.5 text-sm font-semibold text-[#97a3b6] border border-[#343947] rounded-md hover:bg-[#2a2d39] transition-colors">
-              Cancel
+              {t.btnCancel}
             </button>
             <button
               onClick={handleAdd}
@@ -1281,11 +1288,11 @@ function AddMerchantModal({
               className="flex-1 px-5 py-2.5 text-sm font-semibold text-[#151821] bg-[#FFD600] hover:bg-[#e6c100] rounded-md transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {saving ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> Adding...</>
+                <><Loader2 className="w-4 h-4 animate-spin" /> {t.btnAdding}</>
               ) : success ? (
-                <><Check className="w-4 h-4" /> Added</>
+                <><Check className="w-4 h-4" /> {t.btnAdded}</>
               ) : (
-                "Add Account"
+                t.btnAdd
               )}
             </button>
           </div>
@@ -1350,6 +1357,9 @@ function mapApiToMerchant(a: MerchantApiRow, platformDomains: string[]): Merchan
 }
 
 export default function AccountsPage() {
+  const { language } = useLanguage()
+  const t = accountsCopy[language]
+
   const [merchants, setMerchants] = useState<Merchant[]>([])
   const [platformDomains, setPlatformDomains] = useState<string[]>([])
   const [verifiedPlatformDomains, setVerifiedPlatformDomains] = useState<string[]>([])
@@ -1452,7 +1462,7 @@ export default function AccountsPage() {
   }, [])
 
   const handleDelete = useCallback(async (id: string) => {
-    if (!confirm("Remove this account from the rotation pool?\n\nNote: accounts with linked transactions cannot be deleted. Set them to Suspended instead.")) return
+    if (!confirm(t.dangerDesc + "\n\nNote: accounts with linked transactions cannot be deleted. Set them to Suspended instead.")) return
 
     try {
       const res = await fetch(`/api/merchant/accounts/${id}`, { method: "DELETE" })
@@ -1498,12 +1508,12 @@ export default function AccountsPage() {
 
   return (
     <DashboardShell>
-      <main data-ui-version="accounts-boron-v3" className="w-full px-6 md:px-8 py-8 space-y-6">
+      <main data-ui-version="accounts-i18n-vi-phase6" className="w-full px-6 md:px-8 py-8 space-y-6">
         {/* Page header */}
         <DashboardPageHeader 
-          eyebrow="ACCOUNTS"
-          title="Merchant Accounts"
-          description="Manage payment provider accounts, routing status, limits, profile mapping, and operational health."
+          eyebrow={t.eyebrow}
+          title={t.title}
+          description={t.description}
           action={
             <div className="flex items-center gap-2">
               <button
@@ -1512,14 +1522,14 @@ export default function AccountsPage() {
                 className="flex items-center gap-1.5 text-sm font-semibold text-[#97a3b6] hover:text-[#e7edf8] border border-[#343947] rounded-md px-4 py-2 hover:bg-[#2a2d39] transition-colors disabled:opacity-50"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
-                {syncing ? "Syncing..." : "Sync"}
+                {syncing ? t.syncing : t.sync}
               </button>
               <button
                 onClick={() => setShowAdd(true)}
                 className="flex items-center gap-1.5 text-sm font-semibold text-[#151821] bg-[#FFD600] hover:bg-[#e6c100] rounded-md px-4 py-2 transition-colors"
               >
                 <Plus className="w-3.5 h-3.5" />
-                Add Account
+                {t.addAccount}
               </button>
             </div>
           }
@@ -1530,9 +1540,9 @@ export default function AccountsPage() {
           <div className="col-span-2 md:col-span-2 bg-[#222530] border border-[#343947] rounded-lg px-4 py-3 relative overflow-hidden" data-ui-version="grid-background-v1">
             <GridBackground />
             <div className="relative z-10">
-              <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Total Volume Today</p>
+              <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.totalVolumeToday}</p>
               <p className="text-xl font-mono font-semibold text-[#e7edf8] mt-1">${totalVolume.toLocaleString()}</p>
-              <p className="text-sm text-[#aab4c5] leading-6 mt-1">{activeCount} active accounts</p>
+              <p className="text-sm text-[#aab4c5] leading-6 mt-1">{activeCount} {t.activeAccounts}</p>
             </div>
           </div>
           {statusCounts.map(({ status, count }) => {
@@ -1543,7 +1553,7 @@ export default function AccountsPage() {
                 <div className="relative z-10">
                   <div className={`flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider ${cfg.text}`}>
                     {cfg.icon}
-                    {status}
+                    {status === "Active" ? t.filterActive : status === "Limited" ? t.filterLimited : status === "Warm-up" ? t.filterWarmUp : status === "Paused" ? t.filterPaused : status === "Suspended" ? t.filterSuspended : status}
                   </div>
                   <p className="text-xl font-mono font-semibold text-[#e7edf8] mt-2">{count}</p>
                 </div>
@@ -1566,7 +1576,7 @@ export default function AccountsPage() {
                     : "border-transparent text-[#97a3b6] hover:text-[#e7edf8]"
                 }`}
               >
-                {s}
+                {s === "All" ? t.filterAll : s === "Active" ? t.filterActive : s === "Limited" ? t.filterLimited : s === "Warm-up" ? t.filterWarmUp : s === "Paused" ? t.filterPaused : s === "Suspended" ? t.filterSuspended : s}
                 <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
                   filterStatus === s ? "bg-[#FFD600]/10 text-[#FFD600]" : "bg-[#2a2d39] text-[#97a3b6]"
                 }`}>
@@ -1582,13 +1592,13 @@ export default function AccountsPage() {
               <thead>
                 <tr className="border-b border-[#343947] bg-[#1a1d24]">
                   {[
-                    "Account Name",
-                    "Shield Domain",
-                    "Status",
-                    "Display Profile",
-                    "Daily Volume",
-                    "Priority",
-                    "Tx",
+                    t.thAccountName,
+                    t.thShieldDomain,
+                    t.thStatus,
+                    t.thDisplayProfile,
+                    t.thDailyVolume,
+                    t.thPriority,
+                    t.thTx,
                     "",
                   ].map((h) => (
                     <th
@@ -1680,8 +1690,8 @@ export default function AccountsPage() {
               <div className="w-16 h-16 rounded-full bg-[#1a1d24] flex items-center justify-center mb-4">
                 <Package className="w-8 h-8 text-[#343947]" />
               </div>
-              <p className="text-lg font-semibold text-[#e7edf8] mb-2">No accounts found</p>
-              <p className="text-[#97a3b6] max-w-sm">There are no accounts matching the selected filter status.</p>
+              <p className="text-lg font-semibold text-[#e7edf8] mb-2">{t.noAccountsFound}</p>
+              <p className="text-[#97a3b6] max-w-sm">{t.noAccountsDesc}</p>
             </div>
           )}
         </div>
@@ -1742,10 +1752,13 @@ function CredentialCell({ clientId }: { clientId: string }) {
 
 
 function PaymentDisplayProfileBadge({ profileId, profiles, isActive }: { profileId: string | null, profiles: PaymentDisplayProfile[], isActive: boolean }) {
+  const { language } = useLanguage()
+  const t = accountsCopy[language]
+
   if (!profileId) {
     return (
       <div className="inline-flex items-center px-2.5 py-1 rounded-md bg-[#2a2d39] border border-[#343947]">
-        <span className="text-xs font-medium text-[#97a3b6]">Inherit Store Default</span>
+        <span className="text-xs font-medium text-[#97a3b6]">{t.inheritStoreDefault}</span>
       </div>
     )
   }
@@ -1755,7 +1768,7 @@ function PaymentDisplayProfileBadge({ profileId, profiles, isActive }: { profile
   if (!p) {
     return (
       <div className="inline-flex items-center px-2.5 py-1 rounded-md bg-red-500/10 border border-red-500/20">
-        <span className="text-xs font-medium text-red-400">Unknown profile</span>
+        <span className="text-xs font-medium text-red-400">{t.unknownProfile}</span>
       </div>
     )
   }

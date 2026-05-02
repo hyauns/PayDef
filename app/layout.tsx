@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Analytics } from '@vercel/analytics/next'
 import { SessionProvider } from '@/components/auth/session-provider'
 import { Toaster } from 'sonner'
+import { LanguageProvider } from "@/components/i18n/LanguageProvider"
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -37,7 +38,9 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className="font-mono antialiased bg-background text-foreground">
         <SessionProvider>
-          {children}
+          <LanguageProvider>
+            {children}
+          </LanguageProvider>
         </SessionProvider>
         <Toaster
           position="bottom-right"

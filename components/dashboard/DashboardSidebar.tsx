@@ -15,6 +15,7 @@ import {
   Users2,
   Boxes,
   X,
+  BookOpen,
 } from "lucide-react"
 
 type Role = "SUPER_ADMIN" | "MERCHANT"
@@ -37,6 +38,7 @@ const MERCHANT_ONLY_LINKS = [
   { label: "Accounts",     href: "/accounts",      icon: Users },
   { label: "Stores",       href: "/stores",        icon: Store },
   { label: "Settings",     href: "/settings",      icon: Settings },
+  { label: "Documents",    href: "/documents",     icon: BookOpen },
 ]
 
 const ADMIN_LINKS = [
