@@ -16,6 +16,7 @@ import {
   Boxes,
   X,
   BookOpen,
+  Layers,
 } from "lucide-react"
 
 type Role = "SUPER_ADMIN" | "MERCHANT"
@@ -30,6 +31,7 @@ const SHARED_LINKS = [
   { label: "Dashboard",    href: "/dashboard",     icon: LayoutDashboard },
   { label: "Analytics",    href: "/analytics",     icon: BarChart3 },
   { label: "Transactions", href: "/transactions",  icon: ArrowRightLeft },
+  { label: "Payment Identities", href: "/payment-identities", icon: Layers },
   { label: "Domains",      href: "/domains",       icon: Globe },
   { label: "Logs",         href: "/logs",          icon: ScrollText },
 ]
