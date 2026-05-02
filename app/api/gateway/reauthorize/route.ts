@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
     const txResult = await client.query<any>(
       `SELECT id, tenant_id, store_id, merchant_id, status, authorization_id, latest_authorization_id
        FROM transactions
-       WHERE (id = $1 OR authorization_id = $1 OR latest_authorization_id = $1)
+       WHERE (id::text = $1 OR authorization_id = $1 OR latest_authorization_id = $1)
          AND store_id = $2
          AND tenant_id = $3
        FOR UPDATE`,
