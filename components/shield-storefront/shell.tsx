@@ -56,101 +56,146 @@ export function ShieldStorefrontShell({
   children,
 }: ShellProps) {
   return (
-    <main className="min-h-screen bg-background text-foreground" data-ui-version="shield-storefront-config-v1">
-      <div className="border-b border-border bg-card/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 md:px-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-cyan-400/30 bg-cyan-400/10">
-              <Shield className="h-4 w-4 text-cyan-400" />
-            </div>
-            <div>
-              <p className="text-xs font-mono uppercase tracking-[0.25em] text-cyan-400">{config.industry}</p>
-              <h1 className="text-sm font-semibold">{config.logoText || config.brandName}</h1>
-            </div>
-          </div>
-          <div className="hidden items-center gap-1 md:flex">
-            {NAV_ITEMS.map((item) => (
-              <NavLink key={item.href} item={item} currentPath={currentPath} />
-            ))}
-          </div>
-        </div>
+    <main className="min-h-screen bg-background text-foreground font-sans selection:bg-muted" data-ui-version="bubblyscent-automotive-storefront-v1">
+      {/* Top utility bar */}
+      <div className="bg-muted px-4 py-2 text-center text-xs font-medium text-muted-foreground">
+        Free standard shipping on orders over $50 | Secure checkout guaranteed
       </div>
 
-      <section className="border-b border-border bg-[radial-gradient(circle_at_top,_rgba(34,211,238,0.18),_transparent_40%),linear-gradient(180deg,rgba(17,24,39,0.8),rgba(5,10,20,1))]">
-        <div className="mx-auto grid max-w-6xl gap-8 px-4 py-14 md:grid-cols-[1.35fr_0.9fr] md:px-6 md:py-18">
-          <div className="space-y-5">
-            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-mono uppercase tracking-[0.2em] text-cyan-400">
-              <Globe className="h-3 w-3" />
-              {eyebrow}
-            </div>
-            <div className="space-y-3">
-              <h2 className="max-w-3xl text-3xl font-semibold tracking-tight md:text-5xl">{title}</h2>
-              <p className="max-w-2xl text-sm leading-7 text-muted-foreground md:text-base">{description}</p>
-            </div>
-            <div className="flex flex-wrap gap-3 text-xs font-mono text-muted-foreground">
-              <span className="rounded-full border border-border px-3 py-1.5">Secure checkout</span>
-              <span className="rounded-full border border-border px-3 py-1.5">Quality guaranteed</span>
-              <span className="rounded-full border border-border px-3 py-1.5">Customer support</span>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-border bg-card p-6 shadow-[0_20px_70px_rgba(0,0,0,0.35)]">
-            <div className="space-y-4">
-              <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-emerald-300">
-                  <PackageCheck className="h-4 w-4" />
-                  Order processing
-                </div>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  Orders are processed securely and usually dispatched within standard fulfillment times. You will receive a tracking link once your order ships.
-                </p>
+      <header className="sticky top-0 z-40 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 md:px-8">
+          <div className="flex items-center gap-3">
+            <Link href="/" className="flex items-center gap-2 transition-opacity hover:opacity-80">
+              <div className="flex h-8 w-8 items-center justify-center rounded bg-foreground text-background">
+                <Shield className="h-4 w-4" />
               </div>
-              <div className="grid gap-3 text-sm">
-                <div className="rounded-xl border border-border p-4">
-                  <p className="text-xs font-mono uppercase tracking-[0.2em] text-muted-foreground">Support email</p>
-                  <p className="mt-1 font-semibold text-foreground">{config.supportEmail}</p>
-                </div>
-                {config.supportPhone && (
-                  <div className="rounded-xl border border-border p-4">
-                    <p className="text-xs font-mono uppercase tracking-[0.2em] text-muted-foreground">Support phone</p>
-                    <p className="mt-1 font-semibold text-foreground">{config.supportPhone}</p>
-                  </div>
-                )}
-              </div>
-            </div>
+              <span className="font-bold tracking-tight text-lg">{config.logoText || config.brandName}</span>
+            </Link>
           </div>
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-6xl px-4 py-12 md:px-6">{children}</section>
-
-      <footer className="border-t border-border bg-card/40">
-        <div className="mx-auto grid max-w-6xl gap-8 px-4 py-8 md:grid-cols-[1fr_auto] md:px-6">
-          <div className="space-y-3">
-            <h2 className="text-sm font-semibold">{config.brandName}</h2>
-            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">{config.footerText}</p>
-            <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5">
-                <Mail className="h-3.5 w-3.5 text-cyan-400" />
-                {config.supportEmail}
-              </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5">
-                <Truck className="h-3.5 w-3.5 text-cyan-400" />
-                Standard fulfillment
-              </span>
-            </div>
-          </div>
-          <div className="grid gap-2 text-sm">
-            {POLICY_ITEMS.map((item) => (
+          <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
+            {NAV_ITEMS.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className="text-muted-foreground transition-colors hover:text-foreground"
+                className={`transition-colors hover:text-foreground/80 ${
+                  currentPath === item.href ? "text-foreground" : "text-foreground/60"
+                }`}
               >
                 {item.label}
               </Link>
             ))}
+          </nav>
+        </div>
+      </header>
+
+      {currentPath === "/" && (
+        <section className="relative overflow-hidden border-b border-border bg-card">
+          {/* Subtle road line accent */}
+          <div className="absolute left-0 top-0 h-1 w-full bg-foreground/10" />
+          
+          <div className="mx-auto grid max-w-7xl gap-8 px-4 py-16 md:grid-cols-[1fr_auto] md:px-8 md:py-24 lg:grid-cols-2">
+            <div className="flex flex-col justify-center space-y-6">
+              <div className="inline-flex items-center self-start rounded-full border border-border bg-muted px-3 py-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                {eyebrow}
+              </div>
+              <div className="space-y-4">
+                <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl lg:text-6xl text-foreground">
+                  {title}
+                </h1>
+                <p className="max-w-xl text-lg leading-relaxed text-muted-foreground">
+                  {description}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-4 pt-4">
+                <Link href="/products" className="inline-flex h-11 items-center justify-center rounded-md bg-foreground px-8 text-sm font-medium text-background transition-colors hover:bg-foreground/90 focus:outline-none focus:ring-2 focus:ring-foreground focus:ring-offset-2">
+                  Shop Essentials
+                </Link>
+                <div className="flex items-center gap-4 text-sm text-muted-foreground font-medium">
+                  <span className="flex items-center gap-1.5"><Shield className="h-4 w-4" /> Secure checkout</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="hidden lg:flex flex-col justify-center gap-4 p-8">
+              <div className="rounded-xl border border-border bg-background p-6 shadow-sm">
+                <div className="flex items-center gap-3 text-base font-semibold">
+                  <Truck className="h-5 w-5 text-muted-foreground" />
+                  Reliable Shipping
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Orders are processed securely and dispatched quickly to get you back on the road.
+                </p>
+              </div>
+              <div className="rounded-xl border border-border bg-background p-6 shadow-sm">
+                <div className="flex items-center gap-3 text-base font-semibold">
+                  <PackageCheck className="h-5 w-5 text-muted-foreground" />
+                  Quality Assured
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Everyday auto care products tested for durability and practical performance.
+                </p>
+              </div>
+            </div>
           </div>
+        </section>
+      )}
+
+      <section className="mx-auto max-w-7xl px-4 py-12 md:px-8">{children}</section>
+
+      <footer className="border-t border-border bg-muted/40 pb-12 pt-16">
+        <div className="mx-auto grid max-w-7xl gap-12 px-4 md:grid-cols-[1.5fr_1fr_1fr] md:px-8">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <div className="flex h-6 w-6 items-center justify-center rounded bg-foreground text-background">
+                <Shield className="h-3 w-3" />
+              </div>
+              <span className="font-bold text-base">{config.brandName}</span>
+            </div>
+            <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
+              {config.footerText}
+            </p>
+            <div className="flex flex-col gap-2 text-sm text-muted-foreground pt-2">
+              <span className="flex items-center gap-2">
+                <Mail className="h-4 w-4" /> {config.supportEmail}
+              </span>
+              {config.supportPhone && (
+                <span className="flex items-center gap-2">
+                  <Globe className="h-4 w-4" /> {config.supportPhone}
+                </span>
+              )}
+            </div>
+          </div>
+          
+          <div className="space-y-4">
+            <h4 className="text-sm font-semibold uppercase tracking-wider">Quick Links</h4>
+            <nav className="flex flex-col gap-3 text-sm">
+              <Link href="/" className="text-muted-foreground hover:text-foreground">Home</Link>
+              <Link href="/products" className="text-muted-foreground hover:text-foreground">Products</Link>
+              <Link href="/about" className="text-muted-foreground hover:text-foreground">About Us</Link>
+              <Link href="/contact" className="text-muted-foreground hover:text-foreground">Contact</Link>
+              <Link href="/faq" className="text-muted-foreground hover:text-foreground">FAQ</Link>
+            </nav>
+          </div>
+
+          <div className="space-y-4">
+            <h4 className="text-sm font-semibold uppercase tracking-wider">Policies & Support</h4>
+            <nav className="flex flex-col gap-3 text-sm">
+              {POLICY_ITEMS.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  {item.label}
+                </Link>
+              ))}
+              <Link href="/order-lookup" className="text-muted-foreground hover:text-foreground">Order Lookup</Link>
+              <Link href="/tracking" className="text-muted-foreground hover:text-foreground">Tracking</Link>
+            </nav>
+          </div>
+        </div>
+        <div className="mx-auto mt-16 max-w-7xl border-t border-border px-4 pt-8 md:px-8 text-center text-xs text-muted-foreground">
+          &copy; {new Date().getFullYear()} {config.brandName}. All rights reserved.
         </div>
       </footer>
     </main>

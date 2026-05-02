@@ -6,9 +6,9 @@ export const bubblyScent: ShieldSiteConfig = {
   tagline: "Practical tire care and road-ready accessories for everyday drivers.",
   industry: "Auto Care & Accessories",
   logoText: "Bubbly Scent",
-  heroTitle: "Road-ready essentials for your vehicle.",
+  heroTitle: "Everyday Tire Care & Road-Ready Auto Accessories",
   heroSubtitle:
-    "We provide practical automotive care tools, tire maintenance accessories, and reliable road-ready kits for everyday drivers.",
+    "Practical tools and care essentials for drivers who want a cleaner, safer, better-prepared ride.",
   heroEyebrow: "Auto Care Store",
   products: [
     {
@@ -57,7 +57,7 @@ export const bubblyScent: ShieldSiteConfig = {
   termsUrl: "https://www.bubblyscent.com/terms",
   footerText:
     "Bubbly Scent Auto Care is dedicated to helping drivers maintain their vehicles with practical, easy-to-use accessories. All orders are processed securely and shipped with tracking information.",
-  seoTitle: "Bubbly Scent Auto Care | Tire & Auto Accessories",
+  seoTitle: "Bubbly Scent Auto Care | Tire Care & Auto Accessories",
   seoDescription:
-    "Shop Bubbly Scent Auto Care for practical automotive accessories, tire maintenance tools, and road-ready essentials.",
+    "Practical tire care kits, pressure gauges, valve caps, roadside tools, and wheel cleaning accessories for everyday drivers.",
 }
