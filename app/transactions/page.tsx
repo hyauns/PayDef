@@ -116,6 +116,7 @@ interface TransactionDetailResponse {
   paypal_order_id: string | null
   paypal_capture_id: string | null
   authorization_id: string | null
+  latest_authorization_id: string | null
   customer_email: string | null
   card_last_4: string | null
   card_brand: string | null
@@ -593,6 +594,26 @@ function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }
     }
   }
 
+  const handleReauthorize = async () => {
+    setReplayBusy(true)
+    setToastMsg(null)
+    try {
+      const response = await fetch(`/api/merchant/transactions/${tx.id}/reauthorize`, {
+        method: "POST",
+      })
+      const payload = await response.json()
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Reauthorize failed")
+      }
+      setToastMsg({ ok: true, msg: "Reauthorization successful. New ID: " + payload.new_authorization_id })
+      await mutate()
+    } catch (err) {
+      setToastMsg({ ok: false, msg: err instanceof Error ? err.message : "Reauthorize failed" })
+    } finally {
+      setReplayBusy(false)
+    }
+  }
+
 
 
   return (
@@ -638,13 +659,33 @@ function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }
             <p className="text-xs font-mono text-emerald-400 mt-0.5">{t.netToMerchant} {fmt(amount - fee)}</p>
           </div>
 
+          {status === "Authorized" && (
+            <div className="border border-amber-400/20 bg-amber-400/5 rounded-lg p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-mono font-semibold text-amber-400">Authorization Expiry Warning</p>
+                  <p className="text-xs font-mono text-[#97a3b6] mt-1">
+                    Expires at: {data?.timestamps.authorization_expires_at ? new Date(data.timestamps.authorization_expires_at).toLocaleString() : "—"}
+                  </p>
+                </div>
+                <button
+                  onClick={() => void handleReauthorize()}
+                  disabled={replayBusy}
+                  className="px-3 py-2 text-xs font-mono border border-amber-400/30 text-amber-400 hover:bg-amber-400/10 rounded-md transition-colors disabled:opacity-40"
+                >
+                  {replayBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Reauthorize"}
+                </button>
+              </div>
+            </div>
+          )}
+
 
 
           <div className="grid grid-cols-2 gap-3">
             {[
               { label: t.paypalOrder, value: data?.paypal_order_id ?? tx.orderId, color: "text-[#FFD600]", copy: true },
               { label: t.captureId, value: data?.paypal_capture_id ?? tx.paypalTxId, color: "text-[#e7edf8]", copy: !!data?.paypal_capture_id },
-              { label: t.authorization, value: data?.authorization_id ?? "—", color: "text-[#e7edf8]", copy: !!data?.authorization_id },
+              { label: t.authorization, value: data?.latest_authorization_id ?? data?.authorization_id ?? "—", color: "text-[#e7edf8]", copy: !!data?.authorization_id },
               { label: t.statusReason, value: data?.status_reason ?? "—", color: "text-[#97a3b6]" },
               { label: t.store, value: data?.store_name ?? tx.storeName, color: "text-[#e7edf8]" },
               { label: t.shieldDomain, value: data?.shield_domain ?? "—", color: "text-[#e7edf8]" },

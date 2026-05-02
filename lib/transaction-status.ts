@@ -15,6 +15,7 @@ type TransactionDetailRow = {
   paypal_order_id: string | null
   paypal_capture_id: string | null
   authorization_id: string | null
+  latest_authorization_id: string | null
   customer_email: string | null
   card_last_4: string | null
   card_brand: string | null
@@ -73,6 +74,7 @@ export async function getTransactionDetail(transactionId: string, scope?: {
      t.paypal_order_id,
      t.paypal_capture_id,
      t.authorization_id,
+     t.latest_authorization_id,
      t.customer_email,
      t.card_last_4,
      t.card_brand,
@@ -117,6 +119,7 @@ export async function getTransactionDetail(transactionId: string, scope?: {
      t.paypal_order_id,
      t.paypal_capture_id,
      t.authorization_id,
+     t.latest_authorization_id,
      t.customer_email,
      NULL::text AS card_last_4,
      NULL::text AS card_brand,
@@ -186,6 +189,7 @@ export async function getTransactionDetail(transactionId: string, scope?: {
     paypalOrderId: row.paypal_order_id,
     paypalCaptureId: row.paypal_capture_id,
     authorizationId: row.authorization_id,
+    latestAuthorizationId: row.latest_authorization_id,
     customerEmail: row.customer_email,
     cardLast4: row.card_last_4,
     cardBrand: row.card_brand,

@@ -39,6 +39,7 @@ export async function GET(_req: NextRequest, context: RouteContext) {
     paypal_order_id: detail.paypalOrderId,
     paypal_capture_id: detail.paypalCaptureId,
     authorization_id: detail.authorizationId,
+    latest_authorization_id: detail.latestAuthorizationId,
     customer_email: detail.customerEmail,
     card_last_4: detail.cardLast4,
     card_brand: detail.cardBrand,

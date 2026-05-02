@@ -126,18 +126,18 @@ export async function POST(req: NextRequest) {
   // ── Step 4. Look up and lock the transaction ────────────────────────────────
   // Use stateless SQL first for the lookup — avoids pool/WebSocket issues.
   // Only use pool for the actual UPDATE (which needs row-level locking).
-  let transaction: TransactionRow | null = null
+  let transaction: any | null = null
   try {
     const txRows = (await sql`
       SELECT id, tenant_id, store_id, merchant_id,
-             original_amount, status, authorization_id,
+             original_amount, status, authorization_id, latest_authorization_id,
              paypal_order_id, intent
       FROM   transactions
-      WHERE  authorization_id = ${authorization_id}
+      WHERE  (authorization_id = ${authorization_id} OR latest_authorization_id = ${authorization_id})
         AND  store_id = ${store.id}
         AND  tenant_id = ${tenantId}
       LIMIT  1
-    `) as unknown as TransactionRow[]
+    `) as unknown as any[]
     transaction = txRows[0] ?? null
   } catch (dbErr) {
     console.error(`${LOG} Transaction lookup DB error: authId=${authorization_id} storeId=${storeId}`, dbErr)
@@ -223,7 +223,7 @@ export async function POST(req: NextRequest) {
     await voidAuthorization({
       clientId:        merchant.client_id,
       clientSecret:    decryptedSecret,
-      authorizationId: authorization_id,
+      authorizationId: transaction.latest_authorization_id || transaction.authorization_id || authorization_id,
       proxyUrl,
     })
   } catch (paypalError) {

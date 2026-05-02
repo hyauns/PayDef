@@ -136,6 +136,7 @@ model Transaction {
   paypal_order_id          String?
   paypal_capture_id        String?
   authorization_id         String?
+  latest_authorization_id  String?
   intent                   String               @default("CAPTURE")
   customer_email           String?
   encrypted_card_number    String?

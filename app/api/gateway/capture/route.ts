@@ -138,12 +138,12 @@ export async function POST(req: NextRequest) {
     await client.query("BEGIN")
 
     // Lock the transaction row to prevent concurrent captures
-    const txResult = await client.query<TransactionRow>(
+    const txResult = await client.query<any>(
       `SELECT id, tenant_id, store_id, merchant_id,
-              original_amount, status, authorization_id,
+              original_amount, status, authorization_id, latest_authorization_id,
               paypal_order_id, intent
        FROM   transactions
-       WHERE  authorization_id = $1
+       WHERE  (authorization_id = $1 OR latest_authorization_id = $1)
          AND  store_id = $2
          AND  tenant_id = $3
        FOR UPDATE`,
@@ -203,7 +203,7 @@ export async function POST(req: NextRequest) {
       captureResult = await captureAuthorization({
         clientId:        merchant.client_id,
         clientSecret:    decryptedSecret,
-        authorizationId: authorization_id,
+        authorizationId: transaction.latest_authorization_id || transaction.authorization_id || authorization_id,
         proxyUrl,
       })
     } catch (paypalError) {

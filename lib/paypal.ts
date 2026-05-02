@@ -758,3 +758,68 @@ export async function refundCapture(
   console.info(`[paypal] refundCapture OK: captureId=${p.captureId} refundId=${data.id} status=${data.status}`)
   return data
 }
+
+// ─── Reauthorize Authorization ───────────────────────────────────────────────
+//
+// Reauthorizes a payment that is approaching the end of its honor period.
+// Empty body = full reauthorization.
+
+export interface ReauthorizeAuthorizationParams {
+  clientId:         string
+  clientSecret:     string
+  authorizationId:  string
+  proxyUrl?:        string
+}
+
+export interface ReauthorizeResponse {
+  id:     string     // new authorization ID
+  status: string     // "CREATED" | "DENIED" | "PARTIALLY_CREATED" | ...
+  amount?: {
+    currency_code: string
+    value:         string
+  }
+}
+
+/**
+ * Reauthorizes a previously authorized PayPal payment before it expires.
+ * Empty body = full reauthorization of the entire amount.
+ *
+ * Returns the new authorization ID and status.
+ */
+export async function reauthorizeAuthorization(
+  p: ReauthorizeAuthorizationParams
+): Promise<ReauthorizeResponse> {
+  const token     = await getAccessToken(p.clientId, p.clientSecret, p.proxyUrl)
+  const proxyOpts = createFetchOptions(p.proxyUrl)
+  const ua        = getUserAgent(p.clientId)
+
+  const jitterMs = 200 + Math.floor(Math.random() * 500)
+  await new Promise((r) => setTimeout(r, jitterMs))
+
+  console.info(`[paypal] Reauthorizing ${p.authorizationId} (clientId=${p.clientId.slice(0, 8)}...)`)
+
+  const res = await fetch(
+    `${PAYPAL_BASE}/v2/payments/authorizations/${p.authorizationId}/reauthorize`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type":  "application/json",
+        "Authorization": `Bearer ${token}`,
+        "User-Agent":    ua,
+      },
+      body: JSON.stringify({}),  // Empty body = full reauthorization
+      ...proxyOpts,
+    }
+  )
+
+  if (!res.ok) {
+    const text = await res.text()
+    console.error(`[paypal] reauthorizeAuthorization FAILED [${res.status}]: ${text}`)
+    throw new PayPalApiError("reauthorize authorization", res.status, text)
+  }
+
+  const data = await res.json() as ReauthorizeResponse
+  console.info(`[paypal] reauthorizeAuthorization OK: oldAuthId=${p.authorizationId} newAuthId=${data.id} status=${data.status}`)
+  return data
+}
+
