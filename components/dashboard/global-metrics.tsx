@@ -6,7 +6,7 @@ import { StatCard } from "./StatCard"
 import { useLanguage } from "@/components/i18n/LanguageProvider"
 import { dashboardCopy } from "@/lib/i18n/dashboard"
 
-const fetcher = (url: string) => fetch(url).then(r => {
+const fetcher = (url: string) => fetch(url, { cache: "no-store" }).then(r => {
   if (!r.ok) throw new Error(`HTTP ${r.status}`)
   return r.json()
 })

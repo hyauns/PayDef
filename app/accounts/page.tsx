@@ -1644,7 +1644,7 @@ export default function AccountsPage() {
 
   // Fetch real data from API
   const fetchAccounts = useCallback(() => {
-    fetch("/api/merchant/accounts")
+    fetch("/api/merchant/accounts", { cache: "no-store" })
       .then(r => r.json())
       .then(data => {
         setMerchants(((data.accounts ?? []) as MerchantApiRow[]).map((row) => mapApiToMerchant(row, platformDomains)))
