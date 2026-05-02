@@ -198,17 +198,58 @@ export async function POST(req: NextRequest) {
     const decryptedSecret = decrypt(merchant.client_secret)
     const proxyUrl = merchant.proxy_url ?? undefined
 
+    const selectedAuthorizationId = transaction.latest_authorization_id || transaction.authorization_id || authorization_id
+    const selectedSource = transaction.latest_authorization_id ? "latest_authorization_id" : "authorization_id"
+
+    console.info(JSON.stringify({
+      event: "capture.authorization_selected",
+      transactionId: transaction.id,
+      storeId: store.id,
+      tenantId: tenantId,
+      merchantAccountId: transaction.merchant_id,
+      originalAuthorizationId: transaction.authorization_id,
+      latestAuthorizationId: transaction.latest_authorization_id,
+      selectedAuthorizationId,
+      selectedSource,
+    }))
+
+    console.info(JSON.stringify({
+      event: "capture.paypal_started",
+      transactionId: transaction.id,
+      selectedAuthorizationId,
+      selectedSource,
+    }))
+
     let captureResult
     try {
       captureResult = await captureAuthorization({
         clientId:        merchant.client_id,
         clientSecret:    decryptedSecret,
-        authorizationId: transaction.latest_authorization_id || transaction.authorization_id || authorization_id,
+        authorizationId: selectedAuthorizationId,
         proxyUrl,
       })
+      console.info(JSON.stringify({
+        event: "capture.paypal_completed",
+        transactionId: transaction.id,
+        selectedAuthorizationId,
+        selectedSource,
+        paypalCaptureId: captureResult.id,
+        status: captureResult.status,
+      }))
     } catch (paypalError) {
       await client.query("ROLLBACK")
-      console.error("[capture] PayPal capture failed:", paypalError)
+      const errMsg = paypalError && typeof paypalError === "object" && "body" in paypalError 
+        ? String((paypalError as any).body) 
+        : String(paypalError)
+      
+      console.error(JSON.stringify({
+        event: "capture.paypal_failed",
+        transactionId: transaction.id,
+        selectedAuthorizationId,
+        selectedSource,
+        error: errMsg,
+      }))
+      
       return NextResponse.json(
         { error: "Payment provider error during capture. Please try again." },
         { status: 502 }
