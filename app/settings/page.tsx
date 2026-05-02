@@ -21,7 +21,8 @@ import {
   Mail,
   Send,
   Package,
-  Tag
+  Tag,
+  ChevronRight
 } from "lucide-react"
 import { useLanguage } from "@/components/i18n/LanguageProvider"
 import { settingsCopy } from "@/lib/i18n/settings"
@@ -251,118 +252,127 @@ function StorePaymentDisplayProfile({ storeId, storeName }: { storeId: string; s
   }
 
   return (
-    <div className="space-y-4 pt-6 mt-6 border-t border-[#343947]">
-      <div className="flex items-center gap-2">
-        <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.paymentDisplayProfile}</label>
-        {saving && <Loader2 className="w-3 h-3 text-[#FFD600] animate-spin" />}
-      </div>
+    <details className="group mt-6 border-t border-[#343947] overflow-hidden">
+      <summary className="flex items-center justify-between py-4 cursor-pointer select-none">
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3] cursor-pointer">Advanced / Legacy Profile Settings</label>
+          {saving && <Loader2 className="w-3 h-3 text-[#FFD600] animate-spin" />}
+        </div>
+        <ChevronRight className="w-4 h-4 text-[#97a3b6] group-open:rotate-90 transition-transform" />
+      </summary>
       
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Industry Vertical */}
-        <div className="space-y-2.5">
-          <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.industryVertical}</label>
-          <select 
-            value={form.industryVertical} 
-            onChange={(e) => update({ industryVertical: e.target.value })}
-            className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2.5 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+      <div className="space-y-4 pb-6 pt-2">
+        <div className="bg-[#4a3908]/50 border border-[#ca8a04]/50 text-[#facc15] text-sm leading-6 px-4 py-3 rounded-md border-l-[3px] border-l-[#ca8a04]">
+          Payment Identity is now the recommended setup for checkout identity. Use these legacy settings only for older accounts.
+        </div>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Industry Vertical */}
+          <div className="space-y-2.5">
+            <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.industryVertical}</label>
+            <select 
+              value={form.industryVertical} 
+              onChange={(e) => update({ industryVertical: e.target.value })}
+              className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2.5 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+            >
+              <option value="automotive_tires">{t.indAuto}</option>
+              <option value="electronics">{t.indElectronics}</option>
+              <option value="home_goods">{t.indHome}</option>
+              <option value="toys">{t.indToys}</option>
+              <option value="beauty">{t.indBeauty}</option>
+              <option value="apparel">{t.indApparel}</option>
+              <option value="generic_ecommerce">{t.indGeneric}</option>
+            </select>
+          </div>
+
+          {/* Display Mode */}
+          <div className="space-y-2.5">
+            <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.displayMode}</label>
+            <select 
+              value={form.displayMode} 
+              onChange={(e) => update({ displayMode: e.target.value })}
+              className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2.5 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+            >
+              <option value="BRAND_SEMANTIC">{t.modeBrandSemantic}</option>
+              <option value="SEMANTIC_ORDER">{t.modeSemantic}</option>
+              <option value="REAL_SANITIZED">{t.modeSanitized}</option>
+              <option value="LEGACY_GENERIC">{t.modeLegacy}</option>
+            </select>
+          </div>
+
+          {/* Public Brand Name */}
+          <div className="space-y-2.5">
+            <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.publicBrandName}</label>
+            <input 
+              value={form.publicBrandName} 
+              onChange={(e) => update({ publicBrandName: e.target.value })}
+              placeholder="e.g. TireVix"
+              className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2.5 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+            />
+          </div>
+
+          {/* Descriptor Prefix */}
+          <div className="space-y-2.5">
+            <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.descriptorPrefix}</label>
+            <input 
+              value={form.descriptorPrefix} 
+              onChange={(e) => update({ descriptorPrefix: e.target.value })}
+              placeholder="e.g. TireVix Auto"
+              className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2.5 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+            />
+          </div>
+
+          {/* Line Item Policy */}
+          <div className="space-y-2.5 sm:col-span-2">
+            <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.lineItemPolicy}</label>
+            <select 
+              value={form.lineItemPolicy} 
+              onChange={(e) => update({ lineItemPolicy: e.target.value })}
+              className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2.5 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+            >
+              <option value="SINGLE_SEMANTIC_ITEM">{t.policySingle}</option>
+              <option value="REAL_CART_ITEMS">{t.policyReal}</option>
+              <option value="LEGACY_RANDOM_SPLIT">{t.policyLegacy}</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Warnings */}
+        {form.displayMode === "LEGACY_GENERIC" && form.industryVertical !== "generic_ecommerce" && (
+          <div className="bg-[#4a3908]/50 border border-[#ca8a04]/50 text-[#facc15] text-[11px] font-mono px-4 py-3 rounded-md border-l-[3px] border-l-[#ca8a04]">
+            {t.legacyModeWarning}
+          </div>
+        )}
+        {form.lineItemPolicy === "LEGACY_RANDOM_SPLIT" && (
+          <div className="bg-[#4a3908]/50 border border-[#ca8a04]/50 text-[#facc15] text-[11px] font-mono px-4 py-3 rounded-md border-l-[3px] border-l-[#ca8a04]">
+            {t.legacyPolicyWarning}
+          </div>
+        )}
+
+        {/* Live Preview Box */}
+        <div className="bg-[#1f222c] border border-[#343947] rounded-md p-5 space-y-3 mt-4 shadow-inner">
+          <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.livePreview}</p>
+          <div className="flex flex-col gap-1.5 text-[12px] font-mono text-[#e7edf8]">
+            <p>{t.buyerMaySee}<span className="text-[#FFD600] font-bold text-sm bg-[#151821] px-2 py-1 rounded">{previewLoading ? t.loading : previewName}</span></p>
+            <p className="text-[#6b7280] mt-2 text-[10px]">{t.previewFooter}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4 pt-4">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className={`text-sm font-semibold px-6 py-2.5 rounded-md transition-colors ${
+              saving ? "bg-[#FFD600]/50 text-black cursor-not-allowed" : "bg-[#FFD600] text-black hover:bg-[#e6c100]"
+            }`}
           >
-            <option value="automotive_tires">{t.indAuto}</option>
-            <option value="electronics">{t.indElectronics}</option>
-            <option value="home_goods">{t.indHome}</option>
-            <option value="toys">{t.indToys}</option>
-            <option value="beauty">{t.indBeauty}</option>
-            <option value="apparel">{t.indApparel}</option>
-            <option value="generic_ecommerce">{t.indGeneric}</option>
-          </select>
-        </div>
-
-        {/* Display Mode */}
-        <div className="space-y-2.5">
-          <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.displayMode}</label>
-          <select 
-            value={form.displayMode} 
-            onChange={(e) => update({ displayMode: e.target.value })}
-            className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2.5 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
-          >
-            <option value="BRAND_SEMANTIC">{t.modeBrandSemantic}</option>
-            <option value="SEMANTIC_ORDER">{t.modeSemantic}</option>
-            <option value="REAL_SANITIZED">{t.modeSanitized}</option>
-            <option value="LEGACY_GENERIC">{t.modeLegacy}</option>
-          </select>
-        </div>
-
-        {/* Public Brand Name */}
-        <div className="space-y-2.5">
-          <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.publicBrandName}</label>
-          <input 
-            value={form.publicBrandName} 
-            onChange={(e) => update({ publicBrandName: e.target.value })}
-            placeholder="e.g. TireVix"
-            className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2.5 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
-          />
-        </div>
-
-        {/* Descriptor Prefix */}
-        <div className="space-y-2.5">
-          <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.descriptorPrefix}</label>
-          <input 
-            value={form.descriptorPrefix} 
-            onChange={(e) => update({ descriptorPrefix: e.target.value })}
-            placeholder="e.g. TireVix Auto"
-            className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2.5 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
-          />
-        </div>
-
-        {/* Line Item Policy */}
-        <div className="space-y-2.5 sm:col-span-2">
-          <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.lineItemPolicy}</label>
-          <select 
-            value={form.lineItemPolicy} 
-            onChange={(e) => update({ lineItemPolicy: e.target.value })}
-            className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2.5 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
-          >
-            <option value="SINGLE_SEMANTIC_ITEM">{t.policySingle}</option>
-            <option value="REAL_CART_ITEMS">{t.policyReal}</option>
-            <option value="LEGACY_RANDOM_SPLIT">{t.policyLegacy}</option>
-          </select>
+            {saving ? t.saving : t.saveProfile}
+          </button>
+          {success && <span className="text-sm font-medium text-emerald-400 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> {success}</span>}
+          {error && <span className="text-sm font-medium text-red-400 flex items-center gap-1"><XCircle className="w-3 h-3" /> {error}</span>}
         </div>
       </div>
-
-      {/* Warnings */}
-      {form.displayMode === "LEGACY_GENERIC" && form.industryVertical !== "generic_ecommerce" && (
-        <div className="bg-[#4a3908]/50 border border-[#ca8a04]/50 text-[#facc15] text-[11px] font-mono px-4 py-3 rounded-md border-l-[3px] border-l-[#ca8a04]">
-          {t.legacyModeWarning}
-        </div>
-      )}
-      {form.lineItemPolicy === "LEGACY_RANDOM_SPLIT" && (
-        <div className="bg-[#4a3908]/50 border border-[#ca8a04]/50 text-[#facc15] text-[11px] font-mono px-4 py-3 rounded-md border-l-[3px] border-l-[#ca8a04]">
-          {t.legacyPolicyWarning}
-        </div>
-      )}
-
-      {/* Live Preview Box */}
-      <div className="bg-[#1f222c] border border-[#343947] rounded-md p-5 space-y-3 mt-4 shadow-inner">
-        <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.livePreview}</p>
-        <div className="flex flex-col gap-1.5 text-[12px] font-mono text-[#e7edf8]">
-          <p>{t.buyerMaySee}<span className="text-[#FFD600] font-bold text-sm bg-[#151821] px-2 py-1 rounded">{previewLoading ? t.loading : previewName}</span></p>
-          <p className="text-[#6b7280] mt-2 text-[10px]">{t.previewFooter}</p>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-4 pt-4">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className={`text-sm font-semibold px-6 py-2.5 rounded-md transition-colors ${
-            saving ? "bg-[#FFD600]/50 text-black cursor-not-allowed" : "bg-[#FFD600] text-black hover:bg-[#e6c100]"
-          }`}
-        >
-          {saving ? t.saving : t.saveProfile}
-        </button>
-        {success && <span className="text-sm font-medium text-emerald-400 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> {success}</span>}
-        {error && <span className="text-sm font-medium text-red-400 flex items-center gap-1"><XCircle className="w-3 h-3" /> {error}</span>}
-      </div>
-    </div>
+    </details>
   )
 }
 

@@ -71,7 +71,7 @@ export const domainsCopy = {
     thActions: "Actions",
 
     // Table Empty States
-    noDomainsYet: "No shield domains configured yet. Click \"Add Domain\" to get started.",
+    noDomainsYet: "No domains yet. Add and verify a domain before creating a complete Payment Identity.",
     noDomainsMatch: "No domains match your search.",
 
     // Table Content
@@ -226,7 +226,7 @@ export const domainsCopy = {
     thActions: "Thao tác",
 
     // Table Empty States
-    noDomainsYet: "Chưa cấu hình tên miền bảo vệ nào. Nhấn \"Thêm tên miền\" để bắt đầu.",
+    noDomainsYet: "Chưa có tên miền nào. Thêm và xác minh một tên miền trước khi tạo Payment Identity hoàn chỉnh.",
     noDomainsMatch: "Không tìm thấy tên miền phù hợp.",
 
     // Table Content

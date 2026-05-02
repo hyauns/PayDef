@@ -60,6 +60,7 @@ interface Merchant {
   proxyUrl: string
   shieldDomain: string
   displayProfileId: string | null
+  bundleId: string | null
   domainType: DomainType
   status: Status
   priority: number // 1–5
@@ -82,6 +83,7 @@ interface MerchantApiRow {
   proxyUrl?: string | null
   shieldDomain?: string | null
   displayProfileId?: string | null
+  bundleId?: string | null
   status: string
   isLimited?: boolean | null
   priority?: number | null
@@ -108,6 +110,22 @@ interface ShieldDomainApiRow {
 interface PaymentDisplayProfile {
   id: string
   profile_name: string
+}
+
+interface PaymentIdentity {
+  id: string
+  bundle_name: string
+  public_brand_name: string | null
+  primary_shield_domain: string | null
+  is_active: boolean
+  active_item_count: number
+  support_email: string | null
+  tracking_url: string | null
+  shipping_policy_url: string | null
+  refund_policy_url: string | null
+  privacy_policy_url: string | null
+  terms_url: string | null
+  has_long_descriptor?: boolean
 }
 
 // ─── Platform shield domains provided by Gateway Central ─────────────────────
@@ -293,16 +311,17 @@ interface SlideOverProps {
   merchant: Merchant | null
   verifiedPlatformDomains: string[]
   displayProfiles: PaymentDisplayProfile[]
+  paymentIdentities: PaymentIdentity[]
   onClose: () => void
   onSave: (updated: Merchant) => void
 }
 
-function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose, onSave }: SlideOverProps) {
+function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, paymentIdentities, onClose, onSave }: SlideOverProps) {
   const { language } = useLanguage()
   const t = accountsCopy[language]
 
   const [draft, setDraft] = useState<Merchant | null>(merchant)
-  const [activeTab, setActiveTab] = useState<"overview" | "credentials" | "routing" | "domain" | "display" | "legacy">("overview")
+  const [activeTab, setActiveTab] = useState<"overview" | "credentials" | "routing" | "identity" | "legacy">("overview")
   const fallbackPlatformDomain = verifiedPlatformDomains[0] ?? ""
   const [isSaving, setIsSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
@@ -378,9 +397,7 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
               { id: "overview", label: t.tabOverview },
               { id: "credentials", label: t.tabCredentials },
               { id: "routing", label: t.tabRouting },
-              { id: "domain", label: t.tabDomain },
-              { id: "display", label: t.tabDisplay },
-              { id: "legacy", label: t.tabLegacy },
+              { id: "identity", label: t.tabIdentity },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -568,65 +585,80 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
             </div>
           )}
 
-          {activeTab === "domain" && (
+          {activeTab === "identity" && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
                 <div className="flex items-center gap-2">
-                  <Globe className="w-4 h-4 text-[#FFD600]" />
-                  <p className="text-base font-semibold text-[#e7edf8]">{t.shieldDomain}</p>
+                  <ShieldCheck className="w-4 h-4 text-[#FFD600]" />
+                  <p className="text-base font-semibold text-[#e7edf8]">{t.tabIdentity || "Payment Identity"}</p>
                 </div>
-                <div className="flex rounded-md overflow-hidden border border-[#343947]">
-                  {(["platform", "custom"] as DomainType[]).map((type) => (
-                    <button
-                      key={type}
-                      onClick={() => update({ domainType: type, shieldDomain: type === "platform" ? fallbackPlatformDomain : "" })}
-                      className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold transition-colors ${
-                        draft.domainType === type ? "bg-[#FFD600]/10 text-[#FFD600] border-r border-[#343947]" : "text-[#97a3b6] hover:text-[#e7edf8] bg-transparent"
-                      }`}
-                    >
-                      {type === "platform" ? <Lock className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
-                      {type === "platform" ? t.btnPlatformDomain : t.btnCustomDomain}
-                    </button>
+                <p className="text-sm text-[#aab4c5] leading-6">
+                  {t.identityDescEdit ?? "Choose the brand/domain/descriptor set this PayPal account should use during checkout."}
+                </p>
+                
+                <select
+                  value={draft.bundleId || ""}
+                  onChange={(e) => {
+                     const selectedBundleId = e.target.value || null
+                     const selectedBundle = paymentIdentities.find(b => b.id === selectedBundleId)
+                     update({ 
+                       bundleId: selectedBundleId,
+                       shieldDomain: selectedBundle?.primary_shield_domain || draft.shieldDomain
+                     })
+                  }}
+                  className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors appearance-none"
+                >
+                  <option value="">{t.noneProfile ?? "No Payment Identity assigned"}</option>
+                  {paymentIdentities.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.bundle_name} {p.primary_shield_domain ? `(${p.primary_shield_domain})` : ""}
+                    </option>
                   ))}
-                </div>
-                {draft.domainType === "platform" ? (
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelSelectPlatform}</label>
-                    <select
-                      value={verifiedPlatformDomains.includes(draft.shieldDomain) ? draft.shieldDomain : ""}
-                      onChange={(e) => update({ shieldDomain: e.target.value })}
-                      disabled={!verifiedPlatformDomains.length}
-                      className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors appearance-none"
-                    >
-                      <option value="" disabled>{verifiedPlatformDomains.length ? t.selectVerifiedPlaceholder : t.noVerifiedPlaceholder}</option>
-                      {verifiedPlatformDomains.map((d) => (<option key={d} value={d}>{d}</option>))}
-                    </select>
-                    <p className="text-sm text-[#aab4c5] leading-6">{t.platformManagedBy}</p>
-                    {!verifiedPlatformDomains.length && <p className="text-sm text-[#aab4c5] leading-6 text-amber-400">{t.platformVerifyFirst}</p>}
-                    {!!draft.shieldDomain && !verifiedPlatformDomains.includes(draft.shieldDomain) && verifiedPlatformDomains.length > 0 && (
-                      <p className="text-sm text-[#aab4c5] leading-6 text-amber-400">{t.platformNoLongerVerified}</p>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelCustomDomain}</label>
-                    <input
-                      value={draft.shieldDomain}
-                      onChange={(e) => update({ shieldDomain: e.target.value })}
-                      placeholder="e.g. my-payment-shield.com"
-                      className="w-full bg-[#222530] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#97a3b6]/50 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
-                    />
-                    <p className="text-sm text-[#aab4c5] leading-6 text-amber-400">{t.customDomainWarning}</p>
-                  </div>
-                )}
-                {draft.shieldDomain && (
-                  <a href={`https://${draft.shieldDomain}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm text-[#FFD600] hover:text-[#e6c100] transition-colors">
-                    <ExternalLink className="w-4 h-4" />
-                    {draft.shieldDomain}
-                  </a>
-                )}
-              </div>
+                </select>
 
+                {draft.bundleId && paymentIdentities.find(b => b.id === draft.bundleId) && (
+                  (() => {
+                    const bundle = paymentIdentities.find(b => b.id === draft.bundleId)!
+                    const isReady = bundle.is_active && bundle.active_item_count > 0 && !!bundle.primary_shield_domain
+                    return (
+                      <div className="mt-4 p-4 bg-[#222530] border border-[#343947] rounded-lg space-y-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-semibold text-[#e7edf8]">Identity Preview</p>
+                          {isReady ? (
+                             <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded border text-[11px] font-mono bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                               <CheckCircle2 className="w-3 h-3" /> Ready
+                             </span>
+                          ) : (
+                             <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded border text-[11px] font-mono bg-red-500/10 text-red-400 border-red-500/20">
+                               <XCircle className="w-3 h-3" /> Needs Attention
+                             </span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 text-sm mt-3 border-t border-[#343947] pt-3">
+                          <div>
+                            <p className="text-[#97a3b6] text-xs uppercase tracking-wider font-mono mb-1">Brand</p>
+                            <p className="text-[#e7edf8] font-medium">{bundle.public_brand_name || bundle.bundle_name}</p>
+                          </div>
+                          <div>
+                            <p className="text-[#97a3b6] text-xs uppercase tracking-wider font-mono mb-1">Shield Domain</p>
+                            <p className="text-[#FFD600]">{bundle.primary_shield_domain || "Not configured"}</p>
+                          </div>
+                          <div>
+                            <p className="text-[#97a3b6] text-xs uppercase tracking-wider font-mono mb-1">Items / Descriptor</p>
+                            <p className="text-[#e7edf8]">{bundle.active_item_count} active items</p>
+                          </div>
+                          <div>
+                            <p className="text-[#97a3b6] text-xs uppercase tracking-wider font-mono mb-1">Support Email</p>
+                            <p className="text-[#e7edf8]">{bundle.support_email || "No email"}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })()
+                )}
+
+              </div>
+              
               <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
                 <div className="flex items-center gap-2">
                   <Wifi className="w-4 h-4 text-orange-400" />
@@ -658,87 +690,133 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
                   {t.proxyHiddenWarning}
                 </div>
               </div>
-            </div>
-          )}
-
-          {activeTab === "display" && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
-                <div className="flex items-center gap-2">
-                  <Package className="w-4 h-4 text-[#FFD600]" />
-                  <p className="text-base font-semibold text-[#e7edf8]">{t.paymentDisplayProfile}</p>
-                </div>
-                <p className="text-sm text-[#aab4c5] leading-6">
-                  {t.displayProfileDescEdit}
-                </p>
-                <select
-                  value={draft.displayProfileId || ""}
-                  onChange={(e) => update({ displayProfileId: e.target.value || null })}
-                  className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors appearance-none"
-                >
-                  <option value="">{t.noneProfile}</option>
-                  {displayProfiles.map((p) => (
-                    <option key={p.id} value={p.id}>{p.profile_name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
-
-          {activeTab === "legacy" && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
-                <div className="flex items-center justify-between">
+              <details className="group border border-[#343947] rounded-lg bg-[#151821] overflow-hidden">
+                <summary className="flex items-center justify-between p-5 cursor-pointer select-none">
                   <div className="flex items-center gap-2">
-                    <Package className="w-4 h-4 text-[#97a3b6]" />
-                    <p className="text-base font-semibold text-[#e7edf8]">{t.legacyMasking}</p>
+                    <SlidersHorizontal className="w-4 h-4 text-[#97a3b6]" />
+                    <p className="text-base font-semibold text-[#e7edf8]">Advanced / Legacy Settings</p>
                   </div>
-                  <button
-                    onClick={() => update({ itemMasking: !draft.itemMasking })}
-                    className={`relative w-12 h-6 rounded-full transition-colors ${draft.itemMasking ? "bg-violet-500" : "bg-[#2a2d39] border border-[#343947]"}`}
-                  >
-                    <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-foreground shadow transition-all ${draft.itemMasking ? "left-6" : "left-0.5"}`} />
-                  </button>
-                </div>
+                  <ChevronRight className="w-4 h-4 text-[#97a3b6] group-open:rotate-90 transition-transform" />
+                </summary>
+                <div className="px-5 pb-5 pt-1 border-t border-[#343947] space-y-6 mt-2">
+                  <p className="text-sm text-[#aab4c5] leading-6">
+                    These fields are kept for backward compatibility. Most merchants should use Payment Identity instead.
+                  </p>
 
-                <div className="bg-[#4a3908]/50 border border-[#ca8a04]/50 text-[#facc15] text-sm leading-6 px-4 py-3 rounded-md border-l-[3px] border-l-[#ca8a04]">
-                  {t.legacyDeprecated}
-                </div>
+                  {draft.bundleId && draft.shieldDomain && (
+                    paymentIdentities.find(b => b.id === draft.bundleId)?.primary_shield_domain !== draft.shieldDomain
+                  ) && (
+                    <div className="bg-[#4a3908]/50 border border-[#ca8a04]/50 text-[#facc15] text-sm leading-6 px-4 py-3 rounded-md border-l-[3px] border-l-[#ca8a04]">
+                      Legacy domain ({draft.shieldDomain}) differs from selected Payment Identity. Checkout will use the Payment Identity domain.
+                    </div>
+                  )}
 
-                {draft.itemMasking && (
                   <div className="space-y-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelLegacyProduct}</label>
+                    <div className="flex items-center gap-2">
+                      <Globe className="w-4 h-4 text-[#97a3b6]" />
+                      <p className="text-sm font-semibold text-[#e7edf8]">Legacy Shield Domain</p>
+                    </div>
+                    <div className="flex rounded-md overflow-hidden border border-[#343947]">
+                      {(["platform", "custom"] as DomainType[]).map((type) => (
+                        <button
+                          key={type}
+                          onClick={() => update({ domainType: type, shieldDomain: type === "platform" ? fallbackPlatformDomain : "" })}
+                          className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold transition-colors ${
+                            draft.domainType === type ? "bg-[#FFD600]/10 text-[#FFD600] border border-[#FFD600]" : "text-[#97a3b6] hover:text-[#e7edf8] bg-[#2a2d39] border border-[#343947]"
+                          }`}
+                        >
+                          {type === "platform" ? <Lock className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
+                          {type === "platform" ? t.btnPlatformDomain : t.btnCustomDomain}
+                        </button>
+                      ))}
+                    </div>
+                    {draft.domainType === "platform" ? (
+                      <select
+                        value={verifiedPlatformDomains.includes(draft.shieldDomain) ? draft.shieldDomain : ""}
+                        onChange={(e) => update({ shieldDomain: e.target.value })}
+                        disabled={!verifiedPlatformDomains.length}
+                        className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors appearance-none"
+                      >
+                        <option value="" disabled>{verifiedPlatformDomains.length ? t.selectVerifiedPlaceholder : t.noVerifiedPlaceholder}</option>
+                        {verifiedPlatformDomains.map((d) => (<option key={d} value={d}>{d}</option>))}
+                      </select>
+                    ) : (
                       <input
-                        value={draft.fakeProductName}
-                        onChange={(e) => update({ fakeProductName: e.target.value })}
-                        placeholder="e.g. Digital Service Upgrade"
-                        className="w-full bg-[#222530] border border-[#343947] rounded-md px-4 py-3 text-base text-violet-400 placeholder:text-[#97a3b6]/50 focus:outline-none focus:ring-1 focus:ring-violet-400/40 focus:border-violet-400/40 transition-colors"
+                        value={draft.shieldDomain}
+                        onChange={(e) => update({ shieldDomain: e.target.value })}
+                        placeholder="my-custom-domain.com"
+                        className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
                       />
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelPresets}</p>
-                      <div className="flex flex-wrap gap-2">
-                        {FAKE_PRODUCT_PRESETS.map((preset) => (
-                          <button
-                            key={preset}
-                            onClick={() => update({ fakeProductName: preset })}
-                            className={`text-xs font-semibold px-3 py-1.5 rounded-md border transition-colors ${
-                              draft.fakeProductName === preset ? "bg-violet-400/10 text-violet-400 border-violet-400/30" : "bg-[#2a2d39] text-[#97a3b6] border-[#343947] hover:text-[#e7edf8] hover:border-[#343947]/80"
-                            }`}
-                          >
-                            {preset}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="bg-[#2a2d39]/50 rounded-md px-4 py-3 text-sm text-[#aab4c5] leading-6">
-                      <span className="text-[#97a3b6]">{t.receiptWillShow}</span>
-                      <span className="text-violet-400 font-semibold">{draft.fakeProductName || "(empty)"}</span>
-                    </div>
+                    )}
                   </div>
-                )}
-              </div>
+
+                  <div className="space-y-4 pt-4 border-t border-[#343947]">
+                    <div className="flex items-center gap-2">
+                      <Package className="w-4 h-4 text-[#97a3b6]" />
+                      <p className="text-sm font-semibold text-[#e7edf8]">Legacy Payment Display Profile</p>
+                    </div>
+                    <select
+                      value={draft.displayProfileId || ""}
+                      onChange={(e) => update({ displayProfileId: e.target.value || null })}
+                      className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors appearance-none"
+                    >
+                      <option value="">{t.noneProfile}</option>
+                      {displayProfiles.map((p) => (
+                        <option key={p.id} value={p.id}>{p.profile_name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-4 pt-4 border-t border-[#343947]">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Package className="w-4 h-4 text-[#97a3b6]" />
+                        <p className="text-sm font-semibold text-[#e7edf8]">{t.legacyMasking}</p>
+                      </div>
+                      <button
+                        onClick={() => update({ itemMasking: !draft.itemMasking })}
+                        className={`relative w-12 h-6 rounded-full transition-colors ${draft.itemMasking ? "bg-violet-500" : "bg-[#2a2d39] border border-[#343947]"}`}
+                      >
+                        <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-foreground shadow transition-all ${draft.itemMasking ? "left-6" : "left-0.5"}`} />
+                      </button>
+                    </div>
+
+                    {draft.itemMasking && (
+                      <div className="space-y-4 mt-4">
+                        <div className="space-y-2">
+                          <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelLegacyProduct}</label>
+                          <input
+                            value={draft.fakeProductName}
+                            onChange={(e) => update({ fakeProductName: e.target.value })}
+                            placeholder="e.g. Digital Service Upgrade"
+                            className="w-full bg-[#222530] border border-[#343947] rounded-md px-4 py-3 text-base text-violet-400 placeholder:text-[#97a3b6]/50 focus:outline-none focus:ring-1 focus:ring-violet-400/40 focus:border-violet-400/40 transition-colors"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelPresets}</p>
+                          <div className="flex flex-wrap gap-2">
+                            {FAKE_PRODUCT_PRESETS.map((preset) => (
+                              <button
+                                key={preset}
+                                onClick={() => update({ fakeProductName: preset })}
+                                className={`text-xs font-semibold px-3 py-1.5 rounded-md border transition-colors ${
+                                  draft.fakeProductName === preset ? "bg-violet-400/10 text-violet-400 border-violet-400/30" : "bg-[#2a2d39] text-[#97a3b6] border-[#343947] hover:text-[#e7edf8] hover:border-[#343947]/80"
+                                }`}
+                              >
+                                {preset}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="bg-[#2a2d39]/50 rounded-md px-4 py-3 text-sm text-[#aab4c5] leading-6">
+                          <span className="text-[#97a3b6]">{t.receiptWillShow}</span>
+                          <span className="text-violet-400 font-semibold">{draft.fakeProductName || "(empty)"}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </details>
 
               <div className="border border-red-500/20 rounded-lg p-5 space-y-3 bg-red-500/5">
                 <p className="text-sm font-semibold uppercase tracking-[0.08em] text-red-400">{t.dangerZone}</p>
@@ -803,11 +881,13 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, onClose
 function AddMerchantModal({
   verifiedPlatformDomains,
   displayProfiles,
+  paymentIdentities,
   onClose,
   onAdd,
 }: {
   verifiedPlatformDomains: string[]
   displayProfiles: PaymentDisplayProfile[]
+  paymentIdentities: PaymentIdentity[]
   onClose: () => void
   onAdd: (m: Merchant) => void
 }) {
@@ -825,12 +905,13 @@ function AddMerchantModal({
     domainType: (fallbackPlatformDomain ? "platform" : "custom") as DomainType,
     shieldDomain: fallbackPlatformDomain,
     displayProfileId: "",
+    bundleId: "",
     softLimit: 4000,
     hardLimit: 5000,
     itemMasking: false,
     fakeProductName: "Digital Service Upgrade",
   })
-  const [activeTab, setActiveTab] = useState<"info" | "credentials" | "routing" | "domain" | "display" | "review">("info")
+  const [activeTab, setActiveTab] = useState<"info" | "credentials" | "routing" | "identity" | "legacy" | "review">("info")
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError]   = useState("")
@@ -898,6 +979,7 @@ function AddMerchantModal({
           clientId: form.clientId,
           clientSecret: form.clientSecret,
           displayProfileId: form.displayProfileId || undefined,
+          bundleId: form.bundleId || undefined,
           proxyUrl: form.proxyUrl || undefined,
           shieldDomain: form.domainType === "platform" ? form.shieldDomain : form.shieldDomain,
           status: statusMap[form.status] || "WARMING_UP",
@@ -921,6 +1003,7 @@ function AddMerchantModal({
         proxyUrl: acct.proxyUrl ?? "",
         shieldDomain: acct.shieldDomain ?? form.shieldDomain ?? "",
         displayProfileId: acct.displayProfileId ?? form.displayProfileId ?? null,
+        bundleId: acct.bundleId ?? form.bundleId ?? null,
         domainType: verifiedPlatformDomains.includes(acct.shieldDomain ?? "") ? "platform" : "custom",
         status: form.status,
         priority: acct.priority ?? 1,
@@ -971,8 +1054,7 @@ function AddMerchantModal({
               { id: "info", label: t.tabInfo },
               { id: "credentials", label: t.tabCredentials },
               { id: "routing", label: t.tabRouting },
-              { id: "domain", label: t.tabDomain },
-              { id: "display", label: t.tabDisplay },
+              { id: "identity", label: t.tabIdentity },
               { id: "review", label: t.tabReview },
             ].map(tab => (
               <button
@@ -1137,93 +1219,209 @@ function AddMerchantModal({
             </div>
           )}
 
-          {activeTab === "domain" && (
+          {activeTab === "identity" && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
                 <div className="flex items-center gap-2">
-                  <Globe className="w-4 h-4 text-[#FFD600]" />
-                  <p className="text-base font-semibold text-[#e7edf8]">{t.shieldDomain}</p>
+                  <ShieldCheck className="w-4 h-4 text-[#FFD600]" />
+                  <p className="text-base font-semibold text-[#e7edf8]">{t.tabIdentity || "Payment Identity"}</p>
                 </div>
-                <div className="flex rounded-md overflow-hidden border border-[#343947]">
-                  {(["platform", "custom"] as DomainType[]).map((type) => (
-                    <button
-                      key={type}
-                      onClick={() => update({ domainType: type, shieldDomain: type === "platform" ? fallbackPlatformDomain : "" })}
-                      className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold transition-colors ${
-                        form.domainType === type ? "bg-[#FFD600]/10 text-[#FFD600] border border-[#FFD600]" : "text-[#97a3b6] hover:text-[#e7edf8] bg-[#2a2d39] border border-[#343947]"
-                      }`}
-                    >
-                      {type === "platform" ? <Lock className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
-                      {type === "platform" ? t.btnPlatformDomain : t.btnCustomDomain}
-                    </button>
+                <p className="text-sm text-[#aab4c5] leading-6">
+                  {t.identityDescEdit ?? "Choose the brand/domain/descriptor set this PayPal account should use during checkout."}
+                </p>
+                
+                <select
+                  value={form.bundleId || ""}
+                  onChange={(e) => {
+                     const selectedBundleId = e.target.value || null
+                     const selectedBundle = paymentIdentities.find(b => b.id === selectedBundleId)
+                     update({ 
+                       bundleId: selectedBundleId || "",
+                       shieldDomain: selectedBundle?.primary_shield_domain || form.shieldDomain
+                     })
+                  }}
+                  className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors appearance-none"
+                >
+                  <option value="">{t.noneProfile ?? "No Payment Identity assigned"}</option>
+                  {paymentIdentities.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.bundle_name} {p.primary_shield_domain ? `(${p.primary_shield_domain})` : ""}
+                    </option>
                   ))}
-                </div>
-                {form.domainType === "platform" ? (
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelSelectPlatform} <span className="text-red-400">*</span></label>
-                    <select
-                      value={verifiedPlatformDomains.includes(form.shieldDomain) ? form.shieldDomain : ""}
-                      onChange={(e) => update({ shieldDomain: e.target.value })}
-                      disabled={!verifiedPlatformDomains.length}
-                      className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors appearance-none"
-                    >
-                      <option value="" disabled>{verifiedPlatformDomains.length ? t.selectVerifiedPlaceholder : t.noVerifiedPlaceholder}</option>
-                      {verifiedPlatformDomains.map((d) => (<option key={d} value={d}>{d}</option>))}
-                    </select>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelCustomDomain} <span className="text-red-400">*</span></label>
-                    <input
-                      value={form.shieldDomain}
-                      onChange={(e) => update({ shieldDomain: e.target.value })}
-                      placeholder="my-custom-domain.com"
-                      className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
-                    />
-                  </div>
-                )}
-              </div>
+                </select>
 
+                {form.bundleId && paymentIdentities.find(b => b.id === form.bundleId) && (
+                  (() => {
+                    const bundle = paymentIdentities.find(b => b.id === form.bundleId)!
+                    const isReady = bundle.is_active && bundle.active_item_count > 0 && !!bundle.primary_shield_domain
+                    return (
+                      <div className="mt-4 p-4 bg-[#222530] border border-[#343947] rounded-lg space-y-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-semibold text-[#e7edf8]">Identity Preview</p>
+                          {isReady ? (
+                             <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded border text-[11px] font-mono bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                               <CheckCircle2 className="w-3 h-3" /> Ready
+                             </span>
+                          ) : (
+                             <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded border text-[11px] font-mono bg-red-500/10 text-red-400 border-red-500/20">
+                               <XCircle className="w-3 h-3" /> Needs Attention
+                             </span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 text-sm mt-3 border-t border-[#343947] pt-3">
+                          <div>
+                            <p className="text-[#97a3b6] text-xs uppercase tracking-wider font-mono mb-1">Brand</p>
+                            <p className="text-[#e7edf8] font-medium">{bundle.public_brand_name || bundle.bundle_name}</p>
+                          </div>
+                          <div>
+                            <p className="text-[#97a3b6] text-xs uppercase tracking-wider font-mono mb-1">Shield Domain</p>
+                            <p className="text-[#FFD600]">{bundle.primary_shield_domain || "Not configured"}</p>
+                          </div>
+                          <div>
+                            <p className="text-[#97a3b6] text-xs uppercase tracking-wider font-mono mb-1">Items / Descriptor</p>
+                            <p className="text-[#e7edf8]">{bundle.active_item_count} active items</p>
+                          </div>
+                          <div>
+                            <p className="text-[#97a3b6] text-xs uppercase tracking-wider font-mono mb-1">Support Email</p>
+                            <p className="text-[#e7edf8]">{bundle.support_email || "No email"}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })()
+                )}
+
+              </div>
+              
               <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
                 <div className="flex items-center gap-2">
                   <Wifi className="w-4 h-4 text-[#FFD600]" />
                   <p className="text-base font-semibold text-[#e7edf8]">{t.staticProxyAdd}</p>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelProxyOptional}</label>
+                  <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Static Proxy (Optional)</label>
                   <input
                     value={form.proxyUrl}
                     onChange={(e) => update({ proxyUrl: e.target.value })}
-                    placeholder="http://user:pass@proxy.example.com:8080"
-                    className="w-full bg-[#222530] border border-[#343947] rounded-md px-4 py-3 text-base font-mono text-orange-400 placeholder:text-[#97a3b6]/50 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+                    placeholder="http://user:pass@host:port"
+                    className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
                   />
-                  <p className="text-sm text-[#aab4c5] leading-6">{t.proxyDescAdd}</p>
+                  <p className="text-sm text-[#97a3b6]">Used to assign a dedicated static IP for PayPal API calls.</p>
                 </div>
               </div>
-            </div>
-          )}
 
-          {activeTab === "display" && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="space-y-4 border border-[#343947] rounded-lg p-5 bg-[#151821]">
-                <div className="flex items-center gap-2">
-                  <Package className="w-4 h-4 text-[#FFD600]" />
-                  <p className="text-base font-semibold text-[#e7edf8]">{t.paymentDisplayProfile}</p>
+              <details className="group border border-[#343947] rounded-lg bg-[#151821] overflow-hidden">
+                <summary className="flex items-center justify-between p-5 cursor-pointer select-none">
+                  <div className="flex items-center gap-2">
+                    <SlidersHorizontal className="w-4 h-4 text-[#97a3b6]" />
+                    <p className="text-base font-semibold text-[#e7edf8]">Advanced / Legacy Settings</p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-[#97a3b6] group-open:rotate-90 transition-transform" />
+                </summary>
+                <div className="px-5 pb-5 pt-1 border-t border-[#343947] space-y-6 mt-2">
+                  <div className="bg-[#4a3908]/50 border border-[#ca8a04]/50 text-[#facc15] text-sm leading-6 px-4 py-3 rounded-md border-l-[3px] border-l-[#ca8a04]">
+                    <p className="font-semibold mb-1">Legacy settings are kept only for older accounts. For new setup, use Payment Identity. Checkout now prioritizes Payment Identity when assigned.</p>
+                    {form.bundleId ? (
+                      <p className="mt-2 text-amber-400">These values may be ignored at checkout when Payment Identity is assigned.</p>
+                    ) : (
+                      <p className="mt-2 text-amber-400">This account is using legacy checkout identity settings. Assign a Payment Identity for the recommended setup.</p>
+                    )}
+                  </div>
+
+                  {form.bundleId && form.shieldDomain && (
+                    paymentIdentities.find(b => b.id === form.bundleId)?.primary_shield_domain !== form.shieldDomain
+                  ) && (
+                    <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm leading-6 px-4 py-3 rounded-md border-l-[3px] border-l-red-500">
+                      Legacy domain differs from Payment Identity. Checkout will use the Payment Identity domain.
+                    </div>
+                  )}
+
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <Globe className="w-4 h-4 text-[#97a3b6]" />
+                      <p className="text-sm font-semibold text-[#e7edf8]">Legacy Shield Domain</p>
+                    </div>
+                    <div className="flex rounded-md overflow-hidden border border-[#343947]">
+                      {(["platform", "custom"] as DomainType[]).map((type) => (
+                        <button
+                          key={type}
+                          onClick={() => update({ domainType: type, shieldDomain: type === "platform" ? fallbackPlatformDomain : "" })}
+                          className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold transition-colors ${
+                            form.domainType === type ? "bg-[#FFD600]/10 text-[#FFD600] border border-[#FFD600]" : "text-[#97a3b6] hover:text-[#e7edf8] bg-[#2a2d39] border border-[#343947]"
+                          }`}
+                        >
+                          {type === "platform" ? <Lock className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
+                          {type === "platform" ? t.btnPlatformDomain : t.btnCustomDomain}
+                        </button>
+                      ))}
+                    </div>
+                    {form.domainType === "platform" ? (
+                      <select
+                        value={verifiedPlatformDomains.includes(form.shieldDomain) ? form.shieldDomain : ""}
+                        onChange={(e) => update({ shieldDomain: e.target.value })}
+                        disabled={!verifiedPlatformDomains.length}
+                        className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors appearance-none"
+                      >
+                        <option value="" disabled>{verifiedPlatformDomains.length ? t.selectVerifiedPlaceholder : t.noVerifiedPlaceholder}</option>
+                        {verifiedPlatformDomains.map((d) => (<option key={d} value={d}>{d}</option>))}
+                      </select>
+                    ) : (
+                      <input
+                        value={form.shieldDomain}
+                        onChange={(e) => update({ shieldDomain: e.target.value })}
+                        placeholder="my-custom-domain.com"
+                        className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+                      />
+                    )}
+                  </div>
+
+                  <div className="space-y-4 pt-4 border-t border-[#343947]">
+                    <div className="flex items-center gap-2">
+                      <Package className="w-4 h-4 text-[#97a3b6]" />
+                      <p className="text-sm font-semibold text-[#e7edf8]">Legacy Payment Display Profile</p>
+                    </div>
+                    <select
+                      value={form.displayProfileId || ""}
+                      onChange={(e) => update({ displayProfileId: e.target.value || "" })}
+                      className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors appearance-none"
+                    >
+                      <option value="">{t.noneProfile}</option>
+                      {displayProfiles.map((p) => (
+                        <option key={p.id} value={p.id}>{p.profile_name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-4 pt-4 border-t border-[#343947]">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Package className="w-4 h-4 text-[#97a3b6]" />
+                        <p className="text-sm font-semibold text-[#e7edf8]">{t.legacyMasking || "Legacy Masking"}</p>
+                      </div>
+                      <button
+                        onClick={() => update({ itemMasking: !form.itemMasking })}
+                        className={`relative w-12 h-6 rounded-full transition-colors ${form.itemMasking ? "bg-violet-500" : "bg-[#2a2d39] border border-[#343947]"}`}
+                      >
+                        <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-foreground shadow transition-all ${form.itemMasking ? "left-6" : "left-0.5"}`} />
+                      </button>
+                    </div>
+
+                    {form.itemMasking && (
+                      <div className="space-y-4 mt-4">
+                        <div className="space-y-2">
+                          <label className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">{t.labelLegacyProduct || "Legacy Fake Product Name"}</label>
+                          <input
+                            value={form.fakeProductName}
+                            onChange={(e) => update({ fakeProductName: e.target.value })}
+                            placeholder="e.g. Digital Service Upgrade"
+                            className="w-full bg-[#222530] border border-[#343947] rounded-md px-4 py-3 text-base text-violet-400 placeholder:text-[#97a3b6]/50 focus:outline-none focus:ring-1 focus:ring-violet-400/40 focus:border-violet-400/40 transition-colors"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <p className="text-sm text-[#aab4c5] leading-6">
-                  {t.displayProfileDescAdd}
-                </p>
-                <select
-                  value={form.displayProfileId || ""}
-                  onChange={(e) => update({ displayProfileId: e.target.value || "" })}
-                  className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-4 py-3 text-base text-[#e7edf8] placeholder:text-[#7f8aa0] focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors appearance-none"
-                >
-                  <option value="">{t.noneProfile}</option>
-                  {displayProfiles.map((p) => (
-                    <option key={p.id} value={p.id}>{p.profile_name}</option>
-                  ))}
-                </select>
-              </div>
+              </details>
             </div>
           )}
 
@@ -1236,8 +1434,7 @@ function AddMerchantModal({
                     { label: t.reviewName, value: form.accountName || "—" },
                     { label: t.reviewEmail, value: form.email || "—" },
                     { label: t.reviewInitialStatus, value: form.status === "Active" ? t.filterActive : form.status === "Warm-up" ? t.filterWarmUp : form.status },
-                    { label: t.reviewShieldDomain, value: form.shieldDomain || "—" },
-                    { label: t.reviewProfile, value: displayProfiles.find(p => p.id === form.displayProfileId)?.profile_name || t.noneProfile },
+                    { label: t.tabIdentity || "Payment Identity", value: paymentIdentities.find(b => b.id === form.bundleId)?.bundle_name || "None" },
                     { label: t.reviewLimits, value: `$${form.softLimit}${t.softSuffix} / $${form.hardLimit}${t.hardSuffix}` },
                     { label: t.reviewProxy, value: form.proxyUrl ? t.reviewProxyYes : t.reviewProxyNo },
                   ].map((s) => (
@@ -1341,6 +1538,7 @@ function mapApiToMerchant(a: MerchantApiRow, platformDomains: string[]): Merchan
     proxyUrl: a.proxyUrl ?? "",
     shieldDomain,
     displayProfileId: a.displayProfileId ?? null,
+    bundleId: a.bundleId ?? null,
     domainType: platformDomains.includes(shieldDomain) ? "platform" : "custom",
     status: mapDbStatus(a.status, a.isLimited ?? undefined),
     priority: a.priority ?? 1,
@@ -1368,12 +1566,22 @@ export default function AccountsPage() {
   const [showAdd, setShowAdd] = useState(false)
   const [filterStatus, setFilterStatus] = useState<Status | "All">("All")
   const [displayProfiles, setDisplayProfiles] = useState<PaymentDisplayProfile[]>([])
+  const [paymentIdentities, setPaymentIdentities] = useState<PaymentIdentity[]>([])
 
   const fetchProfiles = useCallback(() => {
     fetch("/api/merchant/display-profiles")
       .then(r => r.json())
       .then(data => {
         setDisplayProfiles(data.profiles ?? [])
+      })
+      .catch(() => {})
+  }, [])
+
+  const fetchPaymentIdentities = useCallback(() => {
+    fetch("/api/merchant/payment-identities")
+      .then(r => r.json())
+      .then(data => {
+        setPaymentIdentities(data.bundles ?? [])
       })
       .catch(() => {})
   }, [])
@@ -1402,6 +1610,7 @@ export default function AccountsPage() {
   useEffect(() => { fetchShieldDomains() }, [fetchShieldDomains])
   useEffect(() => { fetchAccounts() }, [fetchAccounts])
   useEffect(() => { fetchProfiles() }, [fetchProfiles])
+  useEffect(() => { fetchPaymentIdentities() }, [fetchPaymentIdentities])
 
   // Auto-refresh every 10 seconds
   useEffect(() => {
@@ -1430,6 +1639,7 @@ export default function AccountsPage() {
         clientId: updated.clientId,
         shieldDomain: updated.shieldDomain,
         displayProfileId: updated.displayProfileId || null,
+        bundleId: updated.bundleId || null,
         proxyUrl: updated.proxyUrl,
         status: mapUiStatus(updated.status),
         priority: updated.priority,
@@ -1508,7 +1718,7 @@ export default function AccountsPage() {
 
   return (
     <DashboardShell>
-      <main data-ui-version="accounts-i18n-vi-phase6" className="w-full px-6 md:px-8 py-8 space-y-6">
+      <main data-ui-version="accounts-legacy-deprecation-v1" className="w-full px-6 md:px-8 py-8 space-y-6">
         {/* Page header */}
         <DashboardPageHeader 
           eyebrow={t.eyebrow}
@@ -1595,7 +1805,7 @@ export default function AccountsPage() {
                     t.thAccountName,
                     t.thShieldDomain,
                     t.thStatus,
-                    t.thDisplayProfile,
+                    t.tabIdentity || "Payment Identity",
                     t.thDailyVolume,
                     t.thPriority,
                     t.thTx,
@@ -1646,9 +1856,48 @@ export default function AccountsPage() {
                       <StatusBadge status={m.status} />
                     </td>
 
-                    {/* Display Profile */}
+                    {/* Payment Identity */}
                     <td className="px-6 py-4">
-                      <PaymentDisplayProfileBadge profileId={m.displayProfileId} profiles={displayProfiles} isActive={m.status === "Active" || m.status === "Limited"} />
+                      {(() => {
+                        const bundle = paymentIdentities.find(b => b.id === m.bundleId)
+                        if (!bundle) {
+                          return (
+                            <div className="flex flex-col gap-1">
+                              <span className="inline-flex items-center gap-1.5 w-fit px-2 py-0.5 rounded border text-[11px] font-mono bg-[#2a2d39] text-[#97a3b6] border-[#343947]">None</span>
+                              <div className="flex items-start gap-1 text-[11px] text-amber-400 mt-1 max-w-[180px]">
+                                <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+                                <span className="leading-tight">No Payment Identity assigned. This account may use legacy checkout identity settings.</span>
+                              </div>
+                            </div>
+                          )
+                        }
+                        
+                        const hasBrand = !!bundle.public_brand_name
+                        const hasDomain = !!bundle.primary_shield_domain
+                        const hasItems = bundle.active_item_count > 0
+                        const hasEmail = !!bundle.support_email
+                        const hasPolicies = !!(bundle.shipping_policy_url && bundle.refund_policy_url && bundle.privacy_policy_url && bundle.terms_url)
+                        const hasLongDescriptor = !!bundle.has_long_descriptor
+                        const isReady = bundle.is_active && hasBrand && hasDomain && hasItems && !hasLongDescriptor && hasEmail && hasPolicies
+                        
+                        const hasLegacyMismatch = m.shieldDomain && bundle.primary_shield_domain && m.shieldDomain !== bundle.primary_shield_domain
+
+                        return (
+                          <div className="flex flex-col gap-1">
+                            <span className="text-sm font-semibold text-[#e7edf8]">{bundle.bundle_name}</span>
+                            <span className={`inline-flex items-center gap-1.5 w-fit px-1.5 py-0.5 rounded border text-[10px] font-mono ${isReady ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
+                              {isReady ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                              {isReady ? "Ready" : "Needs Attention"}
+                            </span>
+                            {hasLegacyMismatch && (
+                              <div className="flex items-start gap-1 text-[11px] text-amber-400 mt-1 max-w-[180px]">
+                                <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+                                <span className="leading-tight">Legacy domain mismatch (using Identity domain at runtime)</span>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })()}
                     </td>
 
                     {/* Volume */}
@@ -1703,6 +1952,7 @@ export default function AccountsPage() {
         merchant={selected}
         verifiedPlatformDomains={verifiedPlatformDomains}
         displayProfiles={displayProfiles}
+        paymentIdentities={paymentIdentities}
         onClose={() => setSelected(null)}
         onSave={handleSave}
       />
@@ -1712,6 +1962,7 @@ export default function AccountsPage() {
         <AddMerchantModal
           verifiedPlatformDomains={verifiedPlatformDomains}
           displayProfiles={displayProfiles}
+          paymentIdentities={paymentIdentities}
           onClose={() => setShowAdd(false)}
           onAdd={handleAdd}
         />

@@ -748,7 +748,7 @@ export function ShieldDomainsManagerPage() {
         />
       )}
 
-      <main className="w-full px-6 md:px-8 py-8 space-y-6 w-full" data-ui-version="domains-i18n-vi-phase4">
+      <main className="w-full px-6 md:px-8 py-8 space-y-6 w-full" data-ui-version="domains-help-text-v1">
         <DashboardPageHeader
   title={isAdmin ? t.superAdminTitle : t.merchantTitle}
   description={isAdmin ? t.superAdminDesc : t.merchantDesc}
@@ -779,6 +779,32 @@ export function ShieldDomainsManagerPage() {
     </div>
   }
 />
+
+        <div className="bg-[#1f222c] border border-[#343947] rounded-lg px-5 py-4 space-y-3 text-sm">
+          <div className="flex gap-3">
+            <Globe className="w-5 h-5 text-sky-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-[#e7edf8]">What is a Shield Domain?</p>
+              <p className="text-[#aab4c5] mt-1 leading-relaxed">
+                A Shield Domain is the checkout-facing domain buyers pass through before PayPal and return to after approval. To use a domain in checkout branding, attach it to a Payment Identity.
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-3 pt-3 border-t border-[#343947]/50">
+            <Activity className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-[#e7edf8]">Domain Health</p>
+              <ul className="text-[#aab4c5] mt-1 space-y-1">
+                <li><span className="text-emerald-400 font-medium">Healthy:</span> Domain is active and ready for checkout routing.</li>
+                <li><span className="text-amber-400 font-medium">Degraded:</span> Domain is reachable but may need review.</li>
+                <li><span className="text-red-400 font-medium">Inactive:</span> Domain should not be used for checkout until fixed.</li>
+              </ul>
+              <p className="text-[#97a3b6] text-xs mt-2 italic">
+                After adding a domain, DNS and SSL verification can take a few minutes. If the domain was just connected, wait briefly and click Recheck Health.
+              </p>
+            </div>
+          </div>
+        </div>
 
         {isAdmin && (
           <div className="bg-[#151821] border-y border-r border-[#343947] border-l-4 border-l-[#FFD600] rounded-r-lg relative overflow-hidden shadow-sm" data-ui-version="grid-background-v1">

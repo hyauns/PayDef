@@ -40,8 +40,12 @@ export interface CheckoutBundleResolveInput {
 export interface CheckoutBundleResolveResult {
   mode: "shadow" | "enforce" | "disabled"
   bundle: PaymentIdentityBundle | null
+  bundleId: string | null
   selectedItem: PaymentIdentityBundleItem | null
+  selectedItemId: string | null
   candidateDescriptor: string | null
+  primaryShieldDomain: string | null
+  publicBrandName: string | null
   assignmentMatch: {
     merchantAccount: boolean
     shieldDomain: boolean
@@ -95,8 +99,12 @@ export async function resolvePaymentIdentityBundleForCheckout(
     return {
       mode: "disabled",
       bundle: null,
+      bundleId: null,
       selectedItem: null,
+      selectedItemId: null,
       candidateDescriptor: null,
+      primaryShieldDomain: null,
+      publicBrandName: null,
       assignmentMatch: { merchantAccount: false, shieldDomain: false },
       warnings: [],
       reason: "disabled_by_mode",
@@ -203,8 +211,12 @@ export async function resolvePaymentIdentityBundleForCheckout(
     return {
       mode,
       bundle,
+      bundleId: bundle?.id || null,
       selectedItem,
+      selectedItemId: selectedItem?.id || null,
       candidateDescriptor,
+      primaryShieldDomain: bundle?.primary_shield_domain || null,
+      publicBrandName: bundle?.public_brand_name || null,
       assignmentMatch: {
         merchantAccount: maMatch,
         shieldDomain: sdMatch,
@@ -224,8 +236,12 @@ export async function resolvePaymentIdentityBundleForCheckout(
     return {
       mode,
       bundle: null,
+      bundleId: null,
       selectedItem: null,
+      selectedItemId: null,
       candidateDescriptor: null,
+      primaryShieldDomain: null,
+      publicBrandName: null,
       assignmentMatch: { merchantAccount: false, shieldDomain: false },
       warnings: ["Resolver error — using safe fallback"],
       reason: `resolver_error: ${err instanceof Error ? err.message : "unknown"}`,

@@ -6,6 +6,8 @@ import {
   X, Plus, Pencil, Loader2, AlertTriangle, CheckCircle2,
   XCircle, Package, Truck, Eye,
 } from "lucide-react"
+import { useLanguage } from "@/components/i18n/LanguageProvider"
+import { paymentIdentitiesCopy } from "@/lib/i18n/payment-identities"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -77,6 +79,9 @@ const fetcher = (url: string) => fetch(url).then(r => {
 export function PaymentIdentityItemsDialog({
   open, onClose, onItemsChanged, bundleId, bundleName, publicBrandName,
 }: Props) {
+  const { language } = useLanguage()
+  const t = paymentIdentitiesCopy[language]
+
   const { data, error, isLoading, mutate } = useSWR(
     open ? `/api/merchant/payment-identities/items?bundleId=${bundleId}` : null,
     fetcher
@@ -246,13 +251,13 @@ export function PaymentIdentityItemsDialog({
           {/* Actions */}
           <div className="flex items-center justify-between">
             <span className="text-sm font-mono text-[#97a3b6]">
-              {isLoading ? "Loading…" : `${items.length} product${items.length !== 1 ? "s" : ""}`}
+              {isLoading ? t.loading : `${items.length} product${items.length !== 1 ? "s" : ""}`}
             </span>
             <button
               onClick={() => { setEditItem(null); setFormOpen(true) }}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#FFD600]/15 text-[#FFD600] hover:bg-[#FFD600]/25 font-mono text-xs font-medium border border-[#FFD600]/30 transition-colors"
             >
-              <Plus className="w-3.5 h-3.5" /> Add Product
+              <Plus className="w-3.5 h-3.5" /> {t.addItem}
             </button>
           </div>
 
@@ -269,12 +274,12 @@ export function PaymentIdentityItemsDialog({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#343947] text-[#97a3b6] text-xs font-mono uppercase tracking-wider">
-                    <th className="text-left px-4 py-2.5">Descriptor Name</th>
-                    <th className="text-left px-4 py-2.5">Product Title</th>
+                    <th className="text-left px-4 py-2.5">{t.descriptorName}</th>
+                    <th className="text-left px-4 py-2.5">{t.productTitle}</th>
                     <th className="text-left px-4 py-2.5">Type</th>
                     <th className="text-center px-3 py-2.5"><Truck className="w-3 h-3 inline" /></th>
-                    <th className="text-center px-3 py-2.5">Status</th>
-                    <th className="text-right px-4 py-2.5">Actions</th>
+                    <th className="text-center px-3 py-2.5">{t.thStatus}</th>
+                    <th className="text-right px-4 py-2.5">{t.thActions}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#343947]/40">
@@ -333,7 +338,7 @@ export function PaymentIdentityItemsDialog({
           {!isLoading && !error && items.length === 0 && (
             <div className="text-center py-10">
               <Package className="w-10 h-10 text-[#343947] mx-auto mb-3" />
-              <p className="text-sm text-[#6b7280] font-mono">No products added yet.</p>
+              <p className="text-sm text-[#6b7280] font-mono">{t.noItemsFound}</p>
               <p className="text-xs text-[#4a5568] font-mono mt-1">Add products to build the buyer-facing identity.</p>
             </div>
           )}
@@ -343,7 +348,7 @@ export function PaymentIdentityItemsDialog({
             <div className="bg-[#1f222c] border border-[#343947] rounded-lg p-5 space-y-4">
               <div className="flex items-center justify-between mb-1">
                 <h4 className="text-sm font-mono font-semibold text-[#e7edf8]">
-                  {isEdit ? "Edit Product" : "Add Product"}
+                  {isEdit ? t.editItem : t.addItem}
                 </h4>
                 <button onClick={() => { setFormOpen(false); setEditItem(null) }} className="text-[#6b7280] hover:text-[#e7edf8]">
                   <X className="w-4 h-4" />
@@ -353,13 +358,13 @@ export function PaymentIdentityItemsDialog({
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className={LABEL_CLS}>Descriptor Name <span className="text-red-400">*</span></label>
-                    <input className={INPUT} value={formData.descriptorName} onChange={e => set("descriptorName", e.target.value)} placeholder="e.g. Tire & Wheel Order" />
-                    <p className="text-xs text-[#6b7280] mt-1">This appears on the buyer's statement</p>
+                    <label className={LABEL_CLS}>{t.descriptorName} <span className="text-red-400">*</span></label>
+                    <input className={INPUT} value={formData.descriptorName} onChange={e => set("descriptorName", e.target.value)} placeholder={t.descriptorNamePlaceholder} />
+                    <p className="text-xs text-[#6b7280] mt-1">{t.descriptorHelper}</p>
                   </div>
                   <div>
-                    <label className={LABEL_CLS}>Product Title <span className="text-red-400">*</span></label>
-                    <input className={INPUT} value={formData.productTitle} onChange={e => set("productTitle", e.target.value)} placeholder="e.g. Premium Tire & Wheel Package" />
+                    <label className={LABEL_CLS}>{t.productTitle} <span className="text-red-400">*</span></label>
+                    <input className={INPUT} value={formData.productTitle} onChange={e => set("productTitle", e.target.value)} placeholder={t.productTitlePlaceholder} />
                   </div>
                   <div>
                     <label className={LABEL_CLS}>Product Type</label>
@@ -387,11 +392,12 @@ export function PaymentIdentityItemsDialog({
                 {previewDescriptor && (
                   <div className={`bg-[#0d0f14] border rounded-lg px-4 py-3 ${isTooLong ? 'border-red-500/50' : 'border-[#343947]'}`}>
                     <div className="flex justify-between items-center mb-1">
-                      <p className="text-[10px] font-mono text-[#6b7280] uppercase tracking-wider">PayPal Descriptor Preview</p>
+                      <p className="text-[10px] font-mono text-[#6b7280] uppercase tracking-wider">{t.paypalDescriptorPreview}</p>
                       <p className={`text-[10px] font-mono ${isTooLong ? 'text-red-400' : 'text-[#6b7280]'}`}>
                         {previewDescriptor.length} / 127
                       </p>
                     </div>
+                    <p className="text-xs text-[#6b7280] mb-2">This preview shows the final item name PayPal will receive when identity enforcement is enabled.</p>
                     <p className={`text-sm font-mono ${isTooLong ? 'text-red-400' : 'text-[#e7edf8]'}`}>{previewDescriptor}</p>
                   </div>
                 )}
@@ -412,12 +418,12 @@ export function PaymentIdentityItemsDialog({
                 <div className="flex items-center justify-end gap-3 pt-1">
                   <button type="button" onClick={() => { setFormOpen(false); setEditItem(null) }}
                     className="px-4 py-2 rounded-lg bg-[#151821] text-[#97a3b6] hover:text-[#e7edf8] border border-[#343947] text-sm font-mono transition-colors">
-                    Cancel
+                    {t.cancel}
                   </button>
                   <button type="submit" disabled={saving || formSuccess || isTooLong}
                     className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-[#FFD600]/15 text-[#FFD600] hover:bg-[#FFD600]/25 border border-[#FFD600]/30 text-sm font-mono font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                     {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                    {saving ? "Saving…" : (isEdit ? "Save Product" : "Add Product")}
+                    {saving ? "Saving…" : (isEdit ? t.saveChanges : t.addItem)}
                   </button>
                 </div>
               </form>

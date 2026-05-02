@@ -341,7 +341,7 @@ export async function POST(req: NextRequest) {
               ma.current_volume, ma.priority, ma.status,
               ma.warmup_started_at,
               ma.item_masking, ma.fake_product_name,
-              ma.display_profile_id,
+              ma.display_profile_id, ma.bundle_id,
               COALESCE(ho.cnt, 0)::TEXT AS recent_order_count
        FROM   merchant_accounts ma
        LEFT JOIN (
@@ -427,7 +427,7 @@ export async function POST(req: NextRequest) {
               current_volume, priority, status,
               warmup_started_at,
               item_masking, fake_product_name,
-              display_profile_id
+              display_profile_id, bundle_id
        FROM   merchant_accounts
        WHERE  id = $1
        FOR UPDATE`,
@@ -480,11 +480,13 @@ export async function POST(req: NextRequest) {
 
     const txLog = log.child({ transactionId, traceId: transactionId })
 
-    // ── Step 8. Mask item name + build shield URLs ───────────────────────────
+    // ── Step 8. Resolve Identity, Mask item name + build shield URLs ─────────
     
     // PAYMENT_DISPLAY_PROFILE_MODE integration (Phase 2A + Phase 3)
     const profileMode = (process.env.PAYMENT_DISPLAY_PROFILE_MODE || "shadow") as "shadow" | "enforce"
+    const bundleMode = (process.env.PAYMENT_IDENTITY_BUNDLE_MODE || "shadow") as "shadow" | "enforce" | "disabled"
     
+    // Phase 4: Resolve legacy Payment Display Profile (Priority B)
     const profile = await resolvePaymentDisplayProfile({
       tenantId,
       storeId: store.id,
@@ -496,7 +498,7 @@ export async function POST(req: NextRequest) {
       ? maskItemName(realName, account.fake_product_name)
       : maskItemName(realName)
 
-    // Phase 3: Build profile-driven line items
+    // Default legacy line item result
     let lineItemResult = buildPayPalLineItemsForProfile({
       profile,
       originalItems: [{
@@ -526,7 +528,6 @@ export async function POST(req: NextRequest) {
       }
     )
 
-    // Phase 3: Structured log for line item build result
     txLog.info("payment_display_profile.line_items_built",
       `Line items built: policy=${lineItemResult.lineItemPolicy} mode=${profileMode} invariant=${lineItemResult.amountInvariantPassed}`,
       {
@@ -544,267 +545,270 @@ export async function POST(req: NextRequest) {
       }
     )
 
-    // Log invariant failure as a warning (non-blocking — fallback already applied)
     if (!lineItemResult.amountInvariantPassed) {
       txLog.warn("payment_display_profile.line_item_invariant_failed",
         `Amount invariant failed for policy=${lineItemResult.lineItemPolicy} — fell back to SINGLE_SEMANTIC_ITEM`,
-        {
-          storeId: store.id,
-          tenantId,
-          merchantAccountId: account.id,
-          lineItemPolicy: lineItemResult.lineItemPolicy,
-          profileId: profile.profileId,
-        }
+        { storeId: store.id, tenantId, merchantAccountId: account.id, lineItemPolicy: lineItemResult.lineItemPolicy, profileId: profile.profileId }
       )
     }
 
-    const executeToken = generateExecuteToken(transactionId)
-    
-    // ── Phase 4: Shield domain consistency ──────────────────────────────────
+    // ── PI-3B: Payment Identity Bundle (Priority A) ──────────────────────────
     let finalShieldDomain = account.shield_domain
-    let shieldProfileMatched = false
-    let shieldFallbackUsed = true
     let shieldDomainId: string | undefined
+    let identityDomainUsed = false
+    let domainFallbackReason = "no_bundle"
+    let bundleIdLog: string | undefined = undefined
+    let candidateDescriptorLog: string | undefined = undefined
+    let assignmentMatchLog = { merchantAccount: false, shieldDomain: false }
 
-    if (preferredProfileId) {
-      const sdRows = await client.query<{ id: string, domain: string }>(
-        `SELECT id, domain 
-         FROM shield_domains 
-         WHERE tenant_id = $1 
-           AND display_profile_id = $2 
-           AND is_active = true 
-           AND health_ok = true 
-         ORDER BY created_at DESC 
-         LIMIT 1`,
-        [tenantId, preferredProfileId]
-      )
-      if (sdRows.rows.length > 0) {
-        finalShieldDomain = sdRows.rows[0].domain
-        shieldDomainId = sdRows.rows[0].id
-        shieldProfileMatched = true
-        shieldFallbackUsed = false
-      }
-    }
+    try {
+      if (account.bundle_id) {
+        txLog.info("payment_identity_bundle.resolve_start",
+          `Identity bundle resolve: mode=${bundleMode} account=${account.id}`, {
+            tenantId,
+            storeId: store.id,
+            merchantAccountId: account.id,
+            checkoutAmount: amount,
+            mode: bundleMode,
+          })
 
-    // ── Phase 5E: Resolve shieldDomainId from fallback host ─────────────────
-    // When profile-based selection fails (display_profile_id not set on domain),
-    // look up the shield_domains.id by hostname so the identity bundle resolver
-    // can confirm the shield domain assignment.
-    if (!shieldDomainId && finalShieldDomain) {
-      const fallbackIdRows = await client.query<{ id: string }>(
-        `SELECT id FROM shield_domains
-         WHERE LOWER(domain) = LOWER($1) 
-           AND is_active = true 
-           AND health_ok = true
-           AND (tenant_id = $2 OR tenant_id IS NULL)`,
-        [finalShieldDomain, tenantId]
-      )
-      if (fallbackIdRows.rows.length === 1) {
-        shieldDomainId = fallbackIdRows.rows[0].id
-      } else if (fallbackIdRows.rows.length > 1) {
-        txLog.warn("payment_display_profile.shield_domain_ambiguous", "Multiple shield domains match fallback hostname", {
-          targetHost: finalShieldDomain,
+        const bundleResult = await resolvePaymentIdentityBundleForCheckout({
           tenantId,
-          matchCount: fallbackIdRows.rows.length
+          storeId: store.id,
+          merchantAccountId: account.id,
+          shieldDomainId: null, // we are resolving it from the bundle now!
+          checkoutAmount: amount,
+          mode: bundleMode,
         })
-        // Ambiguous match — leave shieldDomainId undefined for safety
+
+        bundleIdLog = bundleResult.bundleId || undefined
+        candidateDescriptorLog = bundleResult.candidateDescriptor ?? undefined
+        assignmentMatchLog = bundleResult.assignmentMatch
+
+        txLog.info("payment_identity_bundle.resolve_result",
+          `Identity bundle result: bundle=${bundleResult.bundleId ?? "none"} item=${bundleResult.selectedItemId ?? "none"} reason=${bundleResult.reason}`, {
+            tenantId, storeId: store.id, merchantAccountId: account.id,
+            bundleId: bundleResult.bundleId, selectedItemId: bundleResult.selectedItemId,
+            reason: bundleResult.reason, mode: bundleResult.mode,
+            assignmentMatch: bundleResult.assignmentMatch, warnings: bundleResult.warnings,
+            checkoutAmount: amount,
+          })
+
+        if (bundleResult.selectedItem) {
+          txLog.info("payment_identity_bundle.item_selected",
+            `Bundle item: descriptor="${bundleResult.candidateDescriptor}" type=${bundleResult.selectedItem.product_type}`, {
+              tenantId, storeId: store.id, merchantAccountId: account.id,
+              bundleId: bundleResult.bundleId, selectedItemId: bundleResult.selectedItemId,
+              candidateDescriptor: bundleResult.candidateDescriptor, productType: bundleResult.selectedItem.product_type,
+              descriptorName: bundleResult.selectedItem.descriptor_name,
+            })
+        }
+
+        if (bundleResult.warnings.length > 0) {
+          txLog.warn("payment_identity_bundle.resolve_warning",
+            `Bundle warnings: ${bundleResult.warnings.join("; ")}`, {
+              tenantId, storeId: store.id, merchantAccountId: account.id,
+              bundleId: bundleResult.bundleId, warnings: bundleResult.warnings,
+            })
+        }
+
+        // Apply Priority A Source of Truth
+        if (bundleResult.bundle && bundleResult.primaryShieldDomain) {
+          // Resolve shieldDomainId internally
+          const sdRows = await client.query<{ id: string }>(
+            `SELECT id FROM shield_domains
+             WHERE LOWER(domain) = LOWER($1) 
+               AND is_active = true 
+               AND health_ok = true
+               AND (tenant_id = $2 OR tenant_id IS NULL)`,
+            [bundleResult.primaryShieldDomain, tenantId]
+          )
+          
+          if (sdRows.rows.length > 0) {
+            shieldDomainId = sdRows.rows[0].id
+            finalShieldDomain = bundleResult.primaryShieldDomain
+            identityDomainUsed = true
+            domainFallbackReason = "none"
+
+            txLog.info("payment_identity.runtime_source_selected", "Priority A: Payment Identity Selected", {
+              tenantId, storeId: store.id, merchantAccountId: account.id, transactionId,
+              source: "payment_identity", bundleId: bundleResult.bundleId, reason: "valid_bundle_domain"
+            })
+
+            txLog.info("payment_identity.domain_from_identity", "Domain from Payment Identity", {
+              bundleId: bundleResult.bundleId, primaryShieldDomain: finalShieldDomain,
+              shieldDomainId, identityDomainUsed: true
+            })
+          } else {
+             domainFallbackReason = "primary_shield_domain_unhealthy"
+             txLog.info("payment_identity.runtime_source_selected", "Priority B: Legacy Selected", {
+               tenantId, storeId: store.id, merchantAccountId: account.id, transactionId,
+               source: "legacy", bundleId: bundleResult.bundleId, reason: domainFallbackReason
+             })
+             txLog.info("payment_identity.domain_fallback_legacy", "Fallback to legacy domain", {
+               bundleId: bundleResult.bundleId, fallbackReason: domainFallbackReason, legacyShieldDomain: finalShieldDomain
+             })
+          }
+        } else {
+           domainFallbackReason = "missing_primary_shield_domain"
+           txLog.info("payment_identity.runtime_source_selected", "Priority B: Legacy Selected", {
+             tenantId, storeId: store.id, merchantAccountId: account.id, transactionId,
+             source: "legacy", bundleId: bundleResult.bundleId, reason: domainFallbackReason
+           })
+           if (bundleResult.bundle) {
+             txLog.info("payment_identity.domain_fallback_legacy", "Fallback to legacy domain", {
+               bundleId: bundleResult.bundleId, fallbackReason: domainFallbackReason, legacyShieldDomain: finalShieldDomain
+             })
+           }
+        }
+
+        // Priority A Enforce Descriptor
+        if (bundleResult.mode === "enforce") {
+          txLog.info("payment_identity_bundle.enforce_start", "Starting Identity Bundle enforce evaluation", {
+            tenantId, storeId: store.id, merchantAccountId: account.id, bundleId: bundleResult.bundleId,
+          })
+
+          const candidate = bundleResult.candidateDescriptor
+
+          if (bundleResult.reason === "disabled_by_mode") {
+             txLog.warn("payment_identity_bundle.enforce_fallback", "Resolver disabled by mode", {
+               tenantId, storeId: store.id, fallbackReason: "mode_not_enforce"
+             })
+          } else if (!bundleResult.bundle) {
+             txLog.warn("payment_identity_bundle.enforce_fallback", "No bundle assigned to merchant/store", {
+               tenantId, storeId: store.id, fallbackReason: "no_bundle"
+             })
+          } else if (!bundleResult.selectedItem) {
+             txLog.warn("payment_identity_bundle.enforce_fallback", "Bundle has no active selected item", {
+               tenantId, storeId: store.id, bundleId: bundleResult.bundleId, fallbackReason: "no_selected_item"
+             })
+          } else if (!candidate) {
+             txLog.warn("payment_identity_bundle.enforce_fallback", "Missing candidate descriptor", {
+               tenantId, storeId: store.id, bundleId: bundleResult.bundleId, fallbackReason: "missing_candidate_descriptor"
+             })
+          } else if (candidate.length > 127) {
+             txLog.warn("payment_identity_bundle.enforce_fallback", `Candidate descriptor too long (${candidate.length} > 127)`, {
+               tenantId, storeId: store.id, bundleId: bundleResult.bundleId, candidateLength: candidate.length, fallbackReason: "descriptor_too_long"
+             })
+          } else {
+             lineItemResult = {
+               ...lineItemResult,
+               selectedItems: [{
+                 name: candidate,
+                 quantity: "1",
+                 unitAmount: { currencyCode: currency, value: amountStr }
+               }],
+               lineItemPolicy: "SINGLE_SEMANTIC_ITEM",
+               skipRandomization: true
+             }
+
+             const checkoutTotalCents = Math.round(parseFloat(amountStr) * 100)
+             txLog.info("payment_identity_bundle.enforce_preflight", "Identity bundle enforce preflight checks", {
+               tenantId, storeId: store.id, bundleId: bundleResult.bundleId,
+               amountInvariantPassed: true, selectedItemCount: 1,
+               selectedTotalCents: checkoutTotalCents, checkoutTotalCents: checkoutTotalCents
+             })
+
+             txLog.info("payment_identity_bundle.enforce_applied", "Identity bundle enforced on PayPal payload", {
+               tenantId, storeId: store.id, merchantAccountId: account.id, shieldDomainId,
+               bundleId: bundleResult.bundleId, selectedItemId: bundleResult.selectedItemId,
+               mode: bundleResult.mode, candidateDescriptor: candidate, candidateLength: candidate.length,
+               amountInvariantPassed: true, selectedItemCount: 1,
+             })
+          }
+        }
+      } else {
+        txLog.info("payment_identity.runtime_source_selected", "Priority B: Legacy Selected", {
+          tenantId, storeId: store.id, merchantAccountId: account.id, transactionId,
+          source: "legacy", reason: "no_account_bundle_id"
+        })
       }
+    } catch (bundleResolverErr) {
+      txLog.error("payment_identity_bundle.resolve_error", "Bundle resolver failed", {
+        tenantId, storeId: store.id, merchantAccountId: account.id, error: bundleResolverErr
+      })
     }
 
-    txLog.info("payment_display_profile.shield_domain_selected", "Shield domain selected for transaction", {
-      tenantId,
-      storeId: store.id,
-      resolvedProfileId: preferredProfileId,
-      shieldDomainId,
-      profileMatched: shieldProfileMatched,
-      fallbackUsed: shieldFallbackUsed,
-      fallbackIdResolved: !shieldProfileMatched && !!shieldDomainId,
+    // ── Phase 4: Legacy Shield Domain Consistency (Priority B) ───────────────
+    if (!identityDomainUsed) {
+      let shieldProfileMatched = false
+      if (preferredProfileId) {
+        const sdRows = await client.query<{ id: string, domain: string }>(
+          `SELECT id, domain 
+           FROM shield_domains 
+           WHERE tenant_id = $1 
+             AND display_profile_id = $2 
+             AND is_active = true 
+             AND health_ok = true 
+           ORDER BY created_at DESC 
+           LIMIT 1`,
+          [tenantId, preferredProfileId]
+        )
+        if (sdRows.rows.length > 0) {
+          finalShieldDomain = sdRows.rows[0].domain
+          shieldDomainId = sdRows.rows[0].id
+          shieldProfileMatched = true
+        }
+      }
+
+      if (!shieldDomainId && finalShieldDomain) {
+        const fallbackIdRows = await client.query<{ id: string }>(
+          `SELECT id FROM shield_domains
+           WHERE LOWER(domain) = LOWER($1) 
+             AND is_active = true 
+             AND health_ok = true
+             AND (tenant_id = $2 OR tenant_id IS NULL)`,
+          [finalShieldDomain, tenantId]
+        )
+        if (fallbackIdRows.rows.length === 1) {
+          shieldDomainId = fallbackIdRows.rows[0].id
+        } else if (fallbackIdRows.rows.length > 1) {
+          txLog.warn("payment_display_profile.shield_domain_ambiguous", "Multiple shield domains match fallback hostname", {
+            targetHost: finalShieldDomain, tenantId, matchCount: fallbackIdRows.rows.length
+          })
+        }
+      }
+
+      txLog.info("payment_display_profile.shield_domain_selected", "Legacy Shield domain selected for transaction", {
+        tenantId, storeId: store.id, resolvedProfileId: preferredProfileId, shieldDomainId,
+        profileMatched: shieldProfileMatched, fallbackUsed: !shieldProfileMatched,
+        fallbackIdResolved: !shieldProfileMatched && !!shieldDomainId, targetHost: finalShieldDomain,
+      })
+    }
+
+    // Domain mismatch warning
+    if (account.shield_domain && finalShieldDomain && account.shield_domain !== finalShieldDomain) {
+      txLog.warn("payment_identity.domain_mismatch_warning", "Legacy account shield domain differs from selected target host", {
+        bundleId: bundleIdLog, identityDomain: finalShieldDomain, legacyAccountShieldDomain: account.shield_domain, merchantAccountId: account.id
+      })
+    }
+
+    // Final Consistency Check Log
+    txLog.info("payment_identity.runtime_consistency_check", "Payment Identity consistency check", {
       targetHost: finalShieldDomain,
+      shieldDomainId,
+      bundleId: bundleIdLog,
+      candidateDescriptor: candidateDescriptorLog,
+      assignmentMatch: assignmentMatchLog,
+      amountInvariantPassed: lineItemResult.amountInvariantPassed
     })
 
+    const executeToken = generateExecuteToken(transactionId)
     const { returnUrl, cancelUrl } = buildShieldUrls(
       finalShieldDomain,
       transactionId,
       executeToken
     )
+    
     txLog.info("checkout.execute_token_generated",
       `Execute token: tx=${transactionId} enabled=${executeToken !== null} ` +
       `mode=${getExecuteTokenMode()} generated=${executeToken !== null} ` +
       `returnUrlHasEt=${returnUrl.includes("et=")}`,
       {
-        storeId: store.id,
-        tenantId,
-        merchantAccountId: account.id,
-        tokenEnabled: executeToken !== null,
-        tokenGenerated: executeToken !== null,
-        returnUrlHasEt: returnUrl.includes("et=")
+        storeId: store.id, tenantId, merchantAccountId: account.id,
+        tokenEnabled: executeToken !== null, tokenGenerated: executeToken !== null, returnUrlHasEt: returnUrl.includes("et=")
       }
     )
-
-    // ── Phase 5D: Payment Identity Bundle shadow resolver ────────────────────
-    // Runs in shadow mode only — resolves which bundle WOULD be selected.
-    // Never mutates payload. Never blocks checkout on failure.
-    try {
-      const bundleMode = (process.env.PAYMENT_IDENTITY_BUNDLE_MODE || "shadow") as "shadow" | "enforce" | "disabled"
-
-      txLog.info("payment_identity_bundle.resolve_start",
-        `Identity bundle resolve: mode=${bundleMode} account=${account.id}`, {
-          tenantId,
-          storeId: store.id,
-          merchantAccountId: account.id,
-          shieldDomainId,
-          checkoutAmount: amount,
-          mode: bundleMode,
-        })
-
-      const bundleResult = await resolvePaymentIdentityBundleForCheckout({
-        tenantId,
-        storeId: store.id,
-        merchantAccountId: account.id,
-        shieldDomainId: shieldDomainId ?? null,
-        checkoutAmount: amount,
-        mode: bundleMode,
-      })
-
-      txLog.info("payment_identity_bundle.resolve_result",
-        `Identity bundle result: bundle=${bundleResult.bundle?.id ?? "none"} item=${bundleResult.selectedItem?.id ?? "none"} reason=${bundleResult.reason}`, {
-          tenantId,
-          storeId: store.id,
-          merchantAccountId: account.id,
-          shieldDomainId,
-          bundleId: bundleResult.bundle?.id,
-          selectedItemId: bundleResult.selectedItem?.id,
-          reason: bundleResult.reason,
-          mode: bundleResult.mode,
-          assignmentMatch: bundleResult.assignmentMatch,
-          warnings: bundleResult.warnings,
-          checkoutAmount: amount,
-        })
-
-      if (bundleResult.selectedItem) {
-        txLog.info("payment_identity_bundle.item_selected",
-          `Bundle item: descriptor="${bundleResult.candidateDescriptor}" type=${bundleResult.selectedItem.product_type}`, {
-            tenantId,
-            storeId: store.id,
-            merchantAccountId: account.id,
-            bundleId: bundleResult.bundle?.id,
-            selectedItemId: bundleResult.selectedItem.id,
-            candidateDescriptor: bundleResult.candidateDescriptor,
-            productType: bundleResult.selectedItem.product_type,
-            descriptorName: bundleResult.selectedItem.descriptor_name,
-          })
-      }
-
-      // Shadow comparison: what the bundle would produce vs current profile output
-      const currentProfileItemName = lineItemResult.selectedItems[0]?.name ?? "(none)"
-      txLog.info("payment_identity_bundle.shadow_comparison",
-        `Shadow: current="${currentProfileItemName}" candidate="${bundleResult.candidateDescriptor ?? "(none)"}" match=${currentProfileItemName === bundleResult.candidateDescriptor}`, {
-          tenantId,
-          storeId: store.id,
-          merchantAccountId: account.id,
-          bundleId: bundleResult.bundle?.id,
-          currentProfileItemName,
-          candidateDescriptor: bundleResult.candidateDescriptor,
-          descriptorsMatch: currentProfileItemName === bundleResult.candidateDescriptor,
-          mode: bundleResult.mode,
-        })
-
-      if (bundleResult.warnings.length > 0) {
-        txLog.warn("payment_identity_bundle.resolve_warning",
-          `Bundle warnings: ${bundleResult.warnings.join("; ")}`, {
-            tenantId,
-            storeId: store.id,
-            merchantAccountId: account.id,
-            bundleId: bundleResult.bundle?.id,
-            warnings: bundleResult.warnings,
-          })
-      }
-
-      // ── Phase 5F: Identity Bundle Enforce ──────────────────────────────────
-      if (bundleResult.mode === "enforce") {
-        txLog.info("payment_identity_bundle.enforce_start", "Starting Identity Bundle enforce evaluation", {
-          tenantId,
-          storeId: store.id,
-          merchantAccountId: account.id,
-          bundleId: bundleResult.bundle?.id,
-        })
-
-        const candidate = bundleResult.candidateDescriptor
-
-        if (candidate && bundleResult.bundle && bundleResult.selectedItem) {
-          txLog.info("payment_identity_bundle.enforce_candidate_built", "Identity Bundle candidate descriptor ready for validation", {
-            tenantId, storeId: store.id, bundleId: bundleResult.bundle.id, selectedItemId: bundleResult.selectedItem.id,
-            candidateDescriptor: candidate, candidateLength: candidate.length
-          })
-        }
-
-        if (bundleResult.reason === "disabled_by_mode") {
-           txLog.warn("payment_identity_bundle.enforce_fallback", "Resolver disabled by mode", {
-             tenantId, storeId: store.id, fallbackReason: "mode_not_enforce"
-           })
-        } else if (!bundleResult.bundle) {
-           txLog.warn("payment_identity_bundle.enforce_fallback", "No bundle assigned to merchant/store", {
-             tenantId, storeId: store.id, fallbackReason: "no_bundle"
-           })
-        } else if (!bundleResult.selectedItem) {
-           txLog.warn("payment_identity_bundle.enforce_fallback", "Bundle has no active selected item", {
-             tenantId, storeId: store.id, bundleId: bundleResult.bundle?.id, fallbackReason: "no_selected_item"
-           })
-        } else if (!candidate) {
-           txLog.warn("payment_identity_bundle.enforce_fallback", "Missing candidate descriptor", {
-             tenantId, storeId: store.id, bundleId: bundleResult.bundle.id, fallbackReason: "missing_candidate_descriptor"
-           })
-        } else if (candidate.length > 127) {
-           txLog.warn("payment_identity_bundle.enforce_fallback", `Candidate descriptor too long (${candidate.length} > 127)`, {
-             tenantId, storeId: store.id, bundleId: bundleResult.bundle.id, candidateLength: candidate.length, fallbackReason: "descriptor_too_long"
-           })
-        } else {
-           // Enforce is VALID: mutate lineItemResult to use the candidate descriptor
-           lineItemResult = {
-             ...lineItemResult,
-             selectedItems: [{
-               name: candidate,
-               quantity: "1",
-               unitAmount: { currencyCode: currency, value: amountStr }
-             }],
-             lineItemPolicy: "SINGLE_SEMANTIC_ITEM",
-             skipRandomization: true
-           }
-
-           const checkoutTotalCents = Math.round(parseFloat(amountStr) * 100)
-           txLog.info("payment_identity_bundle.enforce_preflight", "Identity bundle enforce preflight checks", {
-             tenantId, storeId: store.id, bundleId: bundleResult.bundle.id,
-             amountInvariantPassed: true,
-             selectedItemCount: 1,
-             selectedTotalCents: checkoutTotalCents,
-             checkoutTotalCents: checkoutTotalCents
-           })
-
-           txLog.info("payment_identity_bundle.enforce_applied", "Identity bundle enforced on PayPal payload", {
-             tenantId,
-             storeId: store.id,
-             merchantAccountId: account.id,
-             shieldDomainId,
-             bundleId: bundleResult.bundle.id,
-             selectedItemId: bundleResult.selectedItem.id,
-             mode: bundleResult.mode,
-             candidateDescriptor: candidate,
-             candidateLength: candidate.length,
-             amountInvariantPassed: true,
-             selectedItemCount: 1,
-           })
-        }
-      }
-    } catch (bundleResolverErr) {
-      // Shadow resolver failure must NEVER block checkout
-      txLog.warn("payment_identity_bundle.resolve_warning",
-        `Identity bundle shadow resolver failed — checkout continues unaffected`, {
-          tenantId,
-          storeId: store.id,
-          merchantAccountId: account.id,
-          error: bundleResolverErr,
-        })
-    }
 
     // ── Step 9. Create PayPal order ──────────────────────────────────────────
     // The PayPal API call lives inside the transaction intentionally:

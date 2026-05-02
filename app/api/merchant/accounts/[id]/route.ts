@@ -91,6 +91,9 @@ export async function PATCH(
   if (typeof body.displayProfileId === "string") {
     updates.display_profile_id = body.displayProfileId.trim() || null
   }
+  if (typeof body.bundleId === "string") {
+    updates.bundle_id = body.bundleId.trim() || null
+  }
   if (typeof body.proxyUrl === "string") {
     const proxy = body.proxyUrl.trim()
     if (proxy && !proxy.startsWith("http://") && !proxy.startsWith("https://") && !proxy.startsWith("socks")) {

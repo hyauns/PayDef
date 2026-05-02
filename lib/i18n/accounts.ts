@@ -56,10 +56,12 @@ export const accountsCopy = {
     tabOverview: "Overview",
     tabCredentials: "Credentials",
     tabRouting: "Routing & Limits",
+    tabIdentity: "Payment Identity",
     tabDomain: "Domain & Proxy",
     tabDisplay: "Display Profile",
     tabReview: "Review",
-    tabLegacy: "Legacy",
+    tabLegacy: "Advanced / Legacy",
+    identityDescEdit: "Choose the brand/domain/descriptor set this PayPal account should use during checkout.",
 
     // Form Overview/Info
     labelAccountName: "Account Name",
@@ -227,10 +229,12 @@ export const accountsCopy = {
     tabOverview: "Tổng quan",
     tabCredentials: "Thông tin kết nối",
     tabRouting: "Định tuyến & hạn mức",
+    tabIdentity: "Payment Identity",
     tabDomain: "Tên miền & proxy",
     tabDisplay: "Hồ sơ hiển thị",
     tabReview: "Xem lại",
-    tabLegacy: "Cũ",
+    tabLegacy: "Advanced / Legacy",
+    identityDescEdit: "Chọn thương hiệu/tên miền/mô tả PayPal mà tài khoản này sẽ sử dụng khi thanh toán.",
 
     // Form Overview/Info
     labelAccountName: "Tên tài khoản",

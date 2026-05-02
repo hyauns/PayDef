@@ -26,6 +26,7 @@ interface AccountRow {
   client_id:            string
   // client_secret: intentionally NOT selected — never leaves the DB in an API response
   display_profile_id:   string | null
+  bundle_id:            string | null
   shield_domain:        string | null
   proxy_url:            string | null
   daily_limit:          string
@@ -85,6 +86,7 @@ function mapAccountResponse(
     clientId:           account.client_id,
     // client_secret is intentionally omitted — never exposed via API
     displayProfileId:   account.display_profile_id,
+    bundleId:           account.bundle_id,
     shieldDomain:       account.shield_domain,
     proxyUrl:           account.proxy_url,
     dailyLimit,
@@ -133,7 +135,7 @@ export async function GET() {
     ? (await sql`
         SELECT
           id, tenant_id, store_id, name, email, client_id,
-          display_profile_id, shield_domain, proxy_url,
+          display_profile_id, bundle_id, shield_domain, proxy_url,
           daily_limit, soft_limit, daily_limit_override, current_volume,
           priority, status, item_masking, fake_product_name,
           warmup_started_at, volume_reset_at,
@@ -144,7 +146,7 @@ export async function GET() {
     : (await sql`
         SELECT
           id, tenant_id, store_id, name, email, client_id,
-          display_profile_id, shield_domain, proxy_url,
+          display_profile_id, bundle_id, shield_domain, proxy_url,
           daily_limit, soft_limit, daily_limit_override, current_volume,
           priority, status, item_masking, fake_product_name,
           warmup_started_at, volume_reset_at,
@@ -229,6 +231,7 @@ export async function POST(req: NextRequest) {
     clientId,
     clientSecret,
     displayProfileId,
+    bundleId,
     proxyUrl,
     shieldDomain,
     status: initialStatus,
@@ -243,6 +246,7 @@ export async function POST(req: NextRequest) {
     clientId?: string
     clientSecret?: string
     displayProfileId?: string
+    bundleId?: string
     proxyUrl?: string
     shieldDomain?: string
     status?: string
@@ -321,6 +325,7 @@ export async function POST(req: NextRequest) {
   const safeEmail       = email.trim()
   const safeClientId    = clientId.trim()
   const safeProfileId   = typeof displayProfileId === "string" ? displayProfileId.trim() || null : null
+  const safeBundleId    = typeof bundleId === "string" ? bundleId.trim() || null : null
   const safeProxy       = typeof proxyUrl === "string" ? proxyUrl.trim() || null : null
   const safeDomain      = typeof shieldDomain === "string" ? shieldDomain.trim() || null : null
   const safeSoftLimit   = typeof softLimit === "number" && softLimit > 0 ? softLimit : 4000
@@ -332,16 +337,16 @@ export async function POST(req: NextRequest) {
   const result = await sql`
     INSERT INTO merchant_accounts (
       tenant_id, name, email, client_id, client_secret,
-      display_profile_id, shield_domain, proxy_url, status, priority,
+      display_profile_id, bundle_id, shield_domain, proxy_url, status, priority,
       daily_limit, soft_limit, item_masking, fake_product_name,
       warmup_started_at
     ) VALUES (
       ${tenantId}, ${safeName}, ${safeEmail}, ${safeClientId}, ${encryptedSecret},
-      ${safeProfileId}, ${safeDomain}, ${safeProxy}, ${safeStatus}::account_status, ${safePriority},
+      ${safeProfileId}, ${safeBundleId}, ${safeDomain}, ${safeProxy}, ${safeStatus}::account_status, ${safePriority},
       ${safeHardLimit}, ${safeSoftLimit}, ${safeMasking}, ${safeFakeName},
       ${safeStatus === "WARMING_UP" ? new Date().toISOString() : null}
     )
-    RETURNING id, name, email, client_id, display_profile_id, shield_domain, proxy_url,
+    RETURNING id, name, email, client_id, display_profile_id, bundle_id, shield_domain, proxy_url,
               status, priority, daily_limit, soft_limit,
               item_masking, fake_product_name, current_volume,
               created_at

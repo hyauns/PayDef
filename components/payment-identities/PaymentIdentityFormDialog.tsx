@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { X, Loader2, AlertTriangle, CheckCircle2 } from "lucide-react"
+import { useLanguage } from "@/components/i18n/LanguageProvider"
+import { paymentIdentitiesCopy } from "@/lib/i18n/payment-identities"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -58,6 +60,9 @@ const SECTION_TITLE = "text-sm font-mono font-semibold text-[#e7edf8] uppercase 
 export function PaymentIdentityFormDialog({
   open, onClose, onSaved, editIdentity, shieldDomains
 }: PaymentIdentityFormDialogProps) {
+  const { language } = useLanguage()
+  const t = paymentIdentitiesCopy[language]
+
   const isEdit = Boolean(editIdentity?.id)
   const [form, setForm] = useState<IdentityFormData>(INITIAL)
   const [saving, setSaving] = useState(false)
@@ -170,7 +175,7 @@ export function PaymentIdentityFormDialog({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#343947] bg-[#1f222c]/60 rounded-t-xl">
           <h2 className="text-base font-mono font-semibold text-[#e7edf8]">
-            {isEdit ? "Edit Payment Identity" : "Create Payment Identity"}
+            {isEdit ? t.editIdentity : t.createIdentity}
           </h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[#343947]/40 text-[#6b7280] hover:text-[#e7edf8] transition-colors">
             <X className="w-5 h-5" />
@@ -185,8 +190,8 @@ export function PaymentIdentityFormDialog({
             <h3 className={SECTION_TITLE}>Basic Identity</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className={LABEL_CLS}>Identity Name <span className="text-red-400">*</span></label>
-                <input className={INPUT} value={form.bundleName} onChange={e => set("bundleName", e.target.value)} placeholder="e.g. TireVix Auto" />
+                <label className={LABEL_CLS}>{t.bundleName} <span className="text-red-400">*</span></label>
+                <input className={INPUT} value={form.bundleName} onChange={e => set("bundleName", e.target.value)} placeholder={t.bundleNamePlaceholder} />
                 <p className="text-xs text-[#6b7280] mt-1">Internal name for this identity</p>
               </div>
               <div>
@@ -213,7 +218,7 @@ export function PaymentIdentityFormDialog({
             <h3 className={SECTION_TITLE}>Shield Domain</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="col-span-2 md:col-span-1">
-                <label className={LABEL_CLS}>Primary Shield Domain</label>
+                <label className={LABEL_CLS}>{t.primaryShieldDomain}</label>
                 <select 
                   className={SELECT} 
                   value={customDomainSelected ? "CUSTOM" : form.primaryShieldDomain} 
@@ -231,7 +236,7 @@ export function PaymentIdentityFormDialog({
                   ))}
                   {customDomainSelected && <option value="CUSTOM">Custom: {form.primaryShieldDomain}</option>}
                 </select>
-                <p className="text-xs text-[#6b7280] mt-1">The domain buyer is redirected to for checkout popup</p>
+                <p className="text-xs text-[#6b7280] mt-1">Buyers pass through this domain before PayPal and return to it after approval.</p>
               </div>
               {customDomainSelected && (
                 <div className="col-span-2 md:col-span-1">
@@ -248,9 +253,9 @@ export function PaymentIdentityFormDialog({
             <h3 className={SECTION_TITLE}>Buyer-Facing Brand</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className={LABEL_CLS}>Public Brand Name {form.isActive && <span className="text-red-400">*</span>}</label>
-                <input className={INPUT} value={form.publicBrandName} onChange={e => set("publicBrandName", e.target.value)} placeholder="e.g. TireVix Auto" />
-                <p className="text-xs text-[#6b7280] mt-1">Shown on PayPal buyer view as brand prefix</p>
+                <label className={LABEL_CLS}>{t.publicBrandName} {form.isActive && <span className="text-red-400">*</span>}</label>
+                <input className={INPUT} value={form.publicBrandName} onChange={e => set("publicBrandName", e.target.value)} placeholder={t.publicBrandNamePlaceholder} />
+                <p className="text-xs text-[#6b7280] mt-1">This brand name is used to build the PayPal item display.</p>
               </div>
             </div>
           </div>
@@ -260,12 +265,13 @@ export function PaymentIdentityFormDialog({
             <h3 className={SECTION_TITLE}>Support Identity</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className={LABEL_CLS}>Support Email</label>
-                <input type="email" className={INPUT} value={form.supportEmail} onChange={e => set("supportEmail", e.target.value)} placeholder="support@example.com" />
+                <label className={LABEL_CLS}>{t.supportEmail}</label>
+                <input type="email" className={INPUT} value={form.supportEmail} onChange={e => set("supportEmail", e.target.value)} placeholder={t.supportEmailPlaceholder} />
+                <p className="text-xs text-[#6b7280] mt-1">Use an email that matches this brand/domain when possible.</p>
               </div>
               <div>
-                <label className={LABEL_CLS}>Support Phone</label>
-                <input className={INPUT} value={form.supportPhone} onChange={e => set("supportPhone", e.target.value)} placeholder="+1 (555) 000-0000" />
+                <label className={LABEL_CLS}>{t.supportPhone}</label>
+                <input className={INPUT} value={form.supportPhone} onChange={e => set("supportPhone", e.target.value)} placeholder={t.supportPhonePlaceholder} />
               </div>
               <div>
                 <label className={LABEL_CLS}>Order Lookup URL</label>
@@ -280,22 +286,25 @@ export function PaymentIdentityFormDialog({
 
           {/* ── Section E: Policy URLs ────────────────────────────── */}
           <div>
-            <h3 className={SECTION_TITLE}>Operational Policy</h3>
+            <div className="mb-3">
+              <h3 className={SECTION_TITLE}>Operational Policy</h3>
+              <p className="text-xs text-[#6b7280] mb-3">These pages help customers and support teams understand shipping, refunds, privacy, and terms.</p>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className={LABEL_CLS}>Shipping Policy URL</label>
+                <label className={LABEL_CLS}>{t.shippingPolicyUrl}</label>
                 <input className={INPUT} value={form.shippingPolicyUrl} onChange={e => set("shippingPolicyUrl", e.target.value)} placeholder="https://..." />
               </div>
               <div>
-                <label className={LABEL_CLS}>Refund Policy URL</label>
+                <label className={LABEL_CLS}>{t.refundPolicyUrl}</label>
                 <input className={INPUT} value={form.refundPolicyUrl} onChange={e => set("refundPolicyUrl", e.target.value)} placeholder="https://..." />
               </div>
               <div>
-                <label className={LABEL_CLS}>Privacy Policy URL</label>
+                <label className={LABEL_CLS}>{t.privacyPolicyUrl}</label>
                 <input className={INPUT} value={form.privacyPolicyUrl} onChange={e => set("privacyPolicyUrl", e.target.value)} placeholder="https://..." />
               </div>
               <div>
-                <label className={LABEL_CLS}>Terms of Service URL</label>
+                <label className={LABEL_CLS}>{t.termsOfServiceUrl}</label>
                 <input className={INPUT} value={form.termsUrl} onChange={e => set("termsUrl", e.target.value)} placeholder="https://..." />
               </div>
             </div>
@@ -320,7 +329,7 @@ export function PaymentIdentityFormDialog({
           </div>
           <div className="flex items-center gap-3 ml-4">
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg bg-[#1f222c] text-[#97a3b6] hover:text-[#e7edf8] border border-[#343947] text-sm font-mono transition-colors">
-              Cancel
+              {t.cancel}
             </button>
             <button
               onClick={handleSubmit}
@@ -328,7 +337,7 @@ export function PaymentIdentityFormDialog({
               className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-[#FFD600]/15 text-[#FFD600] hover:bg-[#FFD600]/25 border border-[#FFD600]/30 text-sm font-mono font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-              {saving ? (isEdit ? "Saving…" : "Creating…") : (isEdit ? "Save Changes" : "Create Identity")}
+              {saving ? (isEdit ? "Saving…" : "Creating…") : (isEdit ? t.saveChanges : t.createIdentity)}
             </button>
           </div>
         </div>

@@ -3,11 +3,14 @@
 import { useState } from "react"
 import useSWR from "swr"
 import { Plus, RefreshCw, Loader2, Layers } from "lucide-react"
+import { useLanguage } from "@/components/i18n/LanguageProvider"
+import { paymentIdentitiesCopy } from "@/lib/i18n/payment-identities"
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader"
 import { PaymentIdentitiesSummaryCards } from "./PaymentIdentitiesSummaryCards"
 import { PaymentIdentitiesTable, type IdentityRow } from "./PaymentIdentitiesTable"
 import { PaymentIdentityFormDialog } from "./PaymentIdentityFormDialog"
 import { PaymentIdentityItemsDialog } from "./PaymentIdentityItemsDialog"
+import { PaymentIdentitySetupGuide } from "./PaymentIdentitySetupGuide"
 
 const fetcher = (url: string) => fetch(url).then(r => {
   if (!r.ok) throw new Error(`HTTP ${r.status}`)
@@ -15,6 +18,9 @@ const fetcher = (url: string) => fetch(url).then(r => {
 })
 
 export function PaymentIdentitiesPageClient() {
+  const { language } = useLanguage()
+  const t = paymentIdentitiesCopy[language]
+
   const { data, error, isLoading, mutate } = useSWR("/api/merchant/payment-identities", fetcher)
 
   const [formOpen, setFormOpen] = useState(false)
@@ -25,7 +31,18 @@ export function PaymentIdentitiesPageClient() {
   const shieldDomains = data?.shieldDomains ?? []
 
   const activeIdentities = identities.filter((b: any) => b.is_active)
-  const readyIdentities = identities.filter((b: any) => b.is_active && b.active_item_count > 0 && b.primary_shield_domain)
+  const readyIdentities = identities.filter((b: any) => {
+    const domainObj = shieldDomains?.find((d: any) => d.domain === b.primary_shield_domain)
+    const isDomainHealthy = domainObj ? (domainObj.is_active && domainObj.health_ok !== false) : false
+    const hasBrand = !!b.public_brand_name
+    const hasItems = b.active_item_count > 0
+    const hasEmail = !!b.support_email
+    const hasPolicies = !!(b.shipping_policy_url && b.refund_policy_url && b.privacy_policy_url && b.terms_url)
+    const hasLongDescriptor = !!b.has_long_descriptor
+    const hasDomain = !!b.primary_shield_domain
+
+    return b.is_active && hasBrand && hasDomain && isDomainHealthy && hasItems && !hasLongDescriptor && hasEmail && hasPolicies
+  })
   const needsAttentionCount = activeIdentities.length - readyIdentities.length
 
   function handleCreate() {
@@ -60,11 +77,13 @@ export function PaymentIdentitiesPageClient() {
   }
 
   return (
-    <div className="space-y-6" data-ui-version="merchant-payment-identities-v1">
+    <main className="w-full px-6 md:px-8 py-8 space-y-6" data-ui-version="payment-identities-layout-i18n-v1">
       <DashboardPageHeader
-        title="Payment Identities"
-        description="Manage the brand, domain, descriptor, support, and policy identity used for PayPal checkout."
+        title={t.pageTitle}
+        description={t.pageDescription}
       />
+
+      <PaymentIdentitySetupGuide />
 
       {/* Summary Cards */}
       <PaymentIdentitiesSummaryCards
@@ -79,11 +98,11 @@ export function PaymentIdentitiesPageClient() {
       <div className="flex items-center justify-between">
         <div className="text-sm font-mono text-[#97a3b6]">
           {isLoading ? (
-            <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Loading identities…</span>
+            <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> {t.loading}</span>
           ) : error ? (
             <span className="text-red-400">Failed to load identities</span>
           ) : (
-            <span>{identities.length} identity{identities.length !== 1 ? "ies" : ""} found</span>
+            <span>{identities.length} {t.thIdentity.toLowerCase()}</span>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -91,13 +110,13 @@ export function PaymentIdentitiesPageClient() {
             onClick={() => mutate()}
             className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-[#1f222c] text-[#97a3b6] hover:text-[#e7edf8] border border-[#343947] hover:border-[#4a5568] text-xs font-mono transition-colors"
           >
-            <RefreshCw className="w-3.5 h-3.5" /> Refresh
+            <RefreshCw className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={handleCreate}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#FFD600]/15 text-[#FFD600] hover:bg-[#FFD600]/25 font-mono text-xs font-medium border border-[#FFD600]/30 transition-colors"
           >
-            <Plus className="w-3.5 h-3.5" /> Create Identity
+            <Plus className="w-3.5 h-3.5" /> {t.createIdentity}
           </button>
         </div>
       </div>
@@ -120,7 +139,7 @@ export function PaymentIdentitiesPageClient() {
       )}
       
       {!isLoading && !error && identities.length > 0 && (
-        <PaymentIdentitiesTable identities={identities} onEdit={handleEdit} onManageItems={handleManageItems} />
+        <PaymentIdentitiesTable identities={identities} shieldDomains={shieldDomains} onEdit={handleEdit} onManageItems={handleManageItems} />
       )}
 
       {/* Error state */}
@@ -150,6 +169,6 @@ export function PaymentIdentitiesPageClient() {
           publicBrandName={itemsIdentity.public_brand_name}
         />
       )}
-    </div>
+    </main>
   )
 }

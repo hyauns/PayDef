@@ -74,6 +74,7 @@ export interface MerchantAccountRow {
   item_masking:         boolean
   fake_product_name:    string
   display_profile_id:   string | null
+  bundle_id:            string | null
   // Hourly smoothing (joined from subquery)
   recent_order_count?:  string   // COUNT comes back as string from pg
 }
@@ -478,7 +479,7 @@ export async function selectMerchant(opts: RotationOptions): Promise<SelectedMer
       ma.current_volume, ma.priority, ma.status,
       ma.warmup_started_at,
       ma.item_masking, ma.fake_product_name,
-      ma.display_profile_id,
+      ma.display_profile_id, ma.bundle_id,
       COALESCE(ho.cnt, 0)::TEXT AS recent_order_count
     FROM merchant_accounts ma
     LEFT JOIN (

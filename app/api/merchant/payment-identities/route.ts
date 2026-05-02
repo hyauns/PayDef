@@ -23,6 +23,11 @@ export async function GET() {
     SELECT
       b.*,
       (SELECT COUNT(*) FROM payment_identity_bundle_items i WHERE i.bundle_id = b.id AND i.is_active = true)::int AS active_item_count,
+      (SELECT EXISTS(
+         SELECT 1 FROM payment_identity_bundle_items i 
+         WHERE i.bundle_id = b.id AND i.is_active = true 
+         AND LENGTH(COALESCE(b.public_brand_name || ' - ', '') || i.descriptor_name) > 127
+      )) AS has_long_descriptor,
       (SELECT COUNT(*) FROM merchant_accounts ma WHERE ma.bundle_id = b.id)::int AS assigned_accounts,
       (SELECT COUNT(*) FROM shield_domains sd WHERE sd.bundle_id = b.id)::int AS assigned_domains
     FROM payment_identity_bundles b
