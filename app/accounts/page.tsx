@@ -619,7 +619,24 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, payment
                 {draft.bundleId && paymentIdentities.find(b => b.id === draft.bundleId) && (
                   (() => {
                     const bundle = paymentIdentities.find(b => b.id === draft.bundleId)!
-                    const isReady = bundle.is_active && bundle.active_item_count > 0 && !!bundle.primary_shield_domain
+                    const hasBrand = !!bundle.public_brand_name
+                    const hasDomain = !!bundle.primary_shield_domain
+                    const hasItems = bundle.active_item_count > 0
+                    const hasEmail = !!bundle.support_email
+                    const hasPolicies = !!(bundle.shipping_policy_url && bundle.refund_policy_url && bundle.privacy_policy_url && bundle.terms_url)
+                    const hasLongDescriptor = !!bundle.has_long_descriptor
+                    
+                    const isReady = bundle.is_active && hasBrand && hasDomain && hasItems && !hasLongDescriptor && hasEmail && hasPolicies
+                    
+                    const reasons = []
+                    if (!bundle.is_active) reasons.push("Identity is inactive")
+                    if (!hasBrand) reasons.push("Missing Public Brand Name")
+                    if (!hasDomain) reasons.push("Missing Shield Domain")
+                    if (!hasItems) reasons.push("Missing Active Descriptor Item")
+                    if (hasLongDescriptor) reasons.push("Descriptor Too Long (>127 chars)")
+                    if (!hasEmail) reasons.push("Missing Support Email")
+                    if (!hasPolicies) reasons.push("Missing one or more Policy URLs")
+
                     return (
                       <div className="mt-4 p-4 bg-[#222530] border border-[#343947] rounded-lg space-y-3">
                         <div className="flex items-center justify-between">
@@ -634,6 +651,17 @@ function SlideOver({ merchant, verifiedPlatformDomains, displayProfiles, payment
                              </span>
                           )}
                         </div>
+
+                        {!isReady && reasons.length > 0 && (
+                          <div className="flex flex-col gap-1 mt-2 bg-red-500/5 p-2 rounded border border-red-500/10">
+                            {reasons.map((r, idx) => (
+                              <span key={idx} className="text-[11px] text-red-400 flex items-start gap-1">
+                                <span className="mt-1">-</span> {r}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
                         <div className="grid grid-cols-2 gap-4 text-sm mt-3 border-t border-[#343947] pt-3">
                           <div>
                             <p className="text-[#97a3b6] text-xs uppercase tracking-wider font-mono mb-1">Brand</p>
@@ -1253,7 +1281,24 @@ function AddMerchantModal({
                 {form.bundleId && paymentIdentities.find(b => b.id === form.bundleId) && (
                   (() => {
                     const bundle = paymentIdentities.find(b => b.id === form.bundleId)!
-                    const isReady = bundle.is_active && bundle.active_item_count > 0 && !!bundle.primary_shield_domain
+                    const hasBrand = !!bundle.public_brand_name
+                    const hasDomain = !!bundle.primary_shield_domain
+                    const hasItems = bundle.active_item_count > 0
+                    const hasEmail = !!bundle.support_email
+                    const hasPolicies = !!(bundle.shipping_policy_url && bundle.refund_policy_url && bundle.privacy_policy_url && bundle.terms_url)
+                    const hasLongDescriptor = !!bundle.has_long_descriptor
+                    
+                    const isReady = bundle.is_active && hasBrand && hasDomain && hasItems && !hasLongDescriptor && hasEmail && hasPolicies
+                    
+                    const reasons = []
+                    if (!bundle.is_active) reasons.push("Identity is inactive")
+                    if (!hasBrand) reasons.push("Missing Public Brand Name")
+                    if (!hasDomain) reasons.push("Missing Shield Domain")
+                    if (!hasItems) reasons.push("Missing Active Descriptor Item")
+                    if (hasLongDescriptor) reasons.push("Descriptor Too Long (>127 chars)")
+                    if (!hasEmail) reasons.push("Missing Support Email")
+                    if (!hasPolicies) reasons.push("Missing one or more Policy URLs")
+
                     return (
                       <div className="mt-4 p-4 bg-[#222530] border border-[#343947] rounded-lg space-y-3">
                         <div className="flex items-center justify-between">
@@ -1268,6 +1313,17 @@ function AddMerchantModal({
                              </span>
                           )}
                         </div>
+
+                        {!isReady && reasons.length > 0 && (
+                          <div className="flex flex-col gap-1 mt-2 bg-red-500/5 p-2 rounded border border-red-500/10">
+                            {reasons.map((r, idx) => (
+                              <span key={idx} className="text-[11px] text-red-400 flex items-start gap-1">
+                                <span className="mt-1">-</span> {r}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
                         <div className="grid grid-cols-2 gap-4 text-sm mt-3 border-t border-[#343947] pt-3">
                           <div>
                             <p className="text-[#97a3b6] text-xs uppercase tracking-wider font-mono mb-1">Brand</p>
@@ -1880,6 +1936,15 @@ export default function AccountsPage() {
                         const hasLongDescriptor = !!bundle.has_long_descriptor
                         const isReady = bundle.is_active && hasBrand && hasDomain && hasItems && !hasLongDescriptor && hasEmail && hasPolicies
                         
+                        const reasons = []
+                        if (!bundle.is_active) reasons.push("Identity is inactive")
+                        if (!hasBrand) reasons.push("Missing Public Brand Name")
+                        if (!hasDomain) reasons.push("Missing Shield Domain")
+                        if (!hasItems) reasons.push("Missing Active Descriptor Item")
+                        if (hasLongDescriptor) reasons.push("Descriptor Too Long (>127 chars)")
+                        if (!hasEmail) reasons.push("Missing Support Email")
+                        if (!hasPolicies) reasons.push("Missing one or more Policy URLs")
+
                         const hasLegacyMismatch = m.shieldDomain && bundle.primary_shield_domain && m.shieldDomain !== bundle.primary_shield_domain
 
                         return (
@@ -1889,6 +1954,17 @@ export default function AccountsPage() {
                               {isReady ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
                               {isReady ? "Ready" : "Needs Attention"}
                             </span>
+                            
+                            {!isReady && reasons.length > 0 && (
+                              <div className="flex flex-col gap-0.5 mt-1">
+                                {reasons.map((r, idx) => (
+                                  <span key={idx} className="text-[11px] text-amber-400 leading-tight">
+                                    - {r}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
                             {hasLegacyMismatch && (
                               <div className="flex items-start gap-1 text-[11px] text-amber-400 mt-1 max-w-[180px]">
                                 <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />

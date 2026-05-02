@@ -237,7 +237,7 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json({ success: true })
 }
 
-// ─── DELETE: Soft-disable ────────────────────────────────────────────────────
+// ─── DELETE: Delete Identity ────────────────────────────────────────────────────
 
 export async function DELETE(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -252,9 +252,27 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 })
 
   const sql = getSql()
-  await sql`UPDATE payment_identity_bundles SET is_active = false, updated_at = NOW() WHERE id = ${id} AND tenant_id = ${tenantId}`
+  
+  // Check if assigned to any merchant accounts
+  const accounts = await sql`SELECT id FROM merchant_accounts WHERE bundle_id = ${id} AND tenant_id = ${tenantId}`
+  if (accounts.length > 0) {
+    return NextResponse.json({ error: "Cannot delete identity because it is assigned to one or more merchant accounts." }, { status: 400 })
+  }
 
-  log.info("merchant_identity.disabled", `Identity disabled: ${id}`, { tenantId, bundleId: id })
+  // Remove bundle id from shield domains
+  await sql`UPDATE shield_domains SET bundle_id = NULL WHERE bundle_id = ${id} AND tenant_id = ${tenantId}`
+
+  // Delete items first
+  await sql`DELETE FROM payment_identity_bundle_items WHERE bundle_id = ${id}`
+
+  // Delete bundle
+  const result = await sql`DELETE FROM payment_identity_bundles WHERE id = ${id} AND tenant_id = ${tenantId} RETURNING id`
+  
+  if (result.length === 0) {
+    return NextResponse.json({ error: "Not found or forbidden" }, { status: 403 })
+  }
+
+  log.info("merchant_identity.deleted", `Identity deleted: ${id}`, { tenantId, bundleId: id })
 
   return NextResponse.json({ success: true })
 }

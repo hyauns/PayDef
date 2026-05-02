@@ -1,6 +1,6 @@
 "use client"
 
-import { Layers, CheckCircle2, AlertTriangle, Eye, Package } from "lucide-react"
+import { Layers, CheckCircle2, AlertTriangle, Eye, Package, Trash2, Loader2 } from "lucide-react"
 import { useLanguage } from "@/components/i18n/LanguageProvider"
 import { paymentIdentitiesCopy } from "@/lib/i18n/payment-identities"
 
@@ -21,9 +21,11 @@ interface TableProps {
   shieldDomains: { id: string, domain: string, is_active: boolean, health_ok: boolean }[]
   onEdit: (identity: IdentityRow) => void
   onManageItems: (identity: IdentityRow) => void
+  onDelete?: (id: string) => void
+  deletingId?: string | null
 }
 
-export function PaymentIdentitiesTable({ identities, shieldDomains, onEdit, onManageItems }: TableProps) {
+export function PaymentIdentitiesTable({ identities, shieldDomains, onEdit, onManageItems, onDelete, deletingId }: TableProps) {
   const { language } = useLanguage()
   const t = paymentIdentitiesCopy[language]
 
@@ -134,6 +136,16 @@ export function PaymentIdentitiesTable({ identities, shieldDomains, onEdit, onMa
                         <Eye className="w-3.5 h-3.5 text-[#97a3b6]" />
                         {t.editIdentity}
                       </button>
+                      {onDelete && (
+                        <button
+                          onClick={() => onDelete(identity.id)}
+                          disabled={deletingId === identity.id}
+                          className="inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-red-400 border border-red-500/20 rounded-md hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                          title="Delete Identity"
+                        >
+                          {deletingId === identity.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

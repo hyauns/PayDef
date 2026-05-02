@@ -400,6 +400,14 @@ async function handleCaptureCompleted(
     [captureId, gatewayFee.toFixed(2), transaction.id]
   )
 
+  await client.query(
+    `UPDATE merchant_accounts
+     SET current_volume = current_volume + $1,
+         updated_at = NOW()
+     WHERE id = $2`,
+    [originalAmount, transaction.merchant_id]
+  )
+
   await client.query("COMMIT")
 
   return {

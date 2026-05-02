@@ -26,6 +26,7 @@ export function PaymentIdentitiesPageClient() {
   const [formOpen, setFormOpen] = useState(false)
   const [editIdentity, setEditIdentity] = useState<IdentityRow | null>(null)
   const [itemsIdentity, setItemsIdentity] = useState<IdentityRow | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const identities = data?.bundles ?? []
   const shieldDomains = data?.shieldDomains ?? []
@@ -74,6 +75,25 @@ export function PaymentIdentitiesPageClient() {
 
   function handleItemsChanged() {
     mutate()
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm(t.deleteConfirm || "Are you sure you want to delete this identity?")) return
+    
+    setDeletingId(id)
+    try {
+      const res = await fetch(`/api/merchant/payment-identities?id=${id}`, { method: "DELETE" })
+      if (!res.ok) {
+        const result = await res.json()
+        alert(result.error || "Failed to delete identity")
+      } else {
+        mutate()
+      }
+    } catch (err: any) {
+      alert("Network error: " + err.message)
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   return (
@@ -139,7 +159,14 @@ export function PaymentIdentitiesPageClient() {
       )}
       
       {!isLoading && !error && identities.length > 0 && (
-        <PaymentIdentitiesTable identities={identities} shieldDomains={shieldDomains} onEdit={handleEdit} onManageItems={handleManageItems} />
+        <PaymentIdentitiesTable
+          identities={identities}
+          shieldDomains={shieldDomains}
+          onEdit={handleEdit}
+          onManageItems={handleManageItems}
+          onDelete={handleDelete}
+          deletingId={deletingId}
+        />
       )}
 
       {/* Error state */}

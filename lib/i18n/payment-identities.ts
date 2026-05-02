@@ -53,6 +53,7 @@ export const paymentIdentitiesCopy = {
     saveChanges: "Save Changes",
     cancel: "Cancel",
     close: "Close",
+    deleteConfirm: "Are you sure you want to completely delete this identity? This action cannot be undone.",
 
     // Form Labels
     bundleName: "Bundle Name",
@@ -141,6 +142,7 @@ export const paymentIdentitiesCopy = {
     saveChanges: "Lưu thay đổi",
     cancel: "Hủy",
     close: "Đóng",
+    deleteConfirm: "Bạn có chắc chắn muốn xóa hoàn toàn danh tính này không? Hành động này không thể hoàn tác.",
 
     // Form Labels
     bundleName: "Tên Bundle",
