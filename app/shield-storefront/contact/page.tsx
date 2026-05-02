@@ -11,8 +11,8 @@ export default async function ShieldStorefrontContactPage() {
       config={config}
       currentPath="/contact"
       eyebrow="Support"
-      title="Contact and support details"
-      description="Clear contact information is part of a complete storefront presentation. Buyers should always be able to see who to contact before and after checkout."
+      title="Contact support"
+      description="We are here to help. Contact us if you need assistance with your order."
     >
       <div className="grid gap-6 md:grid-cols-2">
         <section className="rounded-2xl border border-border bg-card p-6">
@@ -20,9 +20,11 @@ export default async function ShieldStorefrontContactPage() {
           <p className="mt-3 text-sm leading-7 text-muted-foreground">
             Email: <span className="text-foreground">{config.supportEmail}</span>
           </p>
-          <p className="mt-2 text-sm leading-7 text-muted-foreground">
-            Hours: <span className="text-foreground">{config.supportHours}</span>
-          </p>
+          {config.supportPhone && (
+            <p className="mt-2 text-sm leading-7 text-muted-foreground">
+              Phone: <span className="text-foreground">{config.supportPhone}</span>
+            </p>
+          )}
         </section>
         <section className="rounded-2xl border border-border bg-card p-6">
           <h3 className="text-lg font-semibold">Order assistance</h3>

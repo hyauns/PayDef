@@ -10,21 +10,18 @@ export default async function ShieldStorefrontAboutPage() {
     <ShieldStorefrontShell
       config={config}
       currentPath="/about"
-      eyebrow="About the studio"
+      eyebrow="About the store"
       title={`About ${config.brandName}`}
-      description={config.aboutCopy}
+      description={config.tagline}
     >
       <div className="grid gap-6 md:grid-cols-2">
         <section className="rounded-2xl border border-border bg-card p-6">
-          <h3 className="text-lg font-semibold">What we make</h3>
-          <p className="mt-3 text-sm leading-7 text-muted-foreground">
-            {config.brandName} is presented as a real storefront with product structure, customer support,
-            and policy pages so buyers move through a coherent retail journey from discovery to payment.
-          </p>
+          <h3 className="text-xl font-semibold">Storefront Overview</h3>
+          <p className="mt-4 text-sm leading-7 text-muted-foreground">{config.footerText}</p>
         </section>
         <section className="rounded-2xl border border-border bg-card p-6">
-          <h3 className="text-lg font-semibold">How fulfillment works</h3>
-          <p className="mt-3 text-sm leading-7 text-muted-foreground">{config.fulfillmentCopy}</p>
+          <h3 className="text-xl font-semibold">Fulfillment Standards</h3>
+          <p className="mt-4 text-sm leading-7 text-muted-foreground">Orders are securely processed and shipped with standard fulfillment timelines. See our shipping policy for details.</p>
         </section>
       </div>
     </ShieldStorefrontShell>

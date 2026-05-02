@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { Globe, Mail, PackageCheck, Shield, Truck } from "lucide-react"
-import type { ShieldStorefrontConfig } from "@/lib/shield-storefront"
+import type { ShieldSiteConfig } from "@/config/shield-sites/types"
 
 type NavItem = {
   href: string
@@ -8,7 +8,7 @@ type NavItem = {
 }
 
 type ShellProps = {
-  config: ShieldStorefrontConfig
+  config: ShieldSiteConfig
   currentPath: string
   eyebrow: string
   title: string
@@ -56,7 +56,7 @@ export function ShieldStorefrontShell({
   children,
 }: ShellProps) {
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <main className="min-h-screen bg-background text-foreground" data-ui-version="shield-storefront-config-v1">
       <div className="border-b border-border bg-card/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 md:px-6">
           <div className="flex items-center gap-3">
@@ -64,8 +64,8 @@ export function ShieldStorefrontShell({
               <Shield className="h-4 w-4 text-cyan-400" />
             </div>
             <div>
-              <p className="text-xs font-mono uppercase tracking-[0.25em] text-cyan-400">{config.heroBadge}</p>
-              <h1 className="text-sm font-semibold">{config.brandName}</h1>
+              <p className="text-xs font-mono uppercase tracking-[0.25em] text-cyan-400">{config.industry}</p>
+              <h1 className="text-sm font-semibold">{config.logoText || config.brandName}</h1>
             </div>
           </div>
           <div className="hidden items-center gap-1 md:flex">
@@ -88,9 +88,9 @@ export function ShieldStorefrontShell({
               <p className="max-w-2xl text-sm leading-7 text-muted-foreground md:text-base">{description}</p>
             </div>
             <div className="flex flex-wrap gap-3 text-xs font-mono text-muted-foreground">
-              <span className="rounded-full border border-border px-3 py-1.5">Protected checkout bridge</span>
-              <span className="rounded-full border border-border px-3 py-1.5">Buyer-facing store facade</span>
-              <span className="rounded-full border border-border px-3 py-1.5">Merchant support ready</span>
+              <span className="rounded-full border border-border px-3 py-1.5">Secure checkout</span>
+              <span className="rounded-full border border-border px-3 py-1.5">Quality guaranteed</span>
+              <span className="rounded-full border border-border px-3 py-1.5">Customer support</span>
             </div>
           </div>
 
@@ -99,19 +99,23 @@ export function ShieldStorefrontShell({
               <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-4">
                 <div className="flex items-center gap-2 text-sm font-semibold text-emerald-300">
                   <PackageCheck className="h-4 w-4" />
-                  Order workflow
+                  Order processing
                 </div>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">{config.fulfillmentCopy}</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  Orders are processed securely and usually dispatched within standard fulfillment times. You will receive a tracking link once your order ships.
+                </p>
               </div>
               <div className="grid gap-3 text-sm">
                 <div className="rounded-xl border border-border p-4">
                   <p className="text-xs font-mono uppercase tracking-[0.2em] text-muted-foreground">Support email</p>
                   <p className="mt-1 font-semibold text-foreground">{config.supportEmail}</p>
                 </div>
-                <div className="rounded-xl border border-border p-4">
-                  <p className="text-xs font-mono uppercase tracking-[0.2em] text-muted-foreground">Support hours</p>
-                  <p className="mt-1 font-semibold text-foreground">{config.supportHours}</p>
-                </div>
+                {config.supportPhone && (
+                  <div className="rounded-xl border border-border p-4">
+                    <p className="text-xs font-mono uppercase tracking-[0.2em] text-muted-foreground">Support phone</p>
+                    <p className="mt-1 font-semibold text-foreground">{config.supportPhone}</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -124,7 +128,7 @@ export function ShieldStorefrontShell({
         <div className="mx-auto grid max-w-6xl gap-8 px-4 py-8 md:grid-cols-[1fr_auto] md:px-6">
           <div className="space-y-3">
             <h2 className="text-sm font-semibold">{config.brandName}</h2>
-            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">{config.aboutCopy}</p>
+            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">{config.footerText}</p>
             <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5">
                 <Mail className="h-3.5 w-3.5 text-cyan-400" />
@@ -132,7 +136,7 @@ export function ShieldStorefrontShell({
               </span>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5">
                 <Truck className="h-3.5 w-3.5 text-cyan-400" />
-                Fulfillment support available
+                Standard fulfillment
               </span>
             </div>
           </div>
