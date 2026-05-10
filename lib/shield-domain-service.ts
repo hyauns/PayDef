@@ -173,6 +173,55 @@ async function touchHealthSnapshot(id: string, healthOk: boolean) {
   )
 }
 
+/**
+ * Direct bridge health check — used when Vercel integration is disabled (Coolify).
+ * Fetches https://{domain}/api/health/shield-popup with a 5-second timeout.
+ * Returns { healthy, statusCode, detail } without touching Vercel APIs.
+ */
+async function checkDomainBridgeHealth(domain: string): Promise<{
+  healthy: boolean
+  statusCode: number | null
+  detail: string
+}> {
+  const url = `https://${domain}/api/health/shield-popup`
+  console.info(`[shield-domain] Health check started: domain=${domain} url=${url}`)
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      signal: AbortSignal.timeout(5000),
+      headers: { "User-Agent": "PayDef-ShieldHealthCheck/1.0" },
+    })
+    const healthy = res.status === 200
+    // Consume body to properly close connection
+    if (healthy) await res.text().catch(() => {})
+    const detail = healthy
+      ? `Bridge OK (${res.status})`
+      : `Bridge returned ${res.status}`
+    console.info(`[shield-domain] Health check result: domain=${domain} healthy=${healthy} status=${res.status}`)
+    return { healthy, statusCode: res.status, detail }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.warn(`[shield-domain] Health check failed: domain=${domain} error=${msg}`)
+    return { healthy: false, statusCode: null, detail: `Fetch failed: ${msg}` }
+  }
+}
+
+/**
+ * Resolves bridge health using the appropriate method for the current platform.
+ * On Vercel: uses Vercel domain provisioning state.
+ * On Coolify/Docker: directly fetches the domain's health endpoint.
+ */
+async function resolveBridgeHealth(domain: string): Promise<boolean> {
+  const integration = getVercelDomainIntegrationInfo()
+  if (integration.enabled) {
+    // Vercel path: let the existing provisioning flow handle bridgeOk
+    return false // caller should use vercel.bridgeOk instead
+  }
+  // Coolify/non-Vercel path: direct health check
+  const result = await checkDomainBridgeHealth(domain)
+  return result.healthy
+}
+
 async function mapShieldDomainRow(
   row: ShieldDomainRow,
   actor: DomainActor,
@@ -294,7 +343,12 @@ export async function createShieldDomain(
 
   const id = inserted[0].id
   const vercel = await provisionVercelDomain(domain)
-  await touchHealthSnapshot(id, vercel.bridgeOk)
+  // On Coolify (Vercel disabled), use direct bridge health check
+  const integration = getVercelDomainIntegrationInfo()
+  const healthOk = integration.enabled
+    ? vercel.bridgeOk
+    : await resolveBridgeHealth(domain)
+  await touchHealthSnapshot(id, healthOk)
 
   const row = await getShieldDomainRowById(id)
   if (!row) {
@@ -313,7 +367,7 @@ export async function createShieldDomain(
 export async function updateShieldDomain(
   actor: DomainActor,
   input: ShieldDomainMutation & {
-    action?: "syncVercel" | "verifyDns" | "assignStore" | "unassignStore"
+    action?: "syncVercel" | "verifyDns" | "assignStore" | "unassignStore" | "checkHealth"
   }
 ) {
   requireMerchantTenant(actor)
@@ -326,13 +380,32 @@ export async function updateShieldDomain(
     throw new Error("Forbidden")
   }
 
+  // Direct health check action — works on both Vercel and Coolify
+  if (input.action === "checkHealth") {
+    const bridgeResult = await checkDomainBridgeHealth(row.domain)
+    await touchHealthSnapshot(row.id, bridgeResult.healthy)
+    const freshRow = await getShieldDomainRowById(row.id)
+    if (!freshRow) {
+      throw new Error("Domain not found.")
+    }
+    return {
+      domain: await mapShieldDomainRow(freshRow, actor),
+      integration: getVercelDomainIntegrationInfo(),
+    }
+  }
+
   if (input.action === "syncVercel" || input.action === "verifyDns") {
     const vercel =
       input.action === "verifyDns"
         ? await verifyVercelDomain(row.domain)
         : await syncVercelDomain(row.domain)
 
-    await touchHealthSnapshot(row.id, vercel.bridgeOk)
+    // On Coolify (Vercel disabled), use direct bridge health check
+    const integration = getVercelDomainIntegrationInfo()
+    const healthOk = integration.enabled
+      ? vercel.bridgeOk
+      : await resolveBridgeHealth(row.domain)
+    await touchHealthSnapshot(row.id, healthOk)
     const freshRow = await getShieldDomainRowById(row.id)
     if (!freshRow) {
       throw new Error("Domain not found.")

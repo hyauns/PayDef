@@ -86,7 +86,7 @@ export async function PATCH(req: NextRequest) {
     tenantId?: string | null
     healthOk?: boolean
     storeId?: string
-    action?: "syncVercel" | "verifyDns" | "assignStore" | "unassignStore"
+    action?: "syncVercel" | "verifyDns" | "assignStore" | "unassignStore" | "checkHealth"
   }
   try {
     body = await req.json()
