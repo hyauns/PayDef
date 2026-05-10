@@ -5,10 +5,17 @@
  *  1. Shield-domain host routing for storefront facade pages
  *  2. Authentication and role-based access control for dashboard routes
  *  3. Token revocation checks against token_blacklist
+ *
+ * RELIABILITY:
+ *  - All DB calls use a shared neon() instance (not recreated per call).
+ *  - All DB calls have a 3-second AbortSignal timeout.
+ *  - All DB calls fail-open on transient errors (ETIMEDOUT, fetch failed).
+ *  - Shield domains use a 5-minute cache with stale-while-revalidate.
+ *  - Blacklist uses a 30-second cache with stale-while-revalidate.
  */
 import { getToken } from "next-auth/jwt"
 import { NextResponse, type NextRequest } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { neon, type NeonQueryFunction } from "@neondatabase/serverless"
 
 type Role = "SUPER_ADMIN" | "MERCHANT"
 
@@ -75,18 +82,34 @@ const SHIELD_BLOCKED_API_PREFIXES = ["/api/auth", "/api/admin", "/api/merchant"]
 
 const STATIC_FILE_PATTERN = /\.(ico|svg|png|jpg|jpeg|gif|webp|css|js|woff2?|txt|xml)$/i
 
-const _blacklistCache = new Map<string, { blocked: boolean; checkedAt: number }>()
-const BLACKLIST_CACHE_TTL = 5_000
+// ─── Shared neon() instance for middleware ──────────────────────────────────────
+// Reuse a single neon() instance instead of creating one per DB call.
+// This avoids connection churn that triggers ETIMEDOUT on Coolify/Docker.
+let _middlewareSql: NeonQueryFunction<false, false> | null = null
 
+function getMiddlewareSql(): NeonQueryFunction<false, false> | null {
+  if (_middlewareSql) return _middlewareSql
+  const dbUrl = process.env.DATABASE_URL_UNPOOLED ?? process.env.POSTGRES_PRISMA_URL ?? null
+  if (!dbUrl) return null
+  _middlewareSql = neon(dbUrl)
+  return _middlewareSql
+}
+
+// ─── DB query timeout ───────────────────────────────────────────────────────────
+// Middleware DB queries must never block longer than 3 seconds.
+const MIDDLEWARE_DB_TIMEOUT_MS = 3_000
+
+// ─── Blacklist cache (fail-open, stale-while-revalidate) ─────────────────────
+const _blacklistCache = new Map<string, { blocked: boolean; checkedAt: number }>()
+const BLACKLIST_CACHE_TTL = 30_000  // 30s — was 5s, raised to reduce connection churn
+
+// ─── Shield domain cache (fail-open, stale-while-revalidate) ─────────────────
 const _shieldDomainCache = {
   hosts: new Set<string>(),
   checkedAt: 0,
+  refreshing: false,
 }
-const SHIELD_DOMAIN_CACHE_TTL = 60_000
-
-function getDatabaseUrl() {
-  return process.env.DATABASE_URL_UNPOOLED ?? process.env.POSTGRES_PRISMA_URL ?? null
-}
+const SHIELD_DOMAIN_CACHE_TTL = 5 * 60_000  // 5 minutes — was 60s
 
 function normalizeHost(host: string | null) {
   return host?.trim().toLowerCase().replace(/:\d+$/, "").replace(/\.$/, "") ?? ""
@@ -116,30 +139,45 @@ function getPrimaryHosts() {
 
 async function getActiveShieldHosts() {
   const now = Date.now()
+
+  // Serve from cache if fresh
   if (now - _shieldDomainCache.checkedAt < SHIELD_DOMAIN_CACHE_TTL && _shieldDomainCache.hosts.size > 0) {
     return _shieldDomainCache.hosts
   }
 
-  const dbUrl = getDatabaseUrl()
-  if (!dbUrl) {
+  // Prevent concurrent refresh storms
+  if (_shieldDomainCache.refreshing) {
     return _shieldDomainCache.hosts
   }
 
+  const sql = getMiddlewareSql()
+  if (!sql) {
+    return _shieldDomainCache.hosts
+  }
+
+  _shieldDomainCache.refreshing = true
   try {
-    const sql = neon(dbUrl)
-    const rows = (await sql`
-      SELECT domain
-      FROM shield_domains
-      WHERE is_active = true
-    `) as { domain: string }[]
+    const rows = (await sql.query(
+      "SELECT domain FROM shield_domains WHERE is_active = true",
+      [],
+      { fetchOptions: { signal: AbortSignal.timeout(MIDDLEWARE_DB_TIMEOUT_MS) } }
+    )) as { domain: string }[]
 
     const hosts = new Set(rows.map((row) => normalizeHost(row.domain)).filter(Boolean))
     _shieldDomainCache.hosts = hosts
     _shieldDomainCache.checkedAt = now
     return hosts
   } catch (error) {
-    console.error("[proxy] Shield domain lookup failed:", error)
+    // Fail-open: use stale cache, log warning (not error) for transient failures
+    const msg = error instanceof Error ? error.message : String(error)
+    if (/fetch failed|ETIMEDOUT|ECONNRESET|timeout/i.test(msg)) {
+      console.warn(`[proxy] Shield domain refresh failed (transient, using stale cache): ${msg}`)
+    } else {
+      console.error("[proxy] Shield domain lookup failed:", error)
+    }
     return _shieldDomainCache.hosts
+  } finally {
+    _shieldDomainCache.refreshing = false
   }
 }
 
@@ -159,19 +197,18 @@ async function isTokenRevoked(jti: string): Promise<boolean> {
     if (Date.now() - cached.checkedAt < BLACKLIST_CACHE_TTL) return false
   }
 
-  try {
-    const dbUrl = getDatabaseUrl()
-    if (!dbUrl) {
-      return false
-    }
+  const sql = getMiddlewareSql()
+  if (!sql) {
+    // No DB URL configured — fail-open (allow request)
+    return false
+  }
 
-    const sql = neon(dbUrl)
-    const rows = await sql`
-      SELECT 1 FROM token_blacklist
-      WHERE jti = ${jti}
-        AND expires_at > NOW()
-      LIMIT 1
-    `
+  try {
+    const rows = await sql.query(
+      "SELECT 1 FROM token_blacklist WHERE jti = $1 AND expires_at > NOW() LIMIT 1",
+      [jti],
+      { fetchOptions: { signal: AbortSignal.timeout(MIDDLEWARE_DB_TIMEOUT_MS) } }
+    )
 
     const blocked = rows.length > 0
     _blacklistCache.set(jti, { blocked, checkedAt: Date.now() })
@@ -187,7 +224,13 @@ async function isTokenRevoked(jti: string): Promise<boolean> {
 
     return blocked
   } catch (error) {
-    console.error("[proxy] Blacklist check failed:", error)
+    // Fail-open: if DB is unreachable, allow the request through
+    const msg = error instanceof Error ? error.message : String(error)
+    if (/fetch failed|ETIMEDOUT|ECONNRESET|timeout/i.test(msg)) {
+      console.warn(`[proxy] Blacklist check failed (transient, fail-open): ${msg}`)
+    } else {
+      console.error("[proxy] Blacklist check failed:", error)
+    }
     return false
   }
 }
