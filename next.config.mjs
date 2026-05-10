@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: "standalone",
   // Cache invalidation timestamp: 2026-04-04T12:00:00Z
   images: {
     unoptimized: true,

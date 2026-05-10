@@ -82,12 +82,23 @@ function getIntegrationEnv() {
   const teamId = process.env.VERCEL_TEAM_ID?.trim() || null
   const teamSlug = process.env.VERCEL_TEAM_SLUG?.trim() || null
 
+  const isVercelEnvironment = Boolean(process.env.VERCEL)
+  const enabled = Boolean(token && projectRef && isVercelEnvironment)
+
+  if (!enabled) {
+    const reason = !isVercelEnvironment 
+      ? "Not running on Vercel environment." 
+      : "Missing VERCEL_API_TOKEN or VERCEL_PROJECT_ID."
+    console.warn(`[Vercel Domains] Domain provisioning is disabled outside Vercel. Reason: ${reason}`)
+  }
+
   return {
-    enabled: Boolean(token && projectRef),
+    enabled,
     token,
     projectRef,
     teamId,
     teamSlug,
+    isVercelEnvironment
   }
 }
 
@@ -272,6 +283,10 @@ function buildState(params: {
   const recommendedRecord = config ? selectRecommendedRecord(config, domain) : null
 
   if (!env.enabled || !env.projectRef) {
+    const message = env.isVercelEnvironment
+      ? "Set VERCEL_API_TOKEN and VERCEL_PROJECT_ID to enable live domain onboarding."
+      : "Domain provisioning is disabled outside Vercel (e.g., Coolify). Please configure domains manually in your proxy/dashboard."
+
     return {
       integrationEnabled: false,
       projectRef: null,
@@ -292,7 +307,7 @@ function buildState(params: {
       bridgeStatusCode: null,
       bridgeCheckedAt: null,
       bridgeMessage: null,
-      statusMessage: "Set VERCEL_API_TOKEN and VERCEL_PROJECT_ID to enable live domain onboarding.",
+      statusMessage: message,
       lastCheckedAt: new Date().toISOString(),
     }
   }

@@ -1,0 +1,13 @@
+node_modules
+.next
+.git
+.env
+.env.*
+logs
+*.log
+coverage
+.turbo
+.vercel
+scratch
+scratch_*
+README.md

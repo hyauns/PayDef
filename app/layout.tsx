@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import { Analytics } from '@vercel/analytics/next'
 import { SessionProvider } from '@/components/auth/session-provider'
 import { Toaster } from 'sonner'
 import { LanguageProvider } from "@/components/i18n/LanguageProvider"
@@ -55,7 +54,6 @@ export default function RootLayout({
             },
           }}
         />
-        <Analytics />
       </body>
     </html>
   )

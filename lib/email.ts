@@ -46,10 +46,13 @@ export async function sendWelcomeEmail(payload: WelcomeEmailPayload): Promise<{
 }> {
   const { businessName, email, temporaryPassword, plan } = payload
 
-  const loginUrl =
-    process.env.NEXT_PUBLIC_APP_URL ??
-    process.env.NEXTAUTH_URL ??
-    "http://localhost:3000"
+  let loginUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL
+  if (!loginUrl) {
+    if (process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production") {
+      throw new Error("NEXT_PUBLIC_APP_URL or NEXTAUTH_URL must be configured in production.")
+    }
+    loginUrl = "http://localhost:3000"
+  }
 
   try {
     const resend = getResend()
