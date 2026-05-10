@@ -799,7 +799,21 @@ export async function POST(req: NextRequest) {
       transactionId,
       executeToken
     )
-    
+
+    txLog.info("checkout.return_urls_built",
+      `Return URLs built: source=${identityDomainUsed ? "payment_identity" : "legacy"} finalShieldDomain=${finalShieldDomain}`,
+      {
+        storeId: store.id, tenantId, merchantAccountId: account.id, transactionId,
+        source: identityDomainUsed ? "payment_identity" : "legacy",
+        finalShieldDomain,
+        paypalReturnUrl: returnUrl,
+        paypalCancelUrl: cancelUrl,
+        legacyAccountShieldDomain: account.shield_domain,
+        identityPrimaryShieldDomain: identityDomainUsed ? finalShieldDomain : null,
+        popupOrigin: finalShieldDomain ? `https://${finalShieldDomain}` : null,
+      }
+    )
+
     txLog.info("checkout.execute_token_generated",
       `Execute token: tx=${transactionId} enabled=${executeToken !== null} ` +
       `mode=${getExecuteTokenMode()} generated=${executeToken !== null} ` +
@@ -1074,7 +1088,7 @@ export async function POST(req: NextRequest) {
     })
     approvalUrl = getApprovalUrl(paypalOrder)
     if (flow === "POPUP_BRIDGE") {
-      popupUrl = buildPopupBridgeUrl(account.shield_domain, approvalUrl, transactionId)
+      popupUrl = buildPopupBridgeUrl(finalShieldDomain, approvalUrl, transactionId)
       popupOrigin = new URL(popupUrl).origin
     }
 
