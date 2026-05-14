@@ -102,6 +102,7 @@ interface ShieldDomainApiRow {
   id: string
   domain: string
   isActive: boolean
+  healthOk?: boolean
   vercel?: {
     bridgeOk?: boolean | null
   } | null
@@ -199,7 +200,7 @@ function getErrorMessage(err: unknown): string {
 }
 
 function isVerifiedPlatformDomain(domain: ShieldDomainApiRow): boolean {
-  return domain.isActive && domain.vercel?.bridgeOk === true
+  return domain.isActive && (domain.healthOk === true || domain.vercel?.bridgeOk === true)
 }
 
 function PriorityStars({ value }: { value: number }) {
