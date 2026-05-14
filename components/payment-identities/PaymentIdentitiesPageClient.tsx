@@ -129,8 +129,10 @@ export function PaymentIdentitiesPageClient() {
           <button
             onClick={() => mutate()}
             className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-[#1f222c] text-[#97a3b6] hover:text-[#e7edf8] border border-[#343947] hover:border-[#4a5568] text-xs font-mono transition-colors"
+            title={t.refreshReadiness}
           >
             <RefreshCw className="w-3.5 h-3.5" />
+            {t.refreshReadiness}
           </button>
           <button
             onClick={handleCreate}

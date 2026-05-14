@@ -43,6 +43,7 @@ export const paymentIdentitiesCopy = {
     missingActiveItem: "Missing active item",
     missingShieldDomain: "Missing shield domain",
     domainNotHealthy: "Domain not healthy",
+    domainNotHealthyHint: "Primary Shield Domain is not healthy. Go to Domains and click Check Health.",
     descriptorTooLong: "Descriptor too long",
     missingPolicyUrls: "Missing policy URLs",
     
@@ -86,7 +87,8 @@ export const paymentIdentitiesCopy = {
     addItem: "Add Descriptor Item",
     editItem: "Edit Item",
 
-    loading: "Loading..."
+    loading: "Loading...",
+    refreshReadiness: "Refresh Readiness"
   },
   vi: {
     // Page Header
@@ -132,6 +134,7 @@ export const paymentIdentitiesCopy = {
     missingActiveItem: "Thiếu mục đang hoạt động",
     missingShieldDomain: "Thiếu Shield Domain",
     domainNotHealthy: "Domain chưa sẵn sàng",
+    domainNotHealthyHint: "Shield Domain chính chưa sẵn sàng. Vào Domains và bấm Kiểm tra trạng thái.",
     descriptorTooLong: "Mô tả quá dài",
     missingPolicyUrls: "Thiếu liên kết chính sách",
     
@@ -175,6 +178,7 @@ export const paymentIdentitiesCopy = {
     addItem: "Thêm mục mô tả",
     editItem: "Sửa mục",
 
-    loading: "Đang tải..."
+    loading: "Đang tải...",
+    refreshReadiness: "Làm mới trạng thái"
   }
 }

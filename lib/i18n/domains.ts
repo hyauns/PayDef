@@ -137,6 +137,7 @@ export const domainsCopy = {
     errAssignStore: "Failed to assign store.",
     errUnassignStore: "Failed to unassign store.",
     errDeleteDomain: "Failed to delete domain.",
+    errCheckHealth: "Failed to check domain health.",
 
     // Time Ago
     justNow: "just now",
@@ -152,7 +153,18 @@ export const domainsCopy = {
     vIntegrationOff: "Integration Off",
     vError: "Error",
     vLinked: "Linked",
-    vNotLinked: "Not Linked"
+    vNotLinked: "Not Linked",
+
+    // Health Check
+    checkHealth: "Check Health",
+    recheckHealth: "Recheck Health",
+    checking: "Checking…",
+    healthyStatus: "Healthy",
+    notReady: "Not ready",
+    needsCheck: "Needs check",
+    healthCheckSuccess: "Domain health checked successfully.",
+    healthCheckHelperText: "Payment domains are checked through /api/health/shield-popup. If DNS and HTTPS are correct, click Check Health after deployment.",
+    domainNotHealthyHint: "Primary Shield Domain is not healthy. Go to Domains and click Check Health."
   },
   vi: {
     // Page Header
@@ -292,6 +304,7 @@ export const domainsCopy = {
     errAssignStore: "Lỗi gán cửa hàng.",
     errUnassignStore: "Lỗi gỡ cửa hàng.",
     errDeleteDomain: "Lỗi xóa tên miền.",
+    errCheckHealth: "Lỗi kiểm tra trạng thái domain.",
 
     // Time Ago
     justNow: "vừa xong",
@@ -307,6 +320,17 @@ export const domainsCopy = {
     vIntegrationOff: "Chưa tích hợp",
     vError: "Lỗi",
     vLinked: "Đã liên kết",
-    vNotLinked: "Chưa liên kết"
+    vNotLinked: "Chưa liên kết",
+
+    // Health Check
+    checkHealth: "Kiểm tra trạng thái",
+    recheckHealth: "Kiểm tra lại",
+    checking: "Đang kiểm tra…",
+    healthyStatus: "Sẵn sàng",
+    notReady: "Chưa sẵn sàng",
+    needsCheck: "Cần kiểm tra",
+    healthCheckSuccess: "Đã kiểm tra trạng thái domain.",
+    healthCheckHelperText: "Domain thanh toán được kiểm tra qua /api/health/shield-popup. Nếu DNS và HTTPS đã đúng, hãy bấm Kiểm tra trạng thái sau khi deploy.",
+    domainNotHealthyHint: "Shield Domain chính chưa sẵn sàng. Vào Domains và bấm Kiểm tra trạng thái."
   }
 }

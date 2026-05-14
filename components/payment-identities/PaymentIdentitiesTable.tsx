@@ -103,7 +103,10 @@ export function PaymentIdentitiesTable({ identities, shieldDomains, onEdit, onMa
                           <span className="text-[11px] text-amber-400">- {t.missingShieldDomain}</span>
                         )}
                         {identity.is_active && hasDomain && !isDomainHealthy && (
-                          <span className="text-[11px] text-red-400">- {t.domainNotHealthy}</span>
+                          <span className="text-[11px] text-red-400">
+                            - {t.domainNotHealthyHint}{" "}
+                            <a href="/domains" className="underline hover:text-red-300 transition-colors">→ Domains</a>
+                          </span>
                         )}
                         {identity.is_active && !hasItems && (
                           <span className="text-[11px] text-red-400">- {t.missingActiveItem}</span>

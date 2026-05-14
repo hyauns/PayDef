@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   ExternalLink,
   Globe,
+  HeartPulse,
   Link2,
   Plus,
   RefreshCw,
@@ -615,6 +616,36 @@ export function ShieldDomainsManagerPage() {
     }
   }
 
+  const handleCheckHealth = async (id: string) => {
+    setBusyKey(`health-${id}`)
+    try {
+      const res = await fetch(apiBase, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, action: "checkHealth" }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        alert(data.error ?? t.errCheckHealth)
+        return
+      }
+      await fetchDomains()
+      // toast-style feedback via a temporary alert (non-blocking)
+      if (typeof window !== "undefined") {
+        const toast = document.createElement("div")
+        toast.textContent = t.healthCheckSuccess
+        toast.className = "fixed bottom-6 right-6 z-[9999] px-4 py-3 rounded-lg bg-emerald-500/90 text-white text-sm font-semibold shadow-lg transition-opacity duration-500"
+        document.body.appendChild(toast)
+        setTimeout(() => { toast.style.opacity = "0" }, 2500)
+        setTimeout(() => { toast.remove() }, 3000)
+      }
+    } catch {
+      alert(t.errCheckHealth)
+    } finally {
+      setBusyKey(null)
+    }
+  }
+
   const handleVerify = async (id: string) => {
     setBusyKey(`verify-${id}`)
     try {
@@ -711,9 +742,9 @@ export function ShieldDomainsManagerPage() {
     [domains, filter, search]
   )
 
-  const readyCount = domains.filter((domain) => domain.vercel.bridgeOk).length
+  const readyCount = domains.filter((domain) => domain.healthOk).length
   const activeCount = domains.filter((domain) => domain.isActive).length
-  const needsActionCount = domains.filter((domain) => !domain.vercel.bridgeOk).length
+  const needsActionCount = domains.filter((domain) => !domain.healthOk).length
 
   return (
     <DashboardShell>
@@ -795,12 +826,12 @@ export function ShieldDomainsManagerPage() {
             <div>
               <p className="font-semibold text-[#e7edf8]">Domain Health</p>
               <ul className="text-[#aab4c5] mt-1 space-y-1">
-                <li><span className="text-emerald-400 font-medium">Healthy:</span> Domain is active and ready for checkout routing.</li>
+                <li><span className="text-emerald-400 font-medium">{t.healthyStatus}:</span> Domain is active and ready for checkout routing.</li>
                 <li><span className="text-amber-400 font-medium">Degraded:</span> Domain is reachable but may need review.</li>
-                <li><span className="text-red-400 font-medium">Inactive:</span> Domain should not be used for checkout until fixed.</li>
+                <li><span className="text-red-400 font-medium">{t.notReady}:</span> Domain should not be used for checkout until fixed.</li>
               </ul>
               <p className="text-[#97a3b6] text-xs mt-2 italic">
-                After adding a domain, DNS and SSL verification can take a few minutes. If the domain was just connected, wait briefly and click Recheck Health.
+                {t.healthCheckHelperText}
               </p>
             </div>
           </div>
@@ -984,6 +1015,16 @@ export function ShieldDomainsManagerPage() {
                           {domain.isActive ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
                           {domain.isActive ? t.active : t.inactive}
                         </span>
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-sm font-semibold mt-1 ${
+                            domain.healthOk
+                              ? "text-emerald-400 bg-emerald-400/10 border-emerald-400/20"
+                              : "text-amber-400 bg-amber-400/10 border-amber-400/20"
+                          }`}
+                        >
+                          <HeartPulse className="w-3 h-3" />
+                          {domain.healthOk ? t.healthyStatus : t.needsCheck}
+                        </span>
                         <div className="text-xs text-[#97a3b6] mt-1">{t.checked} {timeAgo(domain.lastCheck, t)}</div>
                       </td>
 
@@ -1103,6 +1144,15 @@ export function ShieldDomainsManagerPage() {
                                   <Activity className={`w-3.5 h-3.5 ${busyKey === `verify-${domain.id}` ? "animate-pulse" : ""}`} />
                                 </button>
                               )}
+                              <button
+                                onClick={() => handleCheckHealth(domain.id)}
+                                disabled={busyKey === `health-${domain.id}`}
+                                title={domain.healthOk ? t.recheckHealth : t.checkHealth}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-emerald-400/30 text-emerald-400 bg-emerald-400/5 hover:bg-emerald-400/15 transition-colors text-[11px] font-semibold disabled:opacity-50"
+                              >
+                                <HeartPulse className={`w-3 h-3 ${busyKey === `health-${domain.id}` ? "animate-pulse" : ""}`} />
+                                {busyKey === `health-${domain.id}` ? t.checking : (domain.healthOk ? t.recheckHealth : t.checkHealth)}
+                              </button>
                               <button
                                 onClick={() => handleToggle(domain.id, domain.isActive)}
                                 disabled={busyKey === `toggle-${domain.id}`}
