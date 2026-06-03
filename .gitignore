@@ -30,3 +30,27 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .env*.local
+
+.env.vercel
+.env.prod.vercel
+backup.dump
+backup.sql
+*.dump
+psql.zip
+pg17_tar/
+
+# one-off scripts / logs that may contain credentials or PII
+scripts/create-user.js
+scratch/
+scratch_*.js
+scratch_*.ts
+fix*.js
+apply-*.js
+append_badge.js
+restore-ui.js
+*.log
+vercel_logs*.json
+live_logs.txt
+recent_logs.txt
+git_log_all.txt
+reflog-dump.txt
