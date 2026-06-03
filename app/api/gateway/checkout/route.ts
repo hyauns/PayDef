@@ -65,6 +65,7 @@ import {
 import { checkRateLimit } from "@/lib/gateway-rate-limit"
 import { authenticateStoreHeaders } from "@/lib/gateway-auth"
 import { generateExecuteToken, getMode as getExecuteTokenMode } from "@/lib/execute-token"
+import { handleStripeCheckout } from "@/lib/stripe-checkout"
 
 // ─── Request body shape ───────────────────────────────────────────────────────
 
@@ -298,6 +299,29 @@ export async function POST(req: NextRequest) {
     captureMode: store.captureMode,
     intent,
   })
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  //  PROVIDER ROUTING
+  //  STRIPE stores use the Stripe Checkout Session flow (one account per
+  //  store — NO merchant-account rotation). The PayPal rotation logic below
+  //  is never reached for these stores. PAYPAL (and any other) stores fall
+  //  through to the existing rotation flow unchanged.
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  if (store.providerType === "STRIPE") {
+    return handleStripeCheckout({
+      store,
+      amount,
+      amountStr,
+      currency,
+      itemName,
+      intent,
+      customerEmail,
+      buyerIp,
+      buyerCountry,
+      flow,
+      requestId,
+    })
+  }
 
   // ── Pre-resolve Payment Display Profile to guide account selection (Phase 4)
   const preliminaryProfile = await resolvePaymentDisplayProfile({

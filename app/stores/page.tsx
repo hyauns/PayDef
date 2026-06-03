@@ -104,6 +104,14 @@ interface Store {
   checkoutFlowOverride: boolean
   successReturnUrl: string
   cancelReturnUrl: string
+  // Stripe connection status (read-only, from the API)
+  hasStripeSecret?: boolean
+  hasStripeWebhookSecret?: boolean
+  stripePublishableKey?: string | null
+  // Transient, write-only inputs for Stripe credentials (never returned by the API)
+  stripePublishableKeyInput?: string
+  stripeSecretKeyInput?: string
+  stripeWebhookSecretInput?: string
 }
 
 interface StoreApiRow {
@@ -125,6 +133,9 @@ interface StoreApiRow {
   checkoutFlowOverride?: boolean | null
   successReturnUrl?: string | null
   cancelReturnUrl?: string | null
+  hasStripeSecret?: boolean | null
+  hasStripeWebhookSecret?: boolean | null
+  stripePublishableKey?: string | null
 }
 
 function getErrorMessage(err: unknown): string {
@@ -570,6 +581,9 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
   const [platform, setPlatform] = useState("Shopify")
   const [providerType, setProviderType] = useState<ProviderType>("PAYPAL")
   const [webhookUrl, setWebhookUrl] = useState("")
+  const [stripePublishableKey, setStripePublishableKey] = useState("")
+  const [stripeSecretKey, setStripeSecretKey] = useState("")
+  const [stripeWebhookSecret, setStripeWebhookSecret] = useState("")
   const [generated, setGenerated] = useState<{ id: string; key: string; secret: string } | null>(null)
   const [copied, setCopied] = useState<CopyField | null>(null)
   const [saving, setSaving] = useState(false)
@@ -597,6 +611,13 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
           platform,
           providerType,
           webhookUrl: webhookUrl.trim() || undefined,
+          ...(providerType === "STRIPE"
+            ? {
+                stripePublishableKey: stripePublishableKey.trim() || undefined,
+                stripeSecretKey: stripeSecretKey.trim() || undefined,
+                stripeWebhookSecret: stripeWebhookSecret.trim() || undefined,
+              }
+            : {}),
         }),
       })
       const data = await res.json()
@@ -623,6 +644,9 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
         checkoutFlowOverride: data.store.checkoutFlowOverride ?? false,
         successReturnUrl: data.store.successReturnUrl ?? "",
         cancelReturnUrl: data.store.cancelReturnUrl ?? "",
+        hasStripeSecret: data.store.hasStripeSecret ?? false,
+        hasStripeWebhookSecret: data.store.hasStripeWebhookSecret ?? false,
+        stripePublishableKey: data.store.stripePublishableKey ?? null,
       }
 
       // Show the real credentials
@@ -633,7 +657,7 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
     } finally {
       setSaving(false)
     }
-  }, [name, platform, providerType, webhookUrl, onCreate])
+  }, [name, platform, providerType, webhookUrl, stripePublishableKey, stripeSecretKey, stripeWebhookSecret, onCreate])
 
   return (
     <>
@@ -718,6 +742,58 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
                 {providerType === "PAYPAL" ? t.providerPaypal : providerType === "STRIPE" ? t.providerStripe : t.providerCustomMock}
               </p>
             </div>
+
+            {/* Stripe credentials — only when provider = STRIPE (entered by the merchant) */}
+            {providerType === "STRIPE" && (
+              <div className="space-y-3 rounded-md border border-[#635bff]/30 bg-[#635bff]/5 p-3">
+                <div>
+                  <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase">{t.stripeSectionTitle}</p>
+                  <p className="text-xs font-mono text-[#97a3b6] mt-1">{t.stripeSectionDesc}</p>
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor={`${formId}-stripe-pk`} className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase">
+                    {t.labelStripePublishable}
+                  </label>
+                  <input
+                    id={`${formId}-stripe-pk`}
+                    value={stripePublishableKey}
+                    onChange={(e) => setStripePublishableKey(e.target.value)}
+                    placeholder="pk_live_..."
+                    autoComplete="off"
+                    className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] placeholder:text-[#97a3b6]/40 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor={`${formId}-stripe-sk`} className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase">
+                    {t.labelStripeSecret}
+                  </label>
+                  <input
+                    id={`${formId}-stripe-sk`}
+                    type="password"
+                    value={stripeSecretKey}
+                    onChange={(e) => setStripeSecretKey(e.target.value)}
+                    placeholder="sk_live_..."
+                    autoComplete="off"
+                    className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] placeholder:text-[#97a3b6]/40 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor={`${formId}-stripe-whsec`} className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase">
+                    {t.labelStripeWebhookSecret}
+                  </label>
+                  <input
+                    id={`${formId}-stripe-whsec`}
+                    type="password"
+                    value={stripeWebhookSecret}
+                    onChange={(e) => setStripeWebhookSecret(e.target.value)}
+                    placeholder="whsec_..."
+                    autoComplete="off"
+                    className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] placeholder:text-[#97a3b6]/40 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+                  />
+                  <p className="text-xs font-mono text-[#97a3b6]">{t.stripeWebhookHint}</p>
+                </div>
+              </div>
+            )}
 
             {/* Webhook URL */}
             <div className="space-y-1.5">
@@ -992,6 +1068,65 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
               {draft.providerType === "PAYPAL" ? t.providerPaypal : draft.providerType === "STRIPE" ? t.providerStripe : t.providerCustomMock}
             </p>
           </div>
+
+          {/* Stripe credentials — only when provider = STRIPE (entered by the merchant) */}
+          {draft.providerType === "STRIPE" && (
+            <div className="space-y-3 rounded-md border border-[#635bff]/30 bg-[#635bff]/5 p-3">
+              <div>
+                <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase">{t.stripeSectionTitle}</p>
+                <p className="text-xs font-mono text-[#97a3b6] mt-1">{t.stripeSectionDesc}</p>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase">{t.labelStripePublishable}</label>
+                <input
+                  value={draft.stripePublishableKeyInput ?? ""}
+                  onChange={(e) => update({ stripePublishableKeyInput: e.target.value })}
+                  placeholder="pk_live_..."
+                  autoComplete="off"
+                  className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] placeholder:text-[#97a3b6]/40 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase">{t.labelStripeSecret}</label>
+                <input
+                  type="password"
+                  value={draft.stripeSecretKeyInput ?? ""}
+                  onChange={(e) => update({ stripeSecretKeyInput: e.target.value })}
+                  placeholder={`sk_live_...  •  ${t.stripeKeepBlank}`}
+                  autoComplete="off"
+                  className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] placeholder:text-[#97a3b6]/40 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase">{t.labelStripeWebhookSecret}</label>
+                <input
+                  type="password"
+                  value={draft.stripeWebhookSecretInput ?? ""}
+                  onChange={(e) => update({ stripeWebhookSecretInput: e.target.value })}
+                  placeholder={`whsec_...  •  ${t.stripeKeepBlank}`}
+                  autoComplete="off"
+                  className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] placeholder:text-[#97a3b6]/40 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+                />
+                <p className="text-xs font-mono text-[#97a3b6]">{t.stripeWebhookHint}</p>
+              </div>
+              {/* Per-store Stripe webhook endpoint the merchant must register in Stripe */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase">{t.stripeWebhookEndpointLabel}</label>
+                <div className="flex items-center gap-2">
+                  <code className="font-mono text-xs text-[#e7edf8] flex-1 truncate bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2">
+                    {`${getGatewayBaseUrl()}/api/webhook/stripe/${draft.id}`}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(`${getGatewayBaseUrl()}/api/webhook/stripe/${draft.id}`, "webhookUrl")}
+                    className="p-1.5 text-[#97a3b6] hover:text-[#e7edf8] border border-[#343947] rounded-md transition-colors shrink-0"
+                  >
+                    {copied === "webhookUrl" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Webhook URL */}
           <div className="space-y-1.5">
@@ -1312,6 +1447,9 @@ export default function StoresPage() {
               checkoutFlowOverride: s.checkoutFlowOverride ?? false,
               successReturnUrl: s.successReturnUrl ?? "",
               cancelReturnUrl: s.cancelReturnUrl ?? "",
+              hasStripeSecret: s.hasStripeSecret ?? false,
+              hasStripeWebhookSecret: s.hasStripeWebhookSecret ?? false,
+              stripePublishableKey: s.stripePublishableKey ?? null,
             }
           })
         )
@@ -1354,6 +1492,13 @@ export default function StoresPage() {
         checkoutFlow: updated.checkoutFlow,
         successReturnUrl: updated.successReturnUrl,
         cancelReturnUrl: updated.cancelReturnUrl,
+        ...(updated.providerType === "STRIPE"
+          ? {
+              stripePublishableKey: updated.stripePublishableKeyInput?.trim() || undefined,
+              stripeSecretKey: updated.stripeSecretKeyInput?.trim() || undefined,
+              stripeWebhookSecret: updated.stripeWebhookSecretInput?.trim() || undefined,
+            }
+          : {}),
       }),
     })
 
@@ -1383,6 +1528,14 @@ export default function StoresPage() {
               status: data.store.status ?? (!(data.store.isActive ?? updated.enabled)
                 ? "Suspended"
                 : ((updated.txCount === 0 ? "Trial" : "Active") as StoreStatus)),
+              // Reflect newly-entered Stripe keys in the connection status
+              hasStripeSecret: updated.stripeSecretKeyInput?.trim() ? true : s.hasStripeSecret,
+              hasStripeWebhookSecret: updated.stripeWebhookSecretInput?.trim() ? true : s.hasStripeWebhookSecret,
+              stripePublishableKey: updated.stripePublishableKeyInput?.trim() || s.stripePublishableKey,
+              // Clear write-only Stripe inputs so they never persist in client state
+              stripePublishableKeyInput: undefined,
+              stripeSecretKeyInput: undefined,
+              stripeWebhookSecretInput: undefined,
             }
           : s
       )
@@ -1657,7 +1810,22 @@ export default function StoresPage() {
 
                     {/* Status */}
                     <td className="px-4 py-3">
-                      <StatusBadge status={store.status} />
+                      <div className="flex flex-col items-start gap-1.5">
+                        <StatusBadge status={store.status} />
+                        {store.providerType === "STRIPE" && (
+                          store.hasStripeSecret && store.hasStripeWebhookSecret ? (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-mono font-semibold text-emerald-400">
+                              <ShieldCheck className="w-3 h-3" />
+                              {t.stripeConnected}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-0.5 text-[10px] font-mono font-semibold text-amber-400">
+                              <AlertTriangle className="w-3 h-3" />
+                              {t.stripeIncomplete}
+                            </span>
+                          )
+                        )}
+                      </div>
                     </td>
 
                     {/* Toggle */}

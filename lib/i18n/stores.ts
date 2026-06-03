@@ -87,7 +87,19 @@ export const storesCopy = {
     // Provider Descriptions
     providerPaypal: "Includes item masking and account rotation for the current production flow.",
     providerCustomMock: "Local testing mode for direct mock charges and webhook validation.",
-    providerStripe: "Placeholder for future direct-card orchestration.",
+    providerStripe: "Stripe Checkout (redirect) with item masking and shield-domain return URLs. Uses your own Stripe account.",
+
+    // Stripe credentials (per-store, entered by the merchant)
+    stripeSectionTitle: "Stripe Credentials",
+    stripeSectionDesc: "Enter your own Stripe API keys. Stored encrypted — the secret keys are never shown again.",
+    labelStripePublishable: "Publishable Key",
+    labelStripeSecret: "Secret Key",
+    labelStripeWebhookSecret: "Webhook Signing Secret",
+    stripeKeepBlank: "Leave blank to keep the current value",
+    stripeWebhookHint: "In your Stripe Dashboard, add a webhook endpoint pointing to the URL below and paste its signing secret here.",
+    stripeWebhookEndpointLabel: "Your Stripe webhook URL",
+    stripeConnected: "Stripe connected",
+    stripeIncomplete: "Stripe keys missing",
 
     // Integration Summary
     integration: "Integration",
@@ -220,7 +232,19 @@ export const storesCopy = {
     // Provider Descriptions
     providerPaypal: "Bao gồm masking thông tin món hàng và xoay vòng tài khoản cho luồng vận hành thực tế hiện tại.",
     providerCustomMock: "Chế độ thử nghiệm local cho thanh toán ảo trực tiếp và xác thực webhook.",
-    providerStripe: "Cấu hình sẵn cho thanh toán thẻ trực tiếp trong tương lai.",
+    providerStripe: "Stripe Checkout (chuyển hướng) có masking món hàng và URL trả về qua shield-domain. Dùng tài khoản Stripe của chính bạn.",
+
+    // Stripe credentials (per-store, do merchant tự nhập)
+    stripeSectionTitle: "Thông tin Stripe",
+    stripeSectionDesc: "Nhập khóa API Stripe của riêng bạn. Được lưu mã hóa — các khóa bí mật sẽ không hiển thị lại.",
+    labelStripePublishable: "Publishable Key",
+    labelStripeSecret: "Secret Key",
+    labelStripeWebhookSecret: "Khóa ký Webhook",
+    stripeKeepBlank: "Để trống nếu muốn giữ giá trị hiện tại",
+    stripeWebhookHint: "Trong Stripe Dashboard, thêm một webhook endpoint trỏ tới URL bên dưới và dán signing secret của nó vào đây.",
+    stripeWebhookEndpointLabel: "URL webhook Stripe của bạn",
+    stripeConnected: "Stripe đã kết nối",
+    stripeIncomplete: "Thiếu khóa Stripe",
 
     // Integration Summary
     integration: "Tích hợp",

@@ -133,6 +133,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Transaction not found." }, { status: 404 })
     }
 
+    // ── Provider guard: non-PayPal transactions have no PayPal order to capture
+    // here. Stripe (and similar redirect providers) complete via their own
+    // webhook, so this endpoint is a no-op for them — return the current status
+    // and let the success page poll until the webhook flips it to COMPLETED.
+    // PayPal transactions always carry a paypal_order_id and are unaffected.
+    if (!tx.paypal_order_id) {
+      await client.query("ROLLBACK")
+      return NextResponse.json({
+        status: tx.status,
+        transaction_id: tx.id,
+        already_executed: true,
+      })
+    }
+
     // ── 2. Idempotency check ─────────────────────────────────────────────────
     // If already executed (not PENDING), return current state — safe to retry.
     // SPECIAL CASE: For AUTHORIZED status, also attempt to re-fire the webhook

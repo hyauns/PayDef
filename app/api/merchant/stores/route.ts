@@ -53,6 +53,28 @@ function normalizeProviderType(value: unknown): ProviderType {
   return value === "CUSTOM_MOCK" || value === "STRIPE" ? value : "PAYPAL"
 }
 
+/**
+ * Extracts and encrypts optional Stripe credentials from a request body.
+ * Returns `null` for any field not provided. The publishable key is non-secret
+ * (stored plaintext); the secret + webhook signing secret are encrypted.
+ */
+function extractStripeKeys(body: Record<string, unknown>): {
+  secret: string | null
+  publishable: string | null
+  webhookSecret: string | null
+  provided: boolean
+} {
+  const rawSecret = typeof body.stripeSecretKey === "string" ? body.stripeSecretKey.trim() : ""
+  const rawPublishable = typeof body.stripePublishableKey === "string" ? body.stripePublishableKey.trim() : ""
+  const rawWebhookSecret = typeof body.stripeWebhookSecret === "string" ? body.stripeWebhookSecret.trim() : ""
+  return {
+    secret: rawSecret ? encrypt(rawSecret) : null,
+    publishable: rawPublishable || null,
+    webhookSecret: rawWebhookSecret ? encrypt(rawWebhookSecret) : null,
+    provided: !!(rawSecret || rawPublishable || rawWebhookSecret),
+  }
+}
+
 function resolveStoreStatus(store: StoreRow, txCount: number): StoreStatusLabel {
   if (!store.is_active) return "Suspended"
   if (store.status_label === "Active" || store.status_label === "Trial") {
@@ -201,13 +223,56 @@ export async function GET() {
     }
   }
 
+  // ── Stripe connection status (defensive: degrades to "not connected" if the
+  //    migration-025 columns are absent, so the store list never breaks) ──────
+  const stripeStatus: Record<
+    string,
+    { hasStripeSecret: boolean; hasStripeWebhookSecret: boolean; stripePublishableKey: string | null }
+  > = {}
+  if (stores.length > 0) {
+    try {
+      const stripeRows = (role === "SUPER_ADMIN"
+        ? await sql`
+            SELECT id,
+                   (stripe_secret_key IS NOT NULL)     AS has_secret,
+                   (stripe_webhook_secret IS NOT NULL) AS has_webhook,
+                   stripe_publishable_key
+            FROM stores
+          `
+        : await sql`
+            SELECT id,
+                   (stripe_secret_key IS NOT NULL)     AS has_secret,
+                   (stripe_webhook_secret IS NOT NULL) AS has_webhook,
+                   stripe_publishable_key
+            FROM stores
+            WHERE tenant_id = ${tenantId}
+          `) as unknown as Array<{
+        id: string
+        has_secret: boolean
+        has_webhook: boolean
+        stripe_publishable_key: string | null
+      }>
+      for (const row of stripeRows) {
+        stripeStatus[row.id] = {
+          hasStripeSecret: !!row.has_secret,
+          hasStripeWebhookSecret: !!row.has_webhook,
+          stripePublishableKey: row.stripe_publishable_key ?? null,
+        }
+      }
+    } catch {
+      // Migration 025 not applied yet — leave stripeStatus empty (no badge).
+    }
+  }
+
   // ── Build response ──────────────────────────────────────────────────────────
   const defaultStats = { count: 0, volume: 0, completed: 0, failed: 0, pending: 0 }
+  const defaultStripe = { hasStripeSecret: false, hasStripeWebhookSecret: false, stripePublishableKey: null }
 
   return NextResponse.json({
-    stores: stores.map((store) =>
-      mapStoreResponse(store, txStats[store.id] ?? defaultStats, defaultFlow)
-    ),
+    stores: stores.map((store) => ({
+      ...mapStoreResponse(store, txStats[store.id] ?? defaultStats, defaultFlow),
+      ...(stripeStatus[store.id] ?? defaultStripe),
+    })),
   })
 }
 
@@ -284,6 +349,9 @@ export async function POST(req: NextRequest) {
     : normalizeCheckoutFlow(rawCheckoutFlow)
   const { defaultFlow } = await getCheckoutPreferences(sql)
 
+  // ── Optional Stripe credentials (only persisted when provided) ─────────────
+  const stripeKeys = extractStripeKeys(body)
+
   const result = await sql`
     INSERT INTO stores (
       id, tenant_id, name, platform, status_label, api_key_hash, webhook_url, webhook_secret, shield_domain,
@@ -306,6 +374,20 @@ export async function POST(req: NextRequest) {
     is_active: boolean; created_at: string
   }
 
+  // Persist Stripe credentials in a separate UPDATE so the base INSERT (shared
+  // by PayPal / mock-charge stores) never references the migration-025 columns
+  // unless Stripe keys were actually submitted.
+  if (stripeKeys.provided) {
+    await sql`
+      UPDATE stores
+      SET stripe_secret_key      = COALESCE(${stripeKeys.secret}, stripe_secret_key),
+          stripe_publishable_key = COALESCE(${stripeKeys.publishable}, stripe_publishable_key),
+          stripe_webhook_secret  = COALESCE(${stripeKeys.webhookSecret}, stripe_webhook_secret),
+          updated_at = NOW()
+      WHERE id = ${store.id}
+    `
+  }
+
   return NextResponse.json({
     store: {
       id:           store.id,
@@ -316,6 +398,9 @@ export async function POST(req: NextRequest) {
       webhookUrl:   store.webhook_url,
       shieldDomain: store.shield_domain,
       hasWebhookSecret: !!store.webhook_secret,
+      stripePublishableKey: stripeKeys.publishable,
+      hasStripeSecret: !!stripeKeys.secret,
+      hasStripeWebhookSecret: !!stripeKeys.webhookSecret,
       successReturnUrl: store.success_return_url,
       cancelReturnUrl: store.cancel_return_url,
       checkoutFlow: resolveCheckoutFlow(store.checkout_flow, { defaultFlow }),

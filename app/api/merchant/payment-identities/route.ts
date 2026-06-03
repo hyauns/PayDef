@@ -37,13 +37,21 @@ export async function GET() {
 
   // Lookups for the merchant form
   const shieldDomains = await sql`
-    SELECT id, domain, is_active, health_ok 
-    FROM shield_domains 
+    SELECT id, domain, is_active, health_ok
+    FROM shield_domains
     WHERE (tenant_id = ${tenantId} OR tenant_id IS NULL)
     ORDER BY domain
   `
 
-  return NextResponse.json({ bundles, shieldDomains })
+  // Stores for the "Apply to store" scope selector (store-scoped identity).
+  const stores = await sql`
+    SELECT id, name, COALESCE(provider_type, 'PAYPAL') AS provider_type
+    FROM stores
+    WHERE tenant_id = ${tenantId}
+    ORDER BY name
+  `
+
+  return NextResponse.json({ bundles, shieldDomains, stores })
 }
 
 // ─── POST: Create a new identity ─────────────────────────────────────────────
@@ -68,7 +76,7 @@ export async function POST(req: NextRequest) {
     primaryShieldDomain, supportEmail, supportPhone,
     orderLookupUrl, trackingUrl, shippingPolicyUrl,
     refundPolicyUrl, privacyPolicyUrl, termsUrl,
-    isDefault, isActive,
+    isDefault, isActive, storeId,
   } = body
 
   if (!bundleName) return NextResponse.json({ error: "bundleName is required" }, { status: 400 })
@@ -96,6 +104,18 @@ export async function POST(req: NextRequest) {
 
   const sql = getSql()
 
+  // Validate optional store scope: an identity can target a specific store
+  // (store_default_bundle) so it never acts as the tenant-wide fallback for
+  // other providers (e.g. a Stripe-only identity won't touch PayPal accounts).
+  let safeStoreId: string | null = null
+  if (storeId) {
+    const stCheck = await sql`SELECT id FROM stores WHERE id = ${storeId} AND tenant_id = ${tenantId}`
+    if (stCheck.length === 0) {
+      return NextResponse.json({ error: "Selected store not found for this tenant." }, { status: 400 })
+    }
+    safeStoreId = storeId
+  }
+
   // Verify shield domain exists and belongs to merchant or pool
   if (primaryShieldDomain) {
     const sdCheck = await sql`
@@ -117,12 +137,12 @@ export async function POST(req: NextRequest) {
       refund_policy_url, privacy_policy_url, terms_url,
       is_default, is_active
     ) VALUES (
-      ${tenantId}, null, null,
+      ${tenantId}, ${safeStoreId}, null,
       ${bundleName}, ${publicBrandName || null}, ${industryVertical},
       ${primaryShieldDomain || null}, ${supportEmail || null}, ${supportPhone || null},
       ${orderLookupUrl || null}, ${trackingUrl || null}, ${shippingPolicyUrl || null},
       ${refundPolicyUrl || null}, ${privacyPolicyUrl || null}, ${termsUrl || null},
-      ${Boolean(isDefault)}, ${isActive !== false}
+      ${safeStoreId ? true : Boolean(isDefault)}, ${isActive !== false}
     ) RETURNING id
   `
 
@@ -170,6 +190,17 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Not found or forbidden" }, { status: 403 })
   }
 
+  // Validate optional store scope (must belong to this tenant). Empty string
+  // clears the scope (back to tenant-wide). When scoping to a store, force
+  // is_default so the resolver's store_default_bundle path picks it up.
+  if (typeof fields.storeId === "string" && fields.storeId.trim()) {
+    const stCheck = await sql`SELECT id FROM stores WHERE id = ${fields.storeId} AND tenant_id = ${tenantId}`
+    if (stCheck.length === 0) {
+      return NextResponse.json({ error: "Selected store not found for this tenant." }, { status: 400 })
+    }
+    fields.isDefault = true
+  }
+
   if (fields.bundleName || fields.publicBrandName || fields.supportEmail) {
     const validation = validateBundle({
       bundle_name: fields.bundleName || "placeholder",
@@ -207,6 +238,7 @@ export async function PATCH(req: NextRequest) {
     termsUrl: "terms_url",
     isDefault: "is_default",
     isActive: "is_active",
+    storeId: "store_id",
   }
 
   for (const [jsKey, dbCol] of Object.entries(fieldMap)) {

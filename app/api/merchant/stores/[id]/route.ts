@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-config"
 import { getSql } from "@/lib/neon"
+import { encrypt } from "@/lib/encryption"
 import {
   getCheckoutPreferences,
   normalizeCheckoutFlow,
@@ -151,6 +152,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       checkoutFlow?: string | null
       successReturnUrl?: string | null
       cancelReturnUrl?: string | null
+      stripeSecretKey?: string | null
+      stripePublishableKey?: string | null
+      stripeWebhookSecret?: string | null
     }
 
     try {
@@ -285,6 +289,27 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         `)
 
     const updated = (updatedRows as unknown as StoreRow[])[0]
+
+    // ── Optional Stripe credentials (separate UPDATE; only touches the
+    //    migration-025 columns when the merchant actually submits keys) ───────
+    const rawStripeSecret = typeof body.stripeSecretKey === "string" ? body.stripeSecretKey.trim() : ""
+    const rawStripePublishable = typeof body.stripePublishableKey === "string" ? body.stripePublishableKey.trim() : ""
+    const rawStripeWebhookSecret = typeof body.stripeWebhookSecret === "string" ? body.stripeWebhookSecret.trim() : ""
+    const stripeSecretEnc = rawStripeSecret ? encrypt(rawStripeSecret) : null
+    const stripePublishableVal = rawStripePublishable || null
+    const stripeWebhookSecretEnc = rawStripeWebhookSecret ? encrypt(rawStripeWebhookSecret) : null
+    const stripeProvided = !!(rawStripeSecret || rawStripePublishable || rawStripeWebhookSecret)
+    if (stripeProvided) {
+      await sql`
+        UPDATE stores
+        SET stripe_secret_key      = COALESCE(${stripeSecretEnc}, stripe_secret_key),
+            stripe_publishable_key = COALESCE(${stripePublishableVal}, stripe_publishable_key),
+            stripe_webhook_secret  = COALESCE(${stripeWebhookSecretEnc}, stripe_webhook_secret),
+            updated_at = NOW()
+        WHERE id = ${id}
+      `
+    }
+
     const preferences = await getCheckoutPreferences(sql)
 
     return NextResponse.json({
@@ -306,6 +331,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         checkoutFlowOverride: !!updated.checkout_flow,
         createdAt: updated.created_at,
         updatedAt: updated.updated_at,
+        stripeUpdated: stripeProvided,
       },
     })
   } catch (error) {

@@ -8,12 +8,14 @@ import { paymentIdentitiesCopy } from "@/lib/i18n/payment-identities"
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ShieldDomain { id: string; domain: string; is_active: boolean; health_ok: boolean }
+interface StoreOption { id: string; name: string; provider_type?: string }
 
 export interface IdentityFormData {
   id?: string
   bundleName: string
   publicBrandName: string
   industryVertical: string
+  storeId: string
   primaryShieldDomain: string
   supportEmail: string
   supportPhone: string
@@ -33,6 +35,7 @@ interface PaymentIdentityFormDialogProps {
   onSaved: () => void
   editIdentity?: any | null
   shieldDomains: ShieldDomain[]
+  stores?: StoreOption[]
 }
 
 const VERTICALS = [
@@ -42,6 +45,7 @@ const VERTICALS = [
 
 const INITIAL: IdentityFormData = {
   bundleName: "", publicBrandName: "", industryVertical: "generic_ecommerce",
+  storeId: "",
   primaryShieldDomain: "", supportEmail: "", supportPhone: "",
   orderLookupUrl: "", trackingUrl: "", shippingPolicyUrl: "",
   refundPolicyUrl: "", privacyPolicyUrl: "", termsUrl: "",
@@ -58,7 +62,7 @@ const SECTION_TITLE = "text-sm font-mono font-semibold text-[#e7edf8] uppercase 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function PaymentIdentityFormDialog({
-  open, onClose, onSaved, editIdentity, shieldDomains
+  open, onClose, onSaved, editIdentity, shieldDomains, stores = []
 }: PaymentIdentityFormDialogProps) {
   const { language } = useLanguage()
   const t = paymentIdentitiesCopy[language]
@@ -77,6 +81,7 @@ export function PaymentIdentityFormDialog({
         bundleName: editIdentity.bundle_name || "",
         publicBrandName: editIdentity.public_brand_name || "",
         industryVertical: editIdentity.industry_vertical || "generic_ecommerce",
+        storeId: editIdentity.store_id || "",
         primaryShieldDomain: editIdentity.primary_shield_domain || "",
         supportEmail: editIdentity.support_email || "",
         supportPhone: editIdentity.support_phone || "",
@@ -118,6 +123,7 @@ export function PaymentIdentityFormDialog({
         bundleName: form.bundleName.trim(),
         publicBrandName: form.publicBrandName.trim() || null,
         industryVertical: form.industryVertical,
+        storeId: form.storeId || "",
         primaryShieldDomain: form.primaryShieldDomain.trim() || null,
         supportEmail: form.supportEmail.trim() || null,
         supportPhone: form.supportPhone.trim() || null,
@@ -199,6 +205,22 @@ export function PaymentIdentityFormDialog({
                 <select className={SELECT} value={form.industryVertical} onChange={e => set("industryVertical", e.target.value)}>
                   {VERTICALS.map(v => <option key={v} value={v}>{v.replace(/_/g, " ")}</option>)}
                 </select>
+              </div>
+              <div>
+                <label className={LABEL_CLS}>Apply To</label>
+                <select className={SELECT} value={form.storeId} onChange={e => set("storeId", e.target.value)}>
+                  <option value="">All stores (tenant-wide default)</option>
+                  {stores.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}{s.provider_type && s.provider_type !== "PAYPAL" ? ` — ${s.provider_type}` : ""}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-[#6b7280] mt-1">
+                  {form.storeId
+                    ? "Scoped to this store only — it becomes that store's default and will NOT affect other stores/providers (e.g. PayPal)."
+                    : "Tenant-wide fallback for any store that has no store-specific identity."}
+                </p>
               </div>
               <div className="flex items-center gap-6 pt-5">
                 <label className="flex items-center gap-2 text-sm text-[#97a3b6] cursor-pointer">

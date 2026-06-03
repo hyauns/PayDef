@@ -13,6 +13,8 @@ export interface AuthenticatedStore {
   checkoutFlow: string | null
   successReturnUrl: string | null
   cancelReturnUrl: string | null
+  /** Payment provider for this store: 'PAYPAL' | 'CUSTOM_MOCK' | 'STRIPE'. Column added in migration 024. */
+  providerType: string
 }
 
 type StoreAuthRow = {
@@ -26,6 +28,7 @@ type StoreAuthRow = {
   checkout_flow: string | null
   success_return_url: string | null
   cancel_return_url: string | null
+  provider_type: string | null
 }
 
 export async function authenticateStoreHeaders(req: NextRequest) {
@@ -48,7 +51,8 @@ export async function authenticateStoreHeaders(req: NextRequest) {
       COALESCE(capture_mode, 'INSTANT') AS capture_mode,
       checkout_flow,
       success_return_url,
-      cancel_return_url
+      cancel_return_url,
+      COALESCE(provider_type, 'PAYPAL') AS provider_type
     FROM stores
     WHERE id = ${storeId}
     LIMIT 1
@@ -74,5 +78,6 @@ export async function authenticateStoreHeaders(req: NextRequest) {
     checkoutFlow: store.checkout_flow,
     successReturnUrl: store.success_return_url,
     cancelReturnUrl: store.cancel_return_url,
+    providerType: store.provider_type ?? "PAYPAL",
   } satisfies AuthenticatedStore
 }

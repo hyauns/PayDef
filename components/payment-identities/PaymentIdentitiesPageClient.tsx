@@ -30,6 +30,7 @@ export function PaymentIdentitiesPageClient() {
 
   const identities = data?.bundles ?? []
   const shieldDomains = data?.shieldDomains ?? []
+  const stores = data?.stores ?? []
 
   const activeIdentities = identities.filter((b: any) => b.is_active)
   const readyIdentities = identities.filter((b: any) => {
@@ -185,6 +186,7 @@ export function PaymentIdentitiesPageClient() {
         onSaved={handleFormSaved}
         editIdentity={editIdentity}
         shieldDomains={shieldDomains}
+        stores={stores}
       />
 
       {/* Items Manager Dialog */}
