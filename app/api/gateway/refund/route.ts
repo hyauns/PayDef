@@ -27,6 +27,7 @@ import {
 } from "@/lib/webhook-delivery"
 import { checkRateLimit } from "@/lib/gateway-rate-limit"
 import { authenticateStoreHeaders } from "@/lib/gateway-auth"
+import { handleStripeRefund } from "@/lib/stripe-refund"
 
 // ─── Row shapes ───────────────────────────────────────────────────────────────
 
@@ -120,6 +121,15 @@ export async function POST(req: NextRequest) {
 
   const tenantId = store.tenantId
   console.info(`${LOG} Auth OK: storeId=${store.id} tenantId=${tenantId}`)
+
+  // ── STRIPE branch ───────────────────────────────────────────────────────────
+  // STRIPE-provider stores refund via the PaymentIntent (one account per store,
+  // no merchant_accounts rotation / volume). Delegate to the isolated Stripe
+  // handler BEFORE any PayPal-specific lookup so the PayPal path stays untouched.
+  if (store.providerType === "STRIPE") {
+    console.info(`${LOG} Delegating to Stripe refund: storeId=${store.id} txId=${transaction_id}`)
+    return handleStripeRefund({ store, transactionId: transaction_id })
+  }
 
   // ── Step 4. Look up the transaction (stateless SQL) ─────────────────────────
   let transaction: TransactionRow | null = null

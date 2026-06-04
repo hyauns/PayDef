@@ -155,6 +155,54 @@ export async function createCheckoutSession(
   }
 }
 
+// ─── Refund ──────────────────────────────────────────────────────────────────
+
+export interface RefundPaymentParams {
+  secretKey: string // decrypted Stripe secret key for this store
+  paymentIntentId: string // pi_... captured by the original Checkout Session
+}
+
+export interface RefundPaymentResult {
+  id: string // Stripe refund id (re_...)
+  status: string | null // 'succeeded' | 'pending' | 'failed' | 'canceled' | null
+  alreadyRefunded: boolean // true when Stripe reports the charge was already fully refunded
+}
+
+/**
+ * Issues a FULL refund for a captured PaymentIntent.
+ *
+ * Empty `amount` ⇒ Stripe refunds the entire remaining captured amount. This is
+ * the Stripe equivalent of lib/paypal.refundCapture (full refund only).
+ *
+ * Idempotency: if Stripe reports the charge has already been fully refunded
+ * (`charge_already_refunded`), we treat it as success and flag alreadyRefunded
+ * so the caller can sync its DB without erroring — mirroring how the PayPal
+ * path treats CAPTURE_FULLY_REFUNDED.
+ */
+export async function refundPayment(
+  p: RefundPaymentParams
+): Promise<RefundPaymentResult> {
+  const stripe = getStripe(p.secretKey)
+  const paymentIntentId = p.paymentIntentId?.trim()
+  if (!paymentIntentId) {
+    throw new StripeApiError("refund", 422, "Missing payment intent id for refund.")
+  }
+
+  try {
+    const refund = await stripe.refunds.create({ payment_intent: paymentIntentId })
+    return { id: refund.id, status: refund.status ?? null, alreadyRefunded: false }
+  } catch (err) {
+    const e = err as { code?: string; statusCode?: number; message?: string }
+    // Stripe raises `charge_already_refunded` when the charge has no remaining
+    // amount to refund — treat as idempotent success.
+    if (e?.code === "charge_already_refunded") {
+      return { id: "", status: "succeeded", alreadyRefunded: true }
+    }
+    if (err instanceof StripeApiError) throw err
+    throw new StripeApiError("refund", e?.statusCode ?? 502, e?.message ?? String(err))
+  }
+}
+
 /**
  * Verifies a Stripe webhook signature and returns the parsed event.
  * Throws StripeApiError(400) when the signature is invalid.
