@@ -27,6 +27,7 @@ export interface IdentityFormData {
   termsUrl: string
   isDefault: boolean
   isActive: boolean
+  useRandomDescriptor: boolean
 }
 
 interface PaymentIdentityFormDialogProps {
@@ -49,7 +50,7 @@ const INITIAL: IdentityFormData = {
   primaryShieldDomain: "", supportEmail: "", supportPhone: "",
   orderLookupUrl: "", trackingUrl: "", shippingPolicyUrl: "",
   refundPolicyUrl: "", privacyPolicyUrl: "", termsUrl: "",
-  isDefault: false, isActive: true,
+  isDefault: false, isActive: true, useRandomDescriptor: false,
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
@@ -93,6 +94,7 @@ export function PaymentIdentityFormDialog({
         termsUrl: editIdentity.terms_url || "",
         isDefault: editIdentity.is_default || false,
         isActive: editIdentity.is_active !== false,
+        useRandomDescriptor: editIdentity.use_random_descriptor || false,
       })
     } else {
       setForm({ ...INITIAL })
@@ -135,6 +137,7 @@ export function PaymentIdentityFormDialog({
         termsUrl: form.termsUrl.trim() || null,
         isDefault: form.isDefault,
         isActive: form.isActive,
+        useRandomDescriptor: form.useRandomDescriptor,
       }
 
       if (isEdit) {
@@ -233,6 +236,28 @@ export function PaymentIdentityFormDialog({
                 </label>
               </div>
             </div>
+          </div>
+
+          {/* ── Order-traceable masked name (PI-026) ──────────────────── */}
+          <div>
+            <h3 className={SECTION_TITLE}>Order-Traceable Masking</h3>
+            <label className="flex items-start gap-3 cursor-pointer bg-[#0d0f14] border border-[#343947] rounded-lg p-4">
+              <input
+                type="checkbox"
+                checked={form.useRandomDescriptor}
+                onChange={e => set("useRandomDescriptor", e.target.checked)}
+                className="accent-[#FFD600] mt-0.5"
+              />
+              <span>
+                <span className="block text-sm font-medium text-[#e7edf8]">Use order-traceable random descriptor</span>
+                <span className="block text-xs text-[#6b7280] mt-1 font-mono">
+                  PayPal item name becomes <span className="text-[#97a3b6]">#&lt;orderId&gt; &lt;random descriptor&gt; &lt;last char&gt;</span>,
+                  picking one descriptor at random (per order) from this identity&apos;s products and a
+                  random shield domain from its pool. Lets you trace each order in PayPal and recreate
+                  the exact product on a shield domain to lift a limit. (PayPal-rotation stores only.)
+                </span>
+              </span>
+            </label>
           </div>
 
           {/* ── Section B: Shield Domain ──────────────────── */}

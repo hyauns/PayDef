@@ -54,6 +54,9 @@ export interface PaymentIdentityBundle {
   terms_url: string | null
   is_default: boolean
   is_active: boolean
+  // Opt-in: build the order-traceable "#orderId <random descriptor> <last char>"
+  // masked name from this bundle's items (PayPal-rotation checkout only). See 026.
+  use_random_descriptor: boolean
   created_at: Date
   updated_at: Date
 }

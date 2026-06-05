@@ -44,6 +44,9 @@ export interface CheckoutBundleResolveResult {
   selectedItem: PaymentIdentityBundleItem | null
   selectedItemId: string | null
   candidateDescriptor: string | null
+  // All active descriptor_name strings in the bundle — the pool the checkout
+  // route picks from at random when bundle.use_random_descriptor is on.
+  itemDescriptors: string[]
   primaryShieldDomain: string | null
   publicBrandName: string | null
   assignmentMatch: {
@@ -103,6 +106,7 @@ export async function resolvePaymentIdentityBundleForCheckout(
       selectedItem: null,
       selectedItemId: null,
       candidateDescriptor: null,
+      itemDescriptors: [],
       primaryShieldDomain: null,
       publicBrandName: null,
       assignmentMatch: { merchantAccount: false, shieldDomain: false },
@@ -175,11 +179,17 @@ export async function resolvePaymentIdentityBundleForCheckout(
     // ── Step 4: Select item
     let selectedItem: PaymentIdentityBundleItem | null = null
     let candidateDescriptor: string | null = null
+    let itemDescriptors: string[] = []
 
     if (bundle) {
       const items = resolved.items.length > 0
         ? resolved.items
         : await fetchItemsForBundle(bundle.id, input.tenantId)
+
+      itemDescriptors = items
+        .filter((i) => i.is_active)
+        .map((i) => i.descriptor_name)
+        .filter((d): d is string => Boolean(d && d.trim()))
 
       selectedItem = selectItemByPriceAndSort(items, input.checkoutAmount)
 
@@ -215,6 +225,7 @@ export async function resolvePaymentIdentityBundleForCheckout(
       selectedItem,
       selectedItemId: selectedItem?.id || null,
       candidateDescriptor,
+      itemDescriptors,
       primaryShieldDomain: bundle?.primary_shield_domain || null,
       publicBrandName: bundle?.public_brand_name || null,
       assignmentMatch: {
@@ -240,6 +251,7 @@ export async function resolvePaymentIdentityBundleForCheckout(
       selectedItem: null,
       selectedItemId: null,
       candidateDescriptor: null,
+      itemDescriptors: [],
       primaryShieldDomain: null,
       publicBrandName: null,
       assignmentMatch: { merchantAccount: false, shieldDomain: false },

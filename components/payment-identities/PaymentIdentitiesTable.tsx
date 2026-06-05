@@ -1,6 +1,6 @@
 "use client"
 
-import { Layers, CheckCircle2, AlertTriangle, Eye, Package, Trash2, Loader2 } from "lucide-react"
+import { Layers, CheckCircle2, AlertTriangle, Eye, Package, Trash2, Loader2, Globe } from "lucide-react"
 import { useLanguage } from "@/components/i18n/LanguageProvider"
 import { paymentIdentitiesCopy } from "@/lib/i18n/payment-identities"
 
@@ -21,11 +21,12 @@ interface TableProps {
   shieldDomains: { id: string, domain: string, is_active: boolean, health_ok: boolean }[]
   onEdit: (identity: IdentityRow) => void
   onManageItems: (identity: IdentityRow) => void
+  onManageDomains: (identity: IdentityRow) => void
   onDelete?: (id: string) => void
   deletingId?: string | null
 }
 
-export function PaymentIdentitiesTable({ identities, shieldDomains, onEdit, onManageItems, onDelete, deletingId }: TableProps) {
+export function PaymentIdentitiesTable({ identities, shieldDomains, onEdit, onManageItems, onManageDomains, onDelete, deletingId }: TableProps) {
   const { language } = useLanguage()
   const t = paymentIdentitiesCopy[language]
 
@@ -131,6 +132,14 @@ export function PaymentIdentitiesTable({ identities, shieldDomains, onEdit, onMa
                       >
                         <Package className="w-3.5 h-3.5" />
                         {t.manageItems} ({identity.active_item_count})
+                      </button>
+                      <button
+                        onClick={() => onManageDomains(identity)}
+                        className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#e7edf8] border border-[#343947] rounded-md hover:bg-[#2a2d39] transition-colors"
+                        title="Assign shield domains for rotation"
+                      >
+                        <Globe className="w-3.5 h-3.5 text-[#97a3b6]" />
+                        Domains ({identity.assigned_domains})
                       </button>
                       <button
                         onClick={() => onEdit(identity)}

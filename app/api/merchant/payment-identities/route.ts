@@ -239,6 +239,7 @@ export async function PATCH(req: NextRequest) {
     isDefault: "is_default",
     isActive: "is_active",
     storeId: "store_id",
+    useRandomDescriptor: "use_random_descriptor",
   }
 
   for (const [jsKey, dbCol] of Object.entries(fieldMap)) {

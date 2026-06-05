@@ -96,6 +96,15 @@ export function PaymentIdentityItemsDialog({
   const [formSuccess, setFormSuccess] = useState(false)
   const [disablingId, setDisablingId] = useState<string | null>(null)
 
+  // Bulk add (paste a list → one item per line; descriptor_name == product_title)
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [bulkText, setBulkText] = useState("")
+  const [bulkSaving, setBulkSaving] = useState(false)
+  const [bulkError, setBulkError] = useState<string | null>(null)
+  const [bulkResult, setBulkResult] = useState<number | null>(null)
+
+  const bulkCount = bulkText.split(/[\n,]/).map(s => s.trim()).filter(Boolean).length
+
   const isEdit = Boolean(editItem?.id)
 
   // Populate form for edit
@@ -190,6 +199,30 @@ export function PaymentIdentityItemsDialog({
 
   // ── Disable ─────────────────────────────────────────────────────────────────
 
+  async function handleBulkSubmit() {
+    setBulkError(null)
+    setBulkResult(null)
+    if (bulkCount === 0) { setBulkError("Paste at least one descriptor (one per line)."); return }
+    setBulkSaving(true)
+    try {
+      const res = await fetch("/api/merchant/payment-identities/items/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bundleId, text: bulkText }),
+      })
+      const result = await res.json()
+      if (!res.ok) { setBulkError(result.error || `Failed (${res.status})`); return }
+      setBulkResult(result.inserted ?? 0)
+      setBulkText("")
+      mutate()
+      onItemsChanged()
+    } catch (err: any) {
+      setBulkError(err.message || "Network error")
+    } finally {
+      setBulkSaving(false)
+    }
+  }
+
   async function handleDisable(itemId: string) {
     setDisablingId(itemId)
     try {
@@ -253,13 +286,62 @@ export function PaymentIdentityItemsDialog({
             <span className="text-sm font-mono text-[#97a3b6]">
               {isLoading ? t.loading : `${items.length} product${items.length !== 1 ? "s" : ""}`}
             </span>
-            <button
-              onClick={() => { setEditItem(null); setFormOpen(true) }}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#FFD600]/15 text-[#FFD600] hover:bg-[#FFD600]/25 font-mono text-xs font-medium border border-[#FFD600]/30 transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" /> {t.addItem}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { setBulkOpen(o => !o); setBulkError(null); setBulkResult(null) }}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1f222c] text-[#97a3b6] hover:text-[#e7edf8] font-mono text-xs font-medium border border-[#343947] hover:border-[#4a5568] transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" /> Bulk add
+              </button>
+              <button
+                onClick={() => { setEditItem(null); setFormOpen(true) }}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#FFD600]/15 text-[#FFD600] hover:bg-[#FFD600]/25 font-mono text-xs font-medium border border-[#FFD600]/30 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" /> {t.addItem}
+              </button>
+            </div>
           </div>
+
+          {/* ── Bulk add (paste a list of descriptors) ───────────────────────── */}
+          {bulkOpen && (
+            <div className="bg-[#1f222c] border border-[#343947] rounded-lg p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-mono font-semibold text-[#e7edf8]">Bulk add descriptors</h4>
+                <button onClick={() => setBulkOpen(false)} className="text-[#6b7280] hover:text-[#e7edf8]"><X className="w-4 h-4" /></button>
+              </div>
+              <p className="text-xs text-[#6b7280] font-mono">
+                Paste one descriptor per line (or comma-separated). Each becomes an item with the
+                product title set to the same text. Duplicates are skipped.
+              </p>
+              <textarea
+                className={`${INPUT} min-h-[160px] resize-y`}
+                value={bulkText}
+                onChange={e => setBulkText(e.target.value)}
+                placeholder={"Vintage Design\nBirthday Gift\nPersonalized\nNew Collection\n..."}
+              />
+              {bulkError && (
+                <div className="flex items-center gap-2 text-sm text-red-400 font-mono bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0" /> {bulkError}
+                </div>
+              )}
+              {bulkResult !== null && (
+                <div className="flex items-center gap-2 text-sm text-emerald-400 font-mono">
+                  <CheckCircle2 className="w-4 h-4" /> Added {bulkResult} descriptor{bulkResult !== 1 ? "s" : ""}.
+                </div>
+              )}
+              <div className="flex items-center justify-end gap-3">
+                <span className="text-xs font-mono text-[#6b7280] mr-auto">{bulkCount} line{bulkCount !== 1 ? "s" : ""} detected</span>
+                <button
+                  onClick={handleBulkSubmit}
+                  disabled={bulkSaving || bulkCount === 0}
+                  className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-[#FFD600]/15 text-[#FFD600] hover:bg-[#FFD600]/25 border border-[#FFD600]/30 text-sm font-mono font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {bulkSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {bulkSaving ? "Adding…" : `Add ${bulkCount || ""} descriptors`}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Error */}
           {error && (

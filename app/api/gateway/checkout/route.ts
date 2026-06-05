@@ -46,7 +46,7 @@ import {
 } from "@/lib/paypal"
 import { sendTelegramMessage } from "@/lib/telegram"
 import { recordPayPalError, filterOpenCircuits } from "@/lib/circuit-breaker"
-import { maskItemName, buildShieldUrls } from "@/lib/masking"
+import { maskItemName, buildShieldUrls, buildOrderMaskedName, seededIndex } from "@/lib/masking"
 import { resolvePaymentDisplayProfile, buildPaymentDisplayName, buildPayPalLineItemsForProfile } from "@/lib/payment-display-profiles"
 import {
   buildPopupBridgeUrl,
@@ -77,6 +77,8 @@ interface CheckoutBody {
   customerEmail?: string  // optional payer email for audit trail
   buyerIp?:      string
   buyerCountry?: string
+  orderId?:      string   // merchant order id — prefixed onto the masked item
+                          // name (#orderId) for bundles with use_random_descriptor
 }
 
 // ─── DB row shapes ────────────────────────────────────────────────────────────
@@ -739,6 +741,61 @@ export async function POST(req: NextRequest) {
                mode: bundleResult.mode, candidateDescriptor: candidate, candidateLength: candidate.length,
                amountInvariantPassed: true, selectedItemCount: 1,
              })
+          }
+        }
+
+        // ── PI-026: Order-traceable random descriptor (per-bundle opt-in) ──
+        // When the resolved bundle opts in, override the PayPal line-item name
+        // with "#<orderId> <random descriptor> <last char of real product>" and
+        // route return/cancel URLs through a randomly-picked shield domain from
+        // the bundle pool. Runs regardless of the global bundle MODE so it can be
+        // turned on per-bundle without flipping the global enforce flag. Placed
+        // last so it wins over the enforce block above.
+        if (bundleResult.bundle?.use_random_descriptor) {
+          const maskedName = buildOrderMaskedName({
+            descriptors: bundleResult.itemDescriptors,
+            seed: transactionId,
+            orderId: body.orderId,
+            realItemName: itemName,
+          })
+          if (maskedName) {
+            lineItemResult = {
+              ...lineItemResult,
+              selectedItems: [{
+                name: maskedName,
+                quantity: "1",
+                unitAmount: { currencyCode: currency, value: amountStr },
+              }],
+              lineItemPolicy: "SINGLE_SEMANTIC_ITEM",
+              skipRandomization: true,
+            }
+
+            // Random shield domain from the bundle pool (seeded by tx id).
+            const sdPool = await client.query<{ id: string; domain: string }>(
+              `SELECT id, domain FROM shield_domains
+               WHERE bundle_id = $1 AND is_active = true AND health_ok = true
+                 AND (tenant_id = $2 OR tenant_id IS NULL)
+               ORDER BY domain ASC`,
+              [bundleResult.bundleId, tenantId]
+            )
+            if (sdPool.rows.length > 0) {
+              const pick = sdPool.rows[seededIndex(transactionId, sdPool.rows.length)]
+              finalShieldDomain = pick.domain
+              shieldDomainId = pick.id
+              identityDomainUsed = true
+            }
+
+            txLog.info("payment_identity.random_descriptor_applied",
+              `Order-traceable random descriptor applied: ${maskedName}`, {
+                tenantId, storeId: store.id, merchantAccountId: account.id, transactionId,
+                bundleId: bundleResult.bundleId, maskedName,
+                randomShieldDomain: finalShieldDomain, shieldPoolSize: sdPool.rows.length,
+              })
+          } else {
+            txLog.warn("payment_identity.random_descriptor_skipped",
+              "use_random_descriptor set but bundle has no usable descriptors — using legacy masking", {
+                tenantId, storeId: store.id, bundleId: bundleResult.bundleId,
+              })
           }
         }
       } else {

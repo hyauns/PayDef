@@ -10,6 +10,7 @@ import { PaymentIdentitiesSummaryCards } from "./PaymentIdentitiesSummaryCards"
 import { PaymentIdentitiesTable, type IdentityRow } from "./PaymentIdentitiesTable"
 import { PaymentIdentityFormDialog } from "./PaymentIdentityFormDialog"
 import { PaymentIdentityItemsDialog } from "./PaymentIdentityItemsDialog"
+import { PaymentIdentityDomainsDialog } from "./PaymentIdentityDomainsDialog"
 import { PaymentIdentitySetupGuide } from "./PaymentIdentitySetupGuide"
 
 const fetcher = (url: string) => fetch(url).then(r => {
@@ -26,6 +27,7 @@ export function PaymentIdentitiesPageClient() {
   const [formOpen, setFormOpen] = useState(false)
   const [editIdentity, setEditIdentity] = useState<IdentityRow | null>(null)
   const [itemsIdentity, setItemsIdentity] = useState<IdentityRow | null>(null)
+  const [domainsIdentity, setDomainsIdentity] = useState<IdentityRow | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const identities = data?.bundles ?? []
@@ -76,6 +78,10 @@ export function PaymentIdentitiesPageClient() {
 
   function handleItemsChanged() {
     mutate()
+  }
+
+  function handleManageDomains(identity: IdentityRow) {
+    setDomainsIdentity(identity)
   }
 
   async function handleDelete(id: string) {
@@ -167,6 +173,7 @@ export function PaymentIdentitiesPageClient() {
           shieldDomains={shieldDomains}
           onEdit={handleEdit}
           onManageItems={handleManageItems}
+          onManageDomains={handleManageDomains}
           onDelete={handleDelete}
           deletingId={deletingId}
         />
@@ -198,6 +205,17 @@ export function PaymentIdentitiesPageClient() {
           bundleId={itemsIdentity.id}
           bundleName={itemsIdentity.bundle_name}
           publicBrandName={itemsIdentity.public_brand_name}
+        />
+      )}
+
+      {/* Shield Domains Manager Dialog */}
+      {domainsIdentity && (
+        <PaymentIdentityDomainsDialog
+          open={true}
+          onClose={() => setDomainsIdentity(null)}
+          onChanged={() => mutate()}
+          bundleId={domainsIdentity.id}
+          bundleName={domainsIdentity.bundle_name}
         />
       )}
     </main>

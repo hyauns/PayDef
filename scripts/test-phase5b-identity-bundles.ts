@@ -84,6 +84,7 @@ function makeBundleRow(overrides: Partial<PaymentIdentityBundle> = {}): PaymentI
     terms_url: null,
     is_default: true,
     is_active: true,
+    use_random_descriptor: false,
     created_at: new Date(),
     updated_at: new Date(),
     ...overrides,

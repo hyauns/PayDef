@@ -41,6 +41,7 @@ pg17_tar/
 
 # one-off scripts / logs that may contain credentials or PII
 scripts/create-user.js
+scripts/create-user-prod.js
 scratch/
 scratch_*.js
 scratch_*.ts

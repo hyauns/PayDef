@@ -78,6 +78,16 @@ function simpleHash(input: string): number {
   return Math.abs(hash)
 }
 
+/**
+ * Deterministic index into an array of `length` from a string `seed`.
+ * Same seed + length → same index, so a PayPal retry of one transaction always
+ * picks the same descriptor / shield domain.
+ */
+export function seededIndex(seed: string, length: number): number {
+  if (length <= 0) return 0
+  return simpleHash(seed) % length
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -97,6 +107,51 @@ export function maskItemName(realName: string, fakeProductName?: string | null):
   if (fakeProductName?.trim()) return fakeProductName.trim()
   if (!realName?.trim()) return MASKED_DESCRIPTORS[0]
   return MASKED_DESCRIPTORS[simpleHash(realName) % MASKED_DESCRIPTORS.length]
+}
+
+/**
+ * Builds an order-traceable masked item name of the form:
+ *
+ *     #<orderId> <random descriptor> <last char of the real product name>
+ *
+ * The descriptor is chosen from `descriptors` deterministically by `seed`
+ * (the transaction id) so a PayPal retry of the same transaction reproduces the
+ * same name. The order id and trailing character are appended AFTER sanitizing
+ * the (user-supplied) descriptor — sanitizePayPalField's phone-number stripper
+ * would otherwise eat the digits/dashes in an order number like "TVX-2026-00042".
+ *
+ * Returns null when there are no usable descriptors (caller falls back to the
+ * legacy masking).
+ *
+ * @param descriptors  the bundle's descriptor strings (the "random list")
+ * @param seed         transaction id — stable random selection
+ * @param orderId      merchant order id to prefix (optional)
+ * @param realItemName the real product name; its last char is appended (optional)
+ */
+export function buildOrderMaskedName(opts: {
+  descriptors: string[]
+  seed: string
+  orderId?: string | null
+  realItemName?: string | null
+  maxLength?: number
+}): string | null {
+  const pool = opts.descriptors.map((d) => (d ?? "").trim()).filter(Boolean)
+  if (pool.length === 0) return null
+
+  const descriptor = sanitizePayPalField(pool[seededIndex(opts.seed, pool.length)], 100)
+  if (!descriptor) return null
+
+  // Order id is store-generated (e.g. "TVX-2026-00042"); keep only safe chars.
+  const orderId = (opts.orderId ?? "").replace(/[^A-Za-z0-9-]/g, "")
+  // One trailing alphanumeric char from the real product, for extra variation.
+  const lastChar = (opts.realItemName ?? "").replace(/[^A-Za-z0-9]/g, "").slice(-1)
+
+  const parts: string[] = []
+  if (orderId) parts.push(`#${orderId}`)
+  parts.push(descriptor)
+  if (lastChar) parts.push(lastChar)
+
+  return parts.join(" ").slice(0, opts.maxLength ?? 127)
 }
 
 /**
