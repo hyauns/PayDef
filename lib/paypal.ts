@@ -144,6 +144,7 @@ export interface CreateOrderParams {
   proxyUrl?:     string        // optional — HTTP/HTTPS/SOCKS5 proxy for this account
   intent?:       "CAPTURE" | "AUTHORIZE"  // default: CAPTURE
   skipRandomization?: boolean  // Phase 3: skip behavioral randomization for profile-driven items
+  invoiceId?:    string        // optional — PayPal purchase_units[].invoice_id (merchant-facing)
 }
 
 export class PayPalApiError extends Error {
@@ -364,6 +365,7 @@ export function buildOrderPayload(p: CreateOrderParams) {
     purchase_units: [
       {
         custom_id:   p.customId,   // opaque UUID — only internal reference
+        ...(p.invoiceId ? { invoice_id: p.invoiceId.slice(0, 127) } : {}),
         description: safeDescription,
         amount: {
           currency_code: p.currencyCode,

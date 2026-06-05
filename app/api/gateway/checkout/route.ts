@@ -46,7 +46,7 @@ import {
 } from "@/lib/paypal"
 import { sendTelegramMessage } from "@/lib/telegram"
 import { recordPayPalError, filterOpenCircuits } from "@/lib/circuit-breaker"
-import { maskItemName, buildShieldUrls, buildOrderMaskedName, seededIndex } from "@/lib/masking"
+import { maskItemName, buildShieldUrls, buildOrderMaskedName, seededIndex, buildInvoiceId } from "@/lib/masking"
 import { resolvePaymentDisplayProfile, buildPaymentDisplayName, buildPayPalLineItemsForProfile } from "@/lib/payment-display-profiles"
 import {
   buildPopupBridgeUrl,
@@ -581,6 +581,7 @@ export async function POST(req: NextRequest) {
     // ── PI-3B: Payment Identity Bundle (Priority A) ──────────────────────────
     let finalShieldDomain = account.shield_domain
     let shieldDomainId: string | undefined
+    let invoiceId: string | null = null
     let identityDomainUsed = false
     let domainFallbackReason = "no_bundle"
     let bundleIdLog: string | undefined = undefined
@@ -785,10 +786,14 @@ export async function POST(req: NextRequest) {
               identityDomainUsed = true
             }
 
+            // PayPal invoice_id = "<ShieldBrand>-<order digits>" (merchant-facing,
+            // for tracing the order in the PayPal dashboard).
+            invoiceId = buildInvoiceId(finalShieldDomain, body.orderId)
+
             txLog.info("payment_identity.random_descriptor_applied",
               `Order-traceable random descriptor applied: ${maskedName}`, {
                 tenantId, storeId: store.id, merchantAccountId: account.id, transactionId,
-                bundleId: bundleResult.bundleId, maskedName,
+                bundleId: bundleResult.bundleId, maskedName, invoiceId,
                 randomShieldDomain: finalShieldDomain, shieldPoolSize: sdPool.rows.length,
               })
           } else {
@@ -1042,6 +1047,7 @@ export async function POST(req: NextRequest) {
         merchantAccId: account.id,
         proxyUrl,
         skipRandomization: lineItemResult.skipRandomization,
+        invoiceId:     invoiceId ?? undefined,
       })
     } catch (paypalError) {
       await client.query("ROLLBACK")

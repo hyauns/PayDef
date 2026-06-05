@@ -155,6 +155,30 @@ export function buildOrderMaskedName(opts: {
 }
 
 /**
+ * Builds the PayPal `invoice_id` (the "Invoice ID" shown in the PayPal merchant
+ * dashboard): `<ShieldBrand>-<digits of order id>`, e.g. "Ghiblistores-202600014".
+ *
+ * Brand = the shield domain's second-level label, capitalized
+ * (pay.ghiblistores.com → "Ghiblistores"). Order id is reduced to digits only.
+ * NOT passed through sanitizePayPalField — its phone-number stripper would eat
+ * the long digit run. Returns null if neither part is usable.
+ */
+export function buildInvoiceId(
+  shieldDomain: string | null | undefined,
+  orderId: string | null | undefined,
+): string | null {
+  const host = (shieldDomain ?? "").replace(/^https?:\/\//i, "").replace(/[/?#].*$/, "").toLowerCase()
+  const parts = host.split(".").filter(Boolean)
+  const label = parts.length >= 2 ? parts[parts.length - 2] : (parts[0] ?? "")
+  const cleanLabel = label.replace(/[^a-z0-9]/g, "")
+  const brand = cleanLabel ? cleanLabel.charAt(0).toUpperCase() + cleanLabel.slice(1) : ""
+  const num = (orderId ?? "").replace(/\D/g, "")
+  const segments = [brand, num].filter(Boolean)
+  if (segments.length === 0) return null
+  return segments.join("-").slice(0, 127)
+}
+
+/**
  * Returns a neutral brand name for PayPal's checkout page.
  *
  * Can optionally be seeded with the merchant account ID for consistent
