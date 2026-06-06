@@ -99,6 +99,20 @@ export const storesCopy = {
     stripeWebhookHint: "In your Stripe Dashboard, add a webhook endpoint pointing to the URL below and paste its signing secret here.",
     stripeWebhookEndpointLabel: "Your Stripe webhook URL",
     stripeConnected: "Stripe connected",
+
+    // Provider description — Shopify Payments
+    providerShopify: "Shopify Payments via Draft Order invoice. The buyer is redirected to your Shopify checkout (Shopify Payments + Shop Pay). Uses your own Shopify store.",
+
+    // Shopify credentials (per-store, entered by the merchant)
+    shopifySectionTitle: "Shopify Credentials",
+    shopifySectionDesc: "Enter your Shopify store domain and a custom-app Admin API access token (scopes: write_draft_orders, read_orders). Secrets are stored encrypted and never shown again.",
+    labelShopifyDomain: "Store Domain",
+    labelShopifyAccessToken: "Admin API Access Token",
+    labelShopifyWebhookSecret: "Webhook Signing Secret",
+    shopifyWebhookHint: "In Shopify Admin → Settings → Notifications → Webhooks, create an 'Order payment' (orders/paid) webhook pointing to the URL below (JSON), then paste its signing secret here.",
+    shopifyWebhookEndpointLabel: "Your Shopify webhook URL",
+    shopifyConnected: "Shopify connected",
+    shopifyIncomplete: "Shopify incomplete",
     stripeIncomplete: "Stripe keys missing",
 
     // Integration Summary
@@ -244,6 +258,20 @@ export const storesCopy = {
     stripeWebhookHint: "Trong Stripe Dashboard, thêm một webhook endpoint trỏ tới URL bên dưới và dán signing secret của nó vào đây.",
     stripeWebhookEndpointLabel: "URL webhook Stripe của bạn",
     stripeConnected: "Stripe đã kết nối",
+
+    // Mô tả nhà cung cấp — Shopify Payments
+    providerShopify: "Shopify Payments qua hóa đơn Draft Order. Khách được chuyển hướng tới trang checkout Shopify của bạn (Shopify Payments + Shop Pay). Dùng store Shopify của chính bạn.",
+
+    // Thông tin Shopify (per-store, do merchant tự nhập)
+    shopifySectionTitle: "Thông tin Shopify",
+    shopifySectionDesc: "Nhập domain store Shopify và Admin API access token của custom app (scope: write_draft_orders, read_orders). Khóa bí mật được lưu mã hóa và không hiển thị lại.",
+    labelShopifyDomain: "Domain Store",
+    labelShopifyAccessToken: "Admin API Access Token",
+    labelShopifyWebhookSecret: "Khóa ký Webhook",
+    shopifyWebhookHint: "Trong Shopify Admin → Settings → Notifications → Webhooks, tạo webhook 'Order payment' (orders/paid) trỏ tới URL bên dưới (JSON), rồi dán signing secret của nó vào đây.",
+    shopifyWebhookEndpointLabel: "URL webhook Shopify của bạn",
+    shopifyConnected: "Shopify đã kết nối",
+    shopifyIncomplete: "Shopify chưa đủ thông tin",
     stripeIncomplete: "Thiếu khóa Stripe",
 
     // Integration Summary

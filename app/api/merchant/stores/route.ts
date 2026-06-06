@@ -288,14 +288,57 @@ export async function GET() {
     }
   }
 
+  // ── Shopify connection status (defensive: degrades to "not connected" if the
+  //    migration-027 columns are absent, so the store list never breaks) ───────
+  const shopifyStatus: Record<
+    string,
+    { shopifyStoreDomain: string | null; hasShopifyAccessToken: boolean; hasShopifyWebhookSecret: boolean }
+  > = {}
+  if (stores.length > 0) {
+    try {
+      const shopifyRows = (role === "SUPER_ADMIN"
+        ? await sql`
+            SELECT id,
+                   shopify_store_domain,
+                   (shopify_access_token IS NOT NULL)   AS has_token,
+                   (shopify_webhook_secret IS NOT NULL) AS has_webhook
+            FROM stores
+          `
+        : await sql`
+            SELECT id,
+                   shopify_store_domain,
+                   (shopify_access_token IS NOT NULL)   AS has_token,
+                   (shopify_webhook_secret IS NOT NULL) AS has_webhook
+            FROM stores
+            WHERE tenant_id = ${tenantId}
+          `) as unknown as Array<{
+        id: string
+        shopify_store_domain: string | null
+        has_token: boolean
+        has_webhook: boolean
+      }>
+      for (const row of shopifyRows) {
+        shopifyStatus[row.id] = {
+          shopifyStoreDomain: row.shopify_store_domain ?? null,
+          hasShopifyAccessToken: !!row.has_token,
+          hasShopifyWebhookSecret: !!row.has_webhook,
+        }
+      }
+    } catch {
+      // Migration 027 not applied yet — leave shopifyStatus empty (no badge).
+    }
+  }
+
   // ── Build response ──────────────────────────────────────────────────────────
   const defaultStats = { count: 0, volume: 0, completed: 0, failed: 0, pending: 0 }
   const defaultStripe = { hasStripeSecret: false, hasStripeWebhookSecret: false, stripePublishableKey: null }
+  const defaultShopify = { shopifyStoreDomain: null, hasShopifyAccessToken: false, hasShopifyWebhookSecret: false }
 
   return NextResponse.json({
     stores: stores.map((store) => ({
       ...mapStoreResponse(store, txStats[store.id] ?? defaultStats, defaultFlow),
       ...(stripeStatus[store.id] ?? defaultStripe),
+      ...(shopifyStatus[store.id] ?? defaultShopify),
     })),
   })
 }

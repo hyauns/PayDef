@@ -38,7 +38,7 @@ import {
 
 type StoreStatus = "Active" | "Suspended" | "Trial"
 type CheckoutFlow = "REDIRECT" | "POPUP_BRIDGE"
-type ProviderType = "PAYPAL" | "CUSTOM_MOCK" | "STRIPE"
+type ProviderType = "PAYPAL" | "CUSTOM_MOCK" | "STRIPE" | "SHOPIFY"
 type CopyField = "id" | "key" | "secret" | "checkout" | "webhookUrl"
 
 const CHECKOUT_FLOW_OPTIONS: { value: CheckoutFlow; label: string; desc: string }[] = [
@@ -82,7 +82,20 @@ const PROVIDER_OPTIONS: Array<{
     label: "Stripe",
     description: "Placeholder for future direct-card orchestration.",
   },
+  {
+    value: "SHOPIFY",
+    label: "Shopify Payment",
+    description: "Redirects the buyer to your Shopify checkout (Shopify Payments + Shop Pay) via a Draft Order invoice.",
+  },
 ]
+
+/** Display name for a provider in the selector (keeps the dropdown labels short). */
+function providerOptionLabel(value: ProviderType): string {
+  if (value === "PAYPAL") return "PayPal"
+  if (value === "STRIPE") return "Stripe"
+  if (value === "SHOPIFY") return "Shopify Payment"
+  return "Custom Mock"
+}
 
 interface Store {
   id: string          // UUID
@@ -112,6 +125,14 @@ interface Store {
   stripePublishableKeyInput?: string
   stripeSecretKeyInput?: string
   stripeWebhookSecretInput?: string
+  // Shopify connection status (read-only, from the API)
+  shopifyStoreDomain?: string | null
+  hasShopifyAccessToken?: boolean
+  hasShopifyWebhookSecret?: boolean
+  // Transient, write-only inputs for Shopify credentials (never returned by the API)
+  shopifyStoreDomainInput?: string
+  shopifyAccessTokenInput?: string
+  shopifyWebhookSecretInput?: string
 }
 
 interface StoreApiRow {
@@ -136,6 +157,9 @@ interface StoreApiRow {
   hasStripeSecret?: boolean | null
   hasStripeWebhookSecret?: boolean | null
   stripePublishableKey?: string | null
+  shopifyStoreDomain?: string | null
+  hasShopifyAccessToken?: boolean | null
+  hasShopifyWebhookSecret?: boolean | null
 }
 
 function getErrorMessage(err: unknown): string {
@@ -584,6 +608,9 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
   const [stripePublishableKey, setStripePublishableKey] = useState("")
   const [stripeSecretKey, setStripeSecretKey] = useState("")
   const [stripeWebhookSecret, setStripeWebhookSecret] = useState("")
+  const [shopifyStoreDomain, setShopifyStoreDomain] = useState("")
+  const [shopifyAccessToken, setShopifyAccessToken] = useState("")
+  const [shopifyWebhookSecret, setShopifyWebhookSecret] = useState("")
   const [generated, setGenerated] = useState<{ id: string; key: string; secret: string } | null>(null)
   const [copied, setCopied] = useState<CopyField | null>(null)
   const [saving, setSaving] = useState(false)
@@ -618,6 +645,13 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
                 stripeWebhookSecret: stripeWebhookSecret.trim() || undefined,
               }
             : {}),
+          ...(providerType === "SHOPIFY"
+            ? {
+                shopifyStoreDomain: shopifyStoreDomain.trim() || undefined,
+                shopifyAccessToken: shopifyAccessToken.trim() || undefined,
+                shopifyWebhookSecret: shopifyWebhookSecret.trim() || undefined,
+              }
+            : {}),
         }),
       })
       const data = await res.json()
@@ -647,6 +681,9 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
         hasStripeSecret: data.store.hasStripeSecret ?? false,
         hasStripeWebhookSecret: data.store.hasStripeWebhookSecret ?? false,
         stripePublishableKey: data.store.stripePublishableKey ?? null,
+        shopifyStoreDomain: data.store.shopifyStoreDomain ?? null,
+        hasShopifyAccessToken: data.store.hasShopifyAccessToken ?? false,
+        hasShopifyWebhookSecret: data.store.hasShopifyWebhookSecret ?? false,
       }
 
       // Show the real credentials
@@ -657,7 +694,7 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
     } finally {
       setSaving(false)
     }
-  }, [name, platform, providerType, webhookUrl, stripePublishableKey, stripeSecretKey, stripeWebhookSecret, onCreate])
+  }, [name, platform, providerType, webhookUrl, stripePublishableKey, stripeSecretKey, stripeWebhookSecret, shopifyStoreDomain, shopifyAccessToken, shopifyWebhookSecret, onCreate])
 
   return (
     <>
@@ -734,12 +771,18 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
               >
                 {PROVIDER_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
-                    {option.value === "PAYPAL" ? "PayPal" : option.value === "STRIPE" ? "Stripe" : "Custom Mock"}
+                    {providerOptionLabel(option.value)}
                   </option>
                 ))}
               </select>
               <p className="text-xs font-mono text-[#97a3b6]">
-                {providerType === "PAYPAL" ? t.providerPaypal : providerType === "STRIPE" ? t.providerStripe : t.providerCustomMock}
+                {providerType === "PAYPAL"
+                  ? t.providerPaypal
+                  : providerType === "STRIPE"
+                  ? t.providerStripe
+                  : providerType === "SHOPIFY"
+                  ? t.providerShopify
+                  : t.providerCustomMock}
               </p>
             </div>
 
@@ -791,6 +834,58 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
                     className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] placeholder:text-[#97a3b6]/40 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
                   />
                   <p className="text-xs font-mono text-[#97a3b6]">{t.stripeWebhookHint}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Shopify credentials — only when provider = SHOPIFY (entered by the merchant) */}
+            {providerType === "SHOPIFY" && (
+              <div className="space-y-3 rounded-md border border-[#008060]/40 bg-[#008060]/5 p-3">
+                <div>
+                  <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase">{t.shopifySectionTitle}</p>
+                  <p className="text-xs font-mono text-[#97a3b6] mt-1">{t.shopifySectionDesc}</p>
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor={`${formId}-shopify-domain`} className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase">
+                    {t.labelShopifyDomain}
+                  </label>
+                  <input
+                    id={`${formId}-shopify-domain`}
+                    value={shopifyStoreDomain}
+                    onChange={(e) => setShopifyStoreDomain(e.target.value)}
+                    placeholder="your-store.myshopify.com"
+                    autoComplete="off"
+                    className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] placeholder:text-[#97a3b6]/40 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor={`${formId}-shopify-token`} className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase">
+                    {t.labelShopifyAccessToken}
+                  </label>
+                  <input
+                    id={`${formId}-shopify-token`}
+                    type="password"
+                    value={shopifyAccessToken}
+                    onChange={(e) => setShopifyAccessToken(e.target.value)}
+                    placeholder="shpat_..."
+                    autoComplete="off"
+                    className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] placeholder:text-[#97a3b6]/40 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor={`${formId}-shopify-whsec`} className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase">
+                    {t.labelShopifyWebhookSecret}
+                  </label>
+                  <input
+                    id={`${formId}-shopify-whsec`}
+                    type="password"
+                    value={shopifyWebhookSecret}
+                    onChange={(e) => setShopifyWebhookSecret(e.target.value)}
+                    placeholder="••••••••"
+                    autoComplete="off"
+                    className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] placeholder:text-[#97a3b6]/40 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+                  />
+                  <p className="text-xs font-mono text-[#97a3b6]">{t.shopifyWebhookHint}</p>
                 </div>
               </div>
             )}
@@ -1060,12 +1155,18 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
             >
               {PROVIDER_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
-                  {option.value === "PAYPAL" ? "PayPal" : option.value === "STRIPE" ? "Stripe" : "Custom Mock"}
+                  {providerOptionLabel(option.value)}
                 </option>
               ))}
             </select>
             <p className="text-xs font-mono text-[#97a3b6]">
-              {draft.providerType === "PAYPAL" ? t.providerPaypal : draft.providerType === "STRIPE" ? t.providerStripe : t.providerCustomMock}
+              {draft.providerType === "PAYPAL"
+                ? t.providerPaypal
+                : draft.providerType === "STRIPE"
+                ? t.providerStripe
+                : draft.providerType === "SHOPIFY"
+                ? t.providerShopify
+                : t.providerCustomMock}
             </p>
           </div>
 
@@ -1119,6 +1220,65 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
                   <button
                     type="button"
                     onClick={() => handleCopy(`${getGatewayBaseUrl()}/api/webhook/stripe/${draft.id}`, "webhookUrl")}
+                    className="p-1.5 text-[#97a3b6] hover:text-[#e7edf8] border border-[#343947] rounded-md transition-colors shrink-0"
+                  >
+                    {copied === "webhookUrl" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Shopify credentials — only when provider = SHOPIFY (entered by the merchant) */}
+          {draft.providerType === "SHOPIFY" && (
+            <div className="space-y-3 rounded-md border border-[#008060]/40 bg-[#008060]/5 p-3">
+              <div>
+                <p className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase">{t.shopifySectionTitle}</p>
+                <p className="text-xs font-mono text-[#97a3b6] mt-1">{t.shopifySectionDesc}</p>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase">{t.labelShopifyDomain}</label>
+                <input
+                  value={draft.shopifyStoreDomainInput ?? draft.shopifyStoreDomain ?? ""}
+                  onChange={(e) => update({ shopifyStoreDomainInput: e.target.value })}
+                  placeholder="your-store.myshopify.com"
+                  autoComplete="off"
+                  className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] placeholder:text-[#97a3b6]/40 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase">{t.labelShopifyAccessToken}</label>
+                <input
+                  type="password"
+                  value={draft.shopifyAccessTokenInput ?? ""}
+                  onChange={(e) => update({ shopifyAccessTokenInput: e.target.value })}
+                  placeholder={`shpat_...  •  ${t.stripeKeepBlank}`}
+                  autoComplete="off"
+                  className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] placeholder:text-[#97a3b6]/40 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase">{t.labelShopifyWebhookSecret}</label>
+                <input
+                  type="password"
+                  value={draft.shopifyWebhookSecretInput ?? ""}
+                  onChange={(e) => update({ shopifyWebhookSecretInput: e.target.value })}
+                  placeholder={`••••••••  •  ${t.stripeKeepBlank}`}
+                  autoComplete="off"
+                  className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] placeholder:text-[#97a3b6]/40 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+                />
+                <p className="text-xs font-mono text-[#97a3b6]">{t.shopifyWebhookHint}</p>
+              </div>
+              {/* Per-store Shopify webhook endpoint the merchant must register in Shopify */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase">{t.shopifyWebhookEndpointLabel}</label>
+                <div className="flex items-center gap-2">
+                  <code className="font-mono text-xs text-[#e7edf8] flex-1 truncate bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2">
+                    {`${getGatewayBaseUrl()}/api/webhook/shopify/${draft.id}`}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(`${getGatewayBaseUrl()}/api/webhook/shopify/${draft.id}`, "webhookUrl")}
                     className="p-1.5 text-[#97a3b6] hover:text-[#e7edf8] border border-[#343947] rounded-md transition-colors shrink-0"
                   >
                     {copied === "webhookUrl" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
@@ -1450,6 +1610,9 @@ export default function StoresPage() {
               hasStripeSecret: s.hasStripeSecret ?? false,
               hasStripeWebhookSecret: s.hasStripeWebhookSecret ?? false,
               stripePublishableKey: s.stripePublishableKey ?? null,
+              shopifyStoreDomain: s.shopifyStoreDomain ?? null,
+              hasShopifyAccessToken: s.hasShopifyAccessToken ?? false,
+              hasShopifyWebhookSecret: s.hasShopifyWebhookSecret ?? false,
             }
           })
         )
@@ -1499,6 +1662,13 @@ export default function StoresPage() {
               stripeWebhookSecret: updated.stripeWebhookSecretInput?.trim() || undefined,
             }
           : {}),
+        ...(updated.providerType === "SHOPIFY"
+          ? {
+              shopifyStoreDomain: updated.shopifyStoreDomainInput?.trim() || undefined,
+              shopifyAccessToken: updated.shopifyAccessTokenInput?.trim() || undefined,
+              shopifyWebhookSecret: updated.shopifyWebhookSecretInput?.trim() || undefined,
+            }
+          : {}),
       }),
     })
 
@@ -1536,6 +1706,14 @@ export default function StoresPage() {
               stripePublishableKeyInput: undefined,
               stripeSecretKeyInput: undefined,
               stripeWebhookSecretInput: undefined,
+              // Reflect newly-entered Shopify creds in the connection status
+              shopifyStoreDomain: updated.shopifyStoreDomainInput?.trim() || s.shopifyStoreDomain,
+              hasShopifyAccessToken: updated.shopifyAccessTokenInput?.trim() ? true : s.hasShopifyAccessToken,
+              hasShopifyWebhookSecret: updated.shopifyWebhookSecretInput?.trim() ? true : s.hasShopifyWebhookSecret,
+              // Clear write-only Shopify inputs so they never persist in client state
+              shopifyStoreDomainInput: undefined,
+              shopifyAccessTokenInput: undefined,
+              shopifyWebhookSecretInput: undefined,
             }
           : s
       )
@@ -1822,6 +2000,19 @@ export default function StoresPage() {
                             <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-0.5 text-[10px] font-mono font-semibold text-amber-400">
                               <AlertTriangle className="w-3 h-3" />
                               {t.stripeIncomplete}
+                            </span>
+                          )
+                        )}
+                        {store.providerType === "SHOPIFY" && (
+                          store.shopifyStoreDomain && store.hasShopifyAccessToken && store.hasShopifyWebhookSecret ? (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-mono font-semibold text-emerald-400">
+                              <ShieldCheck className="w-3 h-3" />
+                              {t.shopifyConnected}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-0.5 text-[10px] font-mono font-semibold text-amber-400">
+                              <AlertTriangle className="w-3 h-3" />
+                              {t.shopifyIncomplete}
                             </span>
                           )
                         )}
