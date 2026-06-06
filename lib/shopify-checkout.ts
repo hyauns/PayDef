@@ -36,6 +36,7 @@ const moduleLog = createLogger({ route: "/api/gateway/checkout", provider: "shop
 interface ShopifyKeyRow {
   shopify_store_domain: string | null
   shopify_access_token: string | null
+  shopify_item_label: string | null
 }
 
 export interface ShopifyCheckoutParams {
@@ -82,7 +83,7 @@ export async function handleShopifyCheckout(params: ShopifyCheckoutParams): Prom
   let keyRow: ShopifyKeyRow | undefined
   try {
     const rows = (await sql`
-      SELECT shopify_store_domain, shopify_access_token
+      SELECT shopify_store_domain, shopify_access_token, shopify_item_label
       FROM stores
       WHERE id = ${store.id}
       LIMIT 1
@@ -178,9 +179,12 @@ export async function handleShopifyCheckout(params: ShopifyCheckoutParams): Prom
   }
 
   const finalShieldDomain = primaryShieldDomain || store.shieldDomain
-  // Line-item title shown on the Shopify checkout: prefer the Payment Identity's
-  // configured product_title; otherwise fall back to the generic masked name.
-  const maskedItemTitle = identityItemTitle || maskedItems[0]?.name || maskItemName(itemName)
+  // Line-item title shown on the Shopify checkout. Priority:
+  //   1. the store's fixed `shopify_item_label` (admin-set, e.g. "Marine Supplies")
+  //   2. the Payment Identity's configured product_title
+  //   3. the generic masked name (display profile / maskItemName pool)
+  const storeItemLabel = keyRow.shopify_item_label?.trim() || null
+  const maskedItemTitle = storeItemLabel || identityItemTitle || maskedItems[0]?.name || maskItemName(itemName)
 
   // ── Step 4. Create the Shopify Draft Order (invoice) ────────────────────────
   let draft

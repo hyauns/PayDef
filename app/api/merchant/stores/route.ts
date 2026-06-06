@@ -63,17 +63,20 @@ function extractShopifyCreds(body: Record<string, unknown>): {
   domain: string | null
   accessToken: string | null
   webhookSecret: string | null
+  itemLabel: string | null
   provided: boolean
 } {
   const rawDomain = typeof body.shopifyStoreDomain === "string" ? body.shopifyStoreDomain.trim() : ""
   const rawToken = typeof body.shopifyAccessToken === "string" ? body.shopifyAccessToken.trim() : ""
   const rawWebhookSecret = typeof body.shopifyWebhookSecret === "string" ? body.shopifyWebhookSecret.trim() : ""
+  const rawItemLabel = typeof body.shopifyItemLabel === "string" ? body.shopifyItemLabel.trim() : ""
   const cleanDomain = rawDomain.replace(/^https?:\/\//i, "").replace(/\/.*$/, "").trim().toLowerCase()
   return {
     domain: cleanDomain || null,
     accessToken: rawToken ? encrypt(rawToken) : null,
     webhookSecret: rawWebhookSecret ? encrypt(rawWebhookSecret) : null,
-    provided: !!(cleanDomain || rawToken || rawWebhookSecret),
+    itemLabel: rawItemLabel || null,
+    provided: !!(cleanDomain || rawToken || rawWebhookSecret || rawItemLabel),
   }
 }
 
@@ -292,7 +295,12 @@ export async function GET() {
   //    migration-027 columns are absent, so the store list never breaks) ───────
   const shopifyStatus: Record<
     string,
-    { shopifyStoreDomain: string | null; hasShopifyAccessToken: boolean; hasShopifyWebhookSecret: boolean }
+    {
+      shopifyStoreDomain: string | null
+      hasShopifyAccessToken: boolean
+      hasShopifyWebhookSecret: boolean
+      shopifyItemLabel: string | null
+    }
   > = {}
   if (stores.length > 0) {
     try {
@@ -300,6 +308,7 @@ export async function GET() {
         ? await sql`
             SELECT id,
                    shopify_store_domain,
+                   shopify_item_label,
                    (shopify_access_token IS NOT NULL)   AS has_token,
                    (shopify_webhook_secret IS NOT NULL) AS has_webhook
             FROM stores
@@ -307,6 +316,7 @@ export async function GET() {
         : await sql`
             SELECT id,
                    shopify_store_domain,
+                   shopify_item_label,
                    (shopify_access_token IS NOT NULL)   AS has_token,
                    (shopify_webhook_secret IS NOT NULL) AS has_webhook
             FROM stores
@@ -314,6 +324,7 @@ export async function GET() {
           `) as unknown as Array<{
         id: string
         shopify_store_domain: string | null
+        shopify_item_label: string | null
         has_token: boolean
         has_webhook: boolean
       }>
@@ -322,17 +333,18 @@ export async function GET() {
           shopifyStoreDomain: row.shopify_store_domain ?? null,
           hasShopifyAccessToken: !!row.has_token,
           hasShopifyWebhookSecret: !!row.has_webhook,
+          shopifyItemLabel: row.shopify_item_label ?? null,
         }
       }
     } catch {
-      // Migration 027 not applied yet — leave shopifyStatus empty (no badge).
+      // Migration 027/028 not applied yet — leave shopifyStatus empty (no badge).
     }
   }
 
   // ── Build response ──────────────────────────────────────────────────────────
   const defaultStats = { count: 0, volume: 0, completed: 0, failed: 0, pending: 0 }
   const defaultStripe = { hasStripeSecret: false, hasStripeWebhookSecret: false, stripePublishableKey: null }
-  const defaultShopify = { shopifyStoreDomain: null, hasShopifyAccessToken: false, hasShopifyWebhookSecret: false }
+  const defaultShopify = { shopifyStoreDomain: null, hasShopifyAccessToken: false, hasShopifyWebhookSecret: false, shopifyItemLabel: null }
 
   return NextResponse.json({
     stores: stores.map((store) => ({
@@ -467,6 +479,7 @@ export async function POST(req: NextRequest) {
       SET shopify_store_domain   = COALESCE(${shopifyCreds.domain}, shopify_store_domain),
           shopify_access_token   = COALESCE(${shopifyCreds.accessToken}, shopify_access_token),
           shopify_webhook_secret = COALESCE(${shopifyCreds.webhookSecret}, shopify_webhook_secret),
+          shopify_item_label     = COALESCE(${shopifyCreds.itemLabel}, shopify_item_label),
           updated_at = NOW()
       WHERE id = ${store.id}
     `
@@ -488,6 +501,7 @@ export async function POST(req: NextRequest) {
       shopifyStoreDomain: shopifyCreds.domain,
       hasShopifyAccessToken: !!shopifyCreds.accessToken,
       hasShopifyWebhookSecret: !!shopifyCreds.webhookSecret,
+      shopifyItemLabel: shopifyCreds.itemLabel,
       successReturnUrl: store.success_return_url,
       cancelReturnUrl: store.cancel_return_url,
       checkoutFlow: resolveCheckoutFlow(store.checkout_flow, { defaultFlow }),

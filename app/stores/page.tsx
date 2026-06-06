@@ -129,10 +129,12 @@ interface Store {
   shopifyStoreDomain?: string | null
   hasShopifyAccessToken?: boolean
   hasShopifyWebhookSecret?: boolean
+  shopifyItemLabel?: string | null
   // Transient, write-only inputs for Shopify credentials (never returned by the API)
   shopifyStoreDomainInput?: string
   shopifyAccessTokenInput?: string
   shopifyWebhookSecretInput?: string
+  shopifyItemLabelInput?: string
 }
 
 interface StoreApiRow {
@@ -160,6 +162,7 @@ interface StoreApiRow {
   shopifyStoreDomain?: string | null
   hasShopifyAccessToken?: boolean | null
   hasShopifyWebhookSecret?: boolean | null
+  shopifyItemLabel?: string | null
 }
 
 function getErrorMessage(err: unknown): string {
@@ -611,6 +614,7 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
   const [shopifyStoreDomain, setShopifyStoreDomain] = useState("")
   const [shopifyAccessToken, setShopifyAccessToken] = useState("")
   const [shopifyWebhookSecret, setShopifyWebhookSecret] = useState("")
+  const [shopifyItemLabel, setShopifyItemLabel] = useState("")
   const [generated, setGenerated] = useState<{ id: string; key: string; secret: string } | null>(null)
   const [copied, setCopied] = useState<CopyField | null>(null)
   const [saving, setSaving] = useState(false)
@@ -650,6 +654,7 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
                 shopifyStoreDomain: shopifyStoreDomain.trim() || undefined,
                 shopifyAccessToken: shopifyAccessToken.trim() || undefined,
                 shopifyWebhookSecret: shopifyWebhookSecret.trim() || undefined,
+                shopifyItemLabel: shopifyItemLabel.trim() || undefined,
               }
             : {}),
         }),
@@ -684,6 +689,7 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
         shopifyStoreDomain: data.store.shopifyStoreDomain ?? null,
         hasShopifyAccessToken: data.store.hasShopifyAccessToken ?? false,
         hasShopifyWebhookSecret: data.store.hasShopifyWebhookSecret ?? false,
+        shopifyItemLabel: data.store.shopifyItemLabel ?? null,
       }
 
       // Show the real credentials
@@ -694,7 +700,7 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
     } finally {
       setSaving(false)
     }
-  }, [name, platform, providerType, webhookUrl, stripePublishableKey, stripeSecretKey, stripeWebhookSecret, shopifyStoreDomain, shopifyAccessToken, shopifyWebhookSecret, onCreate])
+  }, [name, platform, providerType, webhookUrl, stripePublishableKey, stripeSecretKey, stripeWebhookSecret, shopifyStoreDomain, shopifyAccessToken, shopifyWebhookSecret, shopifyItemLabel, onCreate])
 
   return (
     <>
@@ -886,6 +892,20 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
                     className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] placeholder:text-[#97a3b6]/40 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
                   />
                   <p className="text-xs font-mono text-[#97a3b6]">{t.shopifyWebhookHint}</p>
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor={`${formId}-shopify-label`} className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase">
+                    {t.labelShopifyItemLabel}
+                  </label>
+                  <input
+                    id={`${formId}-shopify-label`}
+                    value={shopifyItemLabel}
+                    onChange={(e) => setShopifyItemLabel(e.target.value)}
+                    placeholder="Marine Supplies"
+                    autoComplete="off"
+                    className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] placeholder:text-[#97a3b6]/40 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+                  />
+                  <p className="text-xs font-mono text-[#97a3b6]">{t.shopifyItemLabelHint}</p>
                 </div>
               </div>
             )}
@@ -1269,6 +1289,17 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
                 />
                 <p className="text-xs font-mono text-[#97a3b6]">{t.shopifyWebhookHint}</p>
               </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase">{t.labelShopifyItemLabel}</label>
+                <input
+                  value={draft.shopifyItemLabelInput ?? draft.shopifyItemLabel ?? ""}
+                  onChange={(e) => update({ shopifyItemLabelInput: e.target.value })}
+                  placeholder="Marine Supplies"
+                  autoComplete="off"
+                  className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] placeholder:text-[#97a3b6]/40 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
+                />
+                <p className="text-xs font-mono text-[#97a3b6]">{t.shopifyItemLabelHint}</p>
+              </div>
               {/* Per-store Shopify webhook endpoint the merchant must register in Shopify */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold tracking-wider text-[#b6c2d3] uppercase">{t.shopifyWebhookEndpointLabel}</label>
@@ -1613,6 +1644,7 @@ export default function StoresPage() {
               shopifyStoreDomain: s.shopifyStoreDomain ?? null,
               hasShopifyAccessToken: s.hasShopifyAccessToken ?? false,
               hasShopifyWebhookSecret: s.hasShopifyWebhookSecret ?? false,
+              shopifyItemLabel: s.shopifyItemLabel ?? null,
             }
           })
         )
@@ -1667,6 +1699,7 @@ export default function StoresPage() {
               shopifyStoreDomain: updated.shopifyStoreDomainInput?.trim() || undefined,
               shopifyAccessToken: updated.shopifyAccessTokenInput?.trim() || undefined,
               shopifyWebhookSecret: updated.shopifyWebhookSecretInput?.trim() || undefined,
+              shopifyItemLabel: updated.shopifyItemLabelInput?.trim() || undefined,
             }
           : {}),
       }),
@@ -1710,10 +1743,12 @@ export default function StoresPage() {
               shopifyStoreDomain: updated.shopifyStoreDomainInput?.trim() || s.shopifyStoreDomain,
               hasShopifyAccessToken: updated.shopifyAccessTokenInput?.trim() ? true : s.hasShopifyAccessToken,
               hasShopifyWebhookSecret: updated.shopifyWebhookSecretInput?.trim() ? true : s.hasShopifyWebhookSecret,
+              shopifyItemLabel: updated.shopifyItemLabelInput?.trim() || s.shopifyItemLabel,
               // Clear write-only Shopify inputs so they never persist in client state
               shopifyStoreDomainInput: undefined,
               shopifyAccessTokenInput: undefined,
               shopifyWebhookSecretInput: undefined,
+              shopifyItemLabelInput: undefined,
             }
           : s
       )

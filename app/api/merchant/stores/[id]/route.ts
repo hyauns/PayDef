@@ -158,6 +158,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       shopifyStoreDomain?: string | null
       shopifyAccessToken?: string | null
       shopifyWebhookSecret?: string | null
+      shopifyItemLabel?: string | null
     }
 
     try {
@@ -318,18 +319,21 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     const rawShopifyDomain = typeof body.shopifyStoreDomain === "string" ? body.shopifyStoreDomain.trim() : ""
     const rawShopifyToken = typeof body.shopifyAccessToken === "string" ? body.shopifyAccessToken.trim() : ""
     const rawShopifyWebhookSecret = typeof body.shopifyWebhookSecret === "string" ? body.shopifyWebhookSecret.trim() : ""
+    const rawShopifyItemLabel = typeof body.shopifyItemLabel === "string" ? body.shopifyItemLabel.trim() : ""
     const shopifyDomainVal = rawShopifyDomain
       ? rawShopifyDomain.replace(/^https?:\/\//i, "").replace(/\/.*$/, "").trim().toLowerCase() || null
       : null
     const shopifyTokenEnc = rawShopifyToken ? encrypt(rawShopifyToken) : null
     const shopifyWebhookSecretEnc = rawShopifyWebhookSecret ? encrypt(rawShopifyWebhookSecret) : null
-    const shopifyProvided = !!(shopifyDomainVal || rawShopifyToken || rawShopifyWebhookSecret)
+    const shopifyItemLabelVal = rawShopifyItemLabel || null
+    const shopifyProvided = !!(shopifyDomainVal || rawShopifyToken || rawShopifyWebhookSecret || rawShopifyItemLabel)
     if (shopifyProvided) {
       await sql`
         UPDATE stores
         SET shopify_store_domain   = COALESCE(${shopifyDomainVal}, shopify_store_domain),
             shopify_access_token   = COALESCE(${shopifyTokenEnc}, shopify_access_token),
             shopify_webhook_secret = COALESCE(${shopifyWebhookSecretEnc}, shopify_webhook_secret),
+            shopify_item_label     = COALESCE(${shopifyItemLabelVal}, shopify_item_label),
             updated_at = NOW()
         WHERE id = ${id}
       `
