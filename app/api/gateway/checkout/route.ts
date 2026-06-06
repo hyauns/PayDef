@@ -66,6 +66,7 @@ import { checkRateLimit } from "@/lib/gateway-rate-limit"
 import { authenticateStoreHeaders } from "@/lib/gateway-auth"
 import { generateExecuteToken, getMode as getExecuteTokenMode } from "@/lib/execute-token"
 import { handleStripeCheckout } from "@/lib/stripe-checkout"
+import { handleShopifyCheckout } from "@/lib/shopify-checkout"
 
 // ─── Request body shape ───────────────────────────────────────────────────────
 
@@ -311,6 +312,25 @@ export async function POST(req: NextRequest) {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   if (store.providerType === "STRIPE") {
     return handleStripeCheckout({
+      store,
+      amount,
+      amountStr,
+      currency,
+      itemName,
+      intent,
+      customerEmail,
+      buyerIp,
+      buyerCountry,
+      flow,
+      requestId,
+    })
+  }
+
+  // SHOPIFY stores use the Shopify Draft Order invoice flow (one Shopify store
+  // per PayDef store — NO merchant-account rotation). The PayPal rotation logic
+  // below is never reached for these stores.
+  if (store.providerType === "SHOPIFY") {
+    return handleShopifyCheckout({
       store,
       amount,
       amountStr,

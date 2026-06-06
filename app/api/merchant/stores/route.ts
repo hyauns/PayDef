@@ -47,10 +47,34 @@ interface StoreRow {
 }
 
 type StoreStatusLabel = "Active" | "Trial" | "Suspended"
-type ProviderType = "PAYPAL" | "CUSTOM_MOCK" | "STRIPE"
+type ProviderType = "PAYPAL" | "CUSTOM_MOCK" | "STRIPE" | "SHOPIFY"
 
 function normalizeProviderType(value: unknown): ProviderType {
-  return value === "CUSTOM_MOCK" || value === "STRIPE" ? value : "PAYPAL"
+  return value === "CUSTOM_MOCK" || value === "STRIPE" || value === "SHOPIFY" ? value : "PAYPAL"
+}
+
+/**
+ * Extracts and encrypts optional Shopify credentials from a request body.
+ * Returns `null` for any field not provided. The store domain is non-secret
+ * (stored plaintext, normalised to the bare host); the access token + webhook
+ * signing secret are encrypted.
+ */
+function extractShopifyCreds(body: Record<string, unknown>): {
+  domain: string | null
+  accessToken: string | null
+  webhookSecret: string | null
+  provided: boolean
+} {
+  const rawDomain = typeof body.shopifyStoreDomain === "string" ? body.shopifyStoreDomain.trim() : ""
+  const rawToken = typeof body.shopifyAccessToken === "string" ? body.shopifyAccessToken.trim() : ""
+  const rawWebhookSecret = typeof body.shopifyWebhookSecret === "string" ? body.shopifyWebhookSecret.trim() : ""
+  const cleanDomain = rawDomain.replace(/^https?:\/\//i, "").replace(/\/.*$/, "").trim().toLowerCase()
+  return {
+    domain: cleanDomain || null,
+    accessToken: rawToken ? encrypt(rawToken) : null,
+    webhookSecret: rawWebhookSecret ? encrypt(rawWebhookSecret) : null,
+    provided: !!(cleanDomain || rawToken || rawWebhookSecret),
+  }
 }
 
 /**
@@ -352,6 +376,9 @@ export async function POST(req: NextRequest) {
   // ── Optional Stripe credentials (only persisted when provided) ─────────────
   const stripeKeys = extractStripeKeys(body)
 
+  // ── Optional Shopify credentials (only persisted when provided) ────────────
+  const shopifyCreds = extractShopifyCreds(body)
+
   const result = await sql`
     INSERT INTO stores (
       id, tenant_id, name, platform, status_label, api_key_hash, webhook_url, webhook_secret, shield_domain,
@@ -388,6 +415,20 @@ export async function POST(req: NextRequest) {
     `
   }
 
+  // Persist Shopify credentials in a separate UPDATE so the base INSERT (shared
+  // by PayPal / Stripe / mock-charge stores) never references the migration-027
+  // columns unless Shopify credentials were actually submitted.
+  if (shopifyCreds.provided) {
+    await sql`
+      UPDATE stores
+      SET shopify_store_domain   = COALESCE(${shopifyCreds.domain}, shopify_store_domain),
+          shopify_access_token   = COALESCE(${shopifyCreds.accessToken}, shopify_access_token),
+          shopify_webhook_secret = COALESCE(${shopifyCreds.webhookSecret}, shopify_webhook_secret),
+          updated_at = NOW()
+      WHERE id = ${store.id}
+    `
+  }
+
   return NextResponse.json({
     store: {
       id:           store.id,
@@ -401,6 +442,9 @@ export async function POST(req: NextRequest) {
       stripePublishableKey: stripeKeys.publishable,
       hasStripeSecret: !!stripeKeys.secret,
       hasStripeWebhookSecret: !!stripeKeys.webhookSecret,
+      shopifyStoreDomain: shopifyCreds.domain,
+      hasShopifyAccessToken: !!shopifyCreds.accessToken,
+      hasShopifyWebhookSecret: !!shopifyCreds.webhookSecret,
       successReturnUrl: store.success_return_url,
       cancelReturnUrl: store.cancel_return_url,
       checkoutFlow: resolveCheckoutFlow(store.checkout_flow, { defaultFlow }),

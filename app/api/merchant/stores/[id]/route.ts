@@ -33,14 +33,14 @@ interface StoreRow {
 }
 
 type StoreStatusLabel = "Active" | "Trial" | "Suspended"
-type ProviderType = "PAYPAL" | "CUSTOM_MOCK" | "STRIPE"
+type ProviderType = "PAYPAL" | "CUSTOM_MOCK" | "STRIPE" | "SHOPIFY"
 
 function normalizeStatusLabel(value: unknown): StoreStatusLabel | null {
   return value === "Active" || value === "Trial" || value === "Suspended" ? value : null
 }
 
 function normalizeProviderType(value: unknown): ProviderType {
-  return value === "CUSTOM_MOCK" || value === "STRIPE" ? value : "PAYPAL"
+  return value === "CUSTOM_MOCK" || value === "STRIPE" || value === "SHOPIFY" ? value : "PAYPAL"
 }
 
 /** Live-probe the bridge health endpoint for a given shield domain.
@@ -155,6 +155,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       stripeSecretKey?: string | null
       stripePublishableKey?: string | null
       stripeWebhookSecret?: string | null
+      shopifyStoreDomain?: string | null
+      shopifyAccessToken?: string | null
+      shopifyWebhookSecret?: string | null
     }
 
     try {
@@ -310,6 +313,28 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       `
     }
 
+    // ── Optional Shopify credentials (separate UPDATE; only touches the
+    //    migration-027 columns when the merchant actually submits them) ───────
+    const rawShopifyDomain = typeof body.shopifyStoreDomain === "string" ? body.shopifyStoreDomain.trim() : ""
+    const rawShopifyToken = typeof body.shopifyAccessToken === "string" ? body.shopifyAccessToken.trim() : ""
+    const rawShopifyWebhookSecret = typeof body.shopifyWebhookSecret === "string" ? body.shopifyWebhookSecret.trim() : ""
+    const shopifyDomainVal = rawShopifyDomain
+      ? rawShopifyDomain.replace(/^https?:\/\//i, "").replace(/\/.*$/, "").trim().toLowerCase() || null
+      : null
+    const shopifyTokenEnc = rawShopifyToken ? encrypt(rawShopifyToken) : null
+    const shopifyWebhookSecretEnc = rawShopifyWebhookSecret ? encrypt(rawShopifyWebhookSecret) : null
+    const shopifyProvided = !!(shopifyDomainVal || rawShopifyToken || rawShopifyWebhookSecret)
+    if (shopifyProvided) {
+      await sql`
+        UPDATE stores
+        SET shopify_store_domain   = COALESCE(${shopifyDomainVal}, shopify_store_domain),
+            shopify_access_token   = COALESCE(${shopifyTokenEnc}, shopify_access_token),
+            shopify_webhook_secret = COALESCE(${shopifyWebhookSecretEnc}, shopify_webhook_secret),
+            updated_at = NOW()
+        WHERE id = ${id}
+      `
+    }
+
     const preferences = await getCheckoutPreferences(sql)
 
     return NextResponse.json({
@@ -332,6 +357,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         createdAt: updated.created_at,
         updatedAt: updated.updated_at,
         stripeUpdated: stripeProvided,
+        shopifyUpdated: shopifyProvided,
       },
     })
   } catch (error) {
