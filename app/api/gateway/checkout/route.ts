@@ -767,7 +767,7 @@ export async function POST(req: NextRequest) {
 
         // ── PI-026: Order-traceable random descriptor (per-bundle opt-in) ──
         // When the resolved bundle opts in, override the PayPal line-item name
-        // with "#<orderId> <random descriptor> <last char of real product>" and
+        // with "#<orderId> <random descriptor> <last word of real product>" and
         // route return/cancel URLs through a randomly-picked shield domain from
         // the bundle pool. Runs regardless of the global bundle MODE so it can be
         // turned on per-bundle without flipping the global enforce flag. Placed
@@ -806,9 +806,10 @@ export async function POST(req: NextRequest) {
               identityDomainUsed = true
             }
 
-            // PayPal invoice_id = "<ShieldBrand>-<order digits>" (merchant-facing,
-            // for tracing the order in the PayPal dashboard).
-            invoiceId = buildInvoiceId(finalShieldDomain, body.orderId)
+            // PayPal invoice_id = "TireVix-<order digits>" (merchant-facing,
+            // for tracing the order in the PayPal dashboard). Fixed store brand
+            // instead of the rotating shield brand.
+            invoiceId = buildInvoiceId(finalShieldDomain, body.orderId, "TireVix")
 
             txLog.info("payment_identity.random_descriptor_applied",
               `Order-traceable random descriptor applied: ${maskedName}`, {

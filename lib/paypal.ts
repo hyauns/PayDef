@@ -378,7 +378,11 @@ export function buildOrderPayload(p: CreateOrderParams) {
           },
         },
         items: finalItems.map((item) => ({
-          name:     sanitizePayPalField(item.name),
+          // Profile-driven items (skipRandomization) are already sanitised by
+          // buildOrderMaskedName and may carry an intentional order number
+          // (e.g. "#TVX-2026-00017 …") — keepNumbers stops the final-pass phone
+          // stripper from eating it, so what we send matches what PayDef records.
+          name:     sanitizePayPalField(item.name, 127, { keepNumbers: !!p.skipRandomization }),
           quantity: item.quantity,
           unit_amount: {
             currency_code: item.unitAmount.currencyCode,

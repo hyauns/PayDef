@@ -112,13 +112,17 @@ export function maskItemName(realName: string, fakeProductName?: string | null):
 /**
  * Builds an order-traceable masked item name of the form:
  *
- *     #<orderId> <random descriptor> <last char of the real product name>
+ *     #<orderId> <random descriptor> <last word of the real product name>
  *
  * The descriptor is chosen from `descriptors` deterministically by `seed`
  * (the transaction id) so a PayPal retry of the same transaction reproduces the
- * same name. The order id and trailing character are appended AFTER sanitizing
- * the (user-supplied) descriptor — sanitizePayPalField's phone-number stripper
+ * same name. The order id and trailing word are appended AFTER sanitizing the
+ * (user-supplied) descriptor — sanitizePayPalField's phone-number stripper
  * would otherwise eat the digits/dashes in an order number like "TVX-2026-00042".
+ *
+ * The trailing word is the last whitespace-separated token of `realItemName`
+ * (e.g. "… 10 Ply Trailer Tire" → "Tire"; "… 10 Ply Trailer" → "Trailer"), kept
+ * for recognizability. Stripped to alphanumerics.
  *
  * Returns null when there are no usable descriptors (caller falls back to the
  * legacy masking).
@@ -126,7 +130,7 @@ export function maskItemName(realName: string, fakeProductName?: string | null):
  * @param descriptors  the bundle's descriptor strings (the "random list")
  * @param seed         transaction id — stable random selection
  * @param orderId      merchant order id to prefix (optional)
- * @param realItemName the real product name; its last char is appended (optional)
+ * @param realItemName the real product name; its last word is appended (optional)
  */
 export function buildOrderMaskedName(opts: {
   descriptors: string[]
@@ -143,35 +147,45 @@ export function buildOrderMaskedName(opts: {
 
   // Order id is store-generated (e.g. "TVX-2026-00042"); keep only safe chars.
   const orderId = (opts.orderId ?? "").replace(/[^A-Za-z0-9-]/g, "")
-  // One trailing alphanumeric char from the real product, for extra variation.
-  const lastChar = (opts.realItemName ?? "").replace(/[^A-Za-z0-9]/g, "").slice(-1)
+  // Last whitespace-separated word of the real product, for recognizability.
+  const lastWord = (opts.realItemName ?? "")
+    .trim()
+    .split(/\s+/)
+    .pop()
+    ?.replace(/[^A-Za-z0-9]/g, "") ?? ""
 
   const parts: string[] = []
   if (orderId) parts.push(`#${orderId}`)
   parts.push(descriptor)
-  if (lastChar) parts.push(lastChar)
+  if (lastWord) parts.push(lastWord)
 
   return parts.join(" ").slice(0, opts.maxLength ?? 127)
 }
 
 /**
  * Builds the PayPal `invoice_id` (the "Invoice ID" shown in the PayPal merchant
- * dashboard): `<ShieldBrand>-<digits of order id>`, e.g. "Ghiblistores-202600014".
+ * dashboard): `<Brand>-<digits of order id>`, e.g. "TireVix-202600017".
  *
- * Brand = the shield domain's second-level label, capitalized
- * (pay.ghiblistores.com → "Ghiblistores"). Order id is reduced to digits only.
- * NOT passed through sanitizePayPalField — its phone-number stripper would eat
- * the long digit run. Returns null if neither part is usable.
+ * Brand resolution: if `brandOverride` is given it wins (e.g. a fixed store
+ * brand "TireVix"); otherwise the brand is derived from the shield domain's
+ * second-level label, capitalized (pay.ghiblistores.com → "Ghiblistores").
+ * Order id is reduced to digits only. NOT passed through sanitizePayPalField —
+ * its phone-number stripper would eat the long digit run. Returns null if
+ * neither part is usable.
  */
 export function buildInvoiceId(
   shieldDomain: string | null | undefined,
   orderId: string | null | undefined,
+  brandOverride?: string | null,
 ): string | null {
-  const host = (shieldDomain ?? "").replace(/^https?:\/\//i, "").replace(/[/?#].*$/, "").toLowerCase()
-  const parts = host.split(".").filter(Boolean)
-  const label = parts.length >= 2 ? parts[parts.length - 2] : (parts[0] ?? "")
-  const cleanLabel = label.replace(/[^a-z0-9]/g, "")
-  const brand = cleanLabel ? cleanLabel.charAt(0).toUpperCase() + cleanLabel.slice(1) : ""
+  let brand = (brandOverride ?? "").replace(/[^A-Za-z0-9]/g, "")
+  if (!brand) {
+    const host = (shieldDomain ?? "").replace(/^https?:\/\//i, "").replace(/[/?#].*$/, "").toLowerCase()
+    const parts = host.split(".").filter(Boolean)
+    const label = parts.length >= 2 ? parts[parts.length - 2] : (parts[0] ?? "")
+    const cleanLabel = label.replace(/[^a-z0-9]/g, "")
+    brand = cleanLabel ? cleanLabel.charAt(0).toUpperCase() + cleanLabel.slice(1) : ""
+  }
   const num = (orderId ?? "").replace(/\D/g, "")
   const segments = [brand, num].filter(Boolean)
   if (segments.length === 0) return null
@@ -209,15 +223,30 @@ export function maskDescription(seed?: string): string {
  *  • Characters that could enable injection (angle brackets, quotes)
  *  • Trims to PayPal's 127-char field limit
  *
+ * `opts.keepNumbers` skips the phone-number stripper. Use it for strings that
+ * already had their free-text portion sanitised and now carry an intentional
+ * digit run we must preserve — e.g. an order-traceable item name like
+ * "#TVX-2026-00017 …" built by buildOrderMaskedName. Without it the phone-number
+ * rule eats "2026-00017", so PayPal would display a different name than the one
+ * PayDef recorded. The URL/email/injection rules still run.
+ *
  * @param raw — the string to sanitize
  * @param maxLength — maximum allowed length (default 127 for PayPal fields)
+ * @param opts.keepNumbers — when true, do not strip phone-number-like digit runs
  */
-export function sanitizePayPalField(raw: string, maxLength = 127): string {
-  return raw
+export function sanitizePayPalField(
+  raw: string,
+  maxLength = 127,
+  opts?: { keepNumbers?: boolean },
+): string {
+  let out = raw
     .replace(/https?:\/\/[^\s]+/gi, "")    // strip URLs
     .replace(/[\w.-]+@[\w.-]+/gi, "")       // strip emails
     .replace(/[<>"'`]/g, "")                // strip injection chars
-    .replace(/\+?\d[\d\s\-()]{7,}/g, "")   // strip phone numbers
+  if (!opts?.keepNumbers) {
+    out = out.replace(/\+?\d[\d\s\-()]{7,}/g, "")   // strip phone numbers
+  }
+  return out
     .replace(/\s{2,}/g, " ")               // collapse whitespace
     .trim()
     .slice(0, maxLength)
