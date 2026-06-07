@@ -46,7 +46,7 @@ import {
 } from "@/lib/paypal"
 import { sendTelegramMessage } from "@/lib/telegram"
 import { recordPayPalError, filterOpenCircuits } from "@/lib/circuit-breaker"
-import { maskItemName, buildShieldUrls, buildOrderMaskedName, seededIndex, buildInvoiceId } from "@/lib/masking"
+import { maskItemName, buildShieldUrls, buildOrderMaskedName, buildOrderMaskedLineItems, seededIndex, buildInvoiceId } from "@/lib/masking"
 import { resolvePaymentDisplayProfile, buildPaymentDisplayName, buildPayPalLineItemsForProfile } from "@/lib/payment-display-profiles"
 import {
   buildPopupBridgeUrl,
@@ -80,6 +80,14 @@ interface CheckoutBody {
   buyerCountry?: string
   orderId?:      string   // merchant order id — prefixed onto the masked item
                           // name (#orderId) for bundles with use_random_descriptor
+  items?:        { name: string; amount: number }[]
+                          // optional cart lines. When ≥2 and the bundle opts into
+                          // use_random_descriptor, each becomes its own masked
+                          // PayPal line item (#orderId <descriptor> <last word>),
+                          // with prices split to sum exactly to `amount`. `amount`
+                          // per line is a distribution weight (real catalog price
+                          // is never sent). Falls back to the single itemName path
+                          // when absent / <2 items.
 }
 
 // ─── DB row shapes ────────────────────────────────────────────────────────────
@@ -773,23 +781,41 @@ export async function POST(req: NextRequest) {
         // turned on per-bundle without flipping the global enforce flag. Placed
         // last so it wins over the enforce block above.
         if (bundleResult.bundle?.use_random_descriptor) {
-          const maskedName = buildOrderMaskedName({
+          // Multi-item: when the merchant sends ≥2 cart lines, render one masked
+          // PayPal line per item (each with its own random descriptor) with
+          // prices split to sum exactly to the total. Otherwise collapse to a
+          // single combined masked line as before.
+          const maskedLineItems = buildOrderMaskedLineItems({
+            items: body.items ?? [],
             descriptors: bundleResult.itemDescriptors,
             seed: transactionId,
             orderId: body.orderId,
-            realItemName: itemName,
+            totalValue: amountStr,
+            currency,
           })
-          if (maskedName) {
+          const maskedName = maskedLineItems
+            ? null
+            : buildOrderMaskedName({
+                descriptors: bundleResult.itemDescriptors,
+                seed: transactionId,
+                orderId: body.orderId,
+                realItemName: itemName,
+              })
+          if (maskedLineItems || maskedName) {
+            const selectedItems = maskedLineItems ?? [{
+              name: maskedName as string,
+              quantity: "1",
+              unitAmount: { currencyCode: currency, value: amountStr },
+            }]
             lineItemResult = {
               ...lineItemResult,
-              selectedItems: [{
-                name: maskedName,
-                quantity: "1",
-                unitAmount: { currencyCode: currency, value: amountStr },
-              }],
-              lineItemPolicy: "SINGLE_SEMANTIC_ITEM",
+              selectedItems,
+              // REAL_CART_ITEMS for multi-line so the enforce preflight (which
+              // asserts itemCount===1 for SINGLE_SEMANTIC_ITEM) is not tripped.
+              lineItemPolicy: maskedLineItems ? "REAL_CART_ITEMS" : "SINGLE_SEMANTIC_ITEM",
               skipRandomization: true,
             }
+            const displayName = selectedItems.map((it) => it.name).join(" | ")
 
             // Random shield domain from the bundle pool (seeded by tx id).
             const sdPool = await client.query<{ id: string; domain: string }>(
@@ -812,9 +838,10 @@ export async function POST(req: NextRequest) {
             invoiceId = buildInvoiceId(finalShieldDomain, body.orderId, "TireVix")
 
             txLog.info("payment_identity.random_descriptor_applied",
-              `Order-traceable random descriptor applied: ${maskedName}`, {
+              `Order-traceable random descriptor applied: ${displayName}`, {
                 tenantId, storeId: store.id, merchantAccountId: account.id, transactionId,
-                bundleId: bundleResult.bundleId, maskedName, invoiceId,
+                bundleId: bundleResult.bundleId, maskedName: displayName,
+                lineItemCount: selectedItems.length, invoiceId,
                 randomShieldDomain: finalShieldDomain, shieldPoolSize: sdPool.rows.length,
               })
           } else {

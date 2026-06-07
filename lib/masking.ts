@@ -162,6 +162,90 @@ export function buildOrderMaskedName(opts: {
   return parts.join(" ").slice(0, opts.maxLength ?? 127)
 }
 
+export interface MaskedLineItem {
+  name: string
+  quantity: string
+  unitAmount: { currencyCode: string; value: string }
+}
+
+/**
+ * Builds N order-traceable masked line items — one per cart line — so a
+ * multi-product order shows as separate lines in PayPal, each named via
+ * buildOrderMaskedName with a per-line seed (`<seed>:<index>`) so every line
+ * gets its OWN random descriptor.
+ *
+ * Prices are DISTRIBUTED across `totalValue` (the order grand total) so the
+ * lines sum to it EXACTLY — PayPal requires item_total === amount, and the
+ * grand total already folds in shipping/tax/discount that the per-line catalog
+ * prices do not. Each merchant `item.amount` is used ONLY as a distribution
+ * weight (the real catalog price is never sent); the last line absorbs the
+ * rounding remainder. Quantity is always "1" (one PayPal line per cart line).
+ *
+ * Returns null — so the caller falls back to a single combined masked item —
+ * when there are fewer than 2 usable items, no usable descriptors, a
+ * non-positive total, or any line would round to < 1 cent (PayPal rejects
+ * 0.00 lines).
+ */
+export function buildOrderMaskedLineItems(opts: {
+  items: { name: string; amount: number }[]
+  descriptors: string[]
+  seed: string
+  orderId?: string | null
+  totalValue: string
+  currency: string
+  maxLength?: number
+}): MaskedLineItem[] | null {
+  const items = (opts.items ?? []).filter(
+    (i) => i && typeof i.name === "string" && i.name.trim(),
+  )
+  if (items.length < 2) return null
+
+  const totalCents = Math.round(parseFloat(opts.totalValue) * 100)
+  if (!Number.isFinite(totalCents) || totalCents <= 0) return null
+
+  // Distribution weights from the merchant's per-line amounts (even split if
+  // none are positive).
+  let weights = items.map((i) => Math.max(0, Math.round((Number(i.amount) || 0) * 100)))
+  let weightSum = weights.reduce((s, w) => s + w, 0)
+  if (weightSum <= 0) {
+    weights = items.map(() => 1)
+    weightSum = items.length
+  }
+
+  // Proportional split in integer cents; the last line takes the remainder so
+  // the sum is exact.
+  const shares: number[] = []
+  let acc = 0
+  for (let i = 0; i < items.length; i++) {
+    if (i < items.length - 1) {
+      const s = Math.floor((totalCents * weights[i]) / weightSum)
+      shares.push(s)
+      acc += s
+    } else {
+      shares.push(totalCents - acc)
+    }
+  }
+  if (shares.some((s) => s < 1)) return null  // a 0.00 line would be rejected
+
+  const out: (MaskedLineItem | null)[] = items.map((item, i) => {
+    const name = buildOrderMaskedName({
+      descriptors: opts.descriptors,
+      seed: `${opts.seed}:${i}`,
+      orderId: opts.orderId,
+      realItemName: item.name,
+      maxLength: opts.maxLength,
+    })
+    if (!name) return null
+    return {
+      name,
+      quantity: "1",
+      unitAmount: { currencyCode: opts.currency, value: (shares[i] / 100).toFixed(2) },
+    }
+  })
+  if (out.some((x) => x === null)) return null
+  return out as MaskedLineItem[]
+}
+
 /**
  * Builds the PayPal `invoice_id` (the "Invoice ID" shown in the PayPal merchant
  * dashboard): `<Brand>-<digits of order id>`, e.g. "TireVix-202600017".
