@@ -151,6 +151,149 @@ export async function createDraftOrder(
   return { draftOrderId: String(draftOrder.id), invoiceUrl }
 }
 
+export interface RefundShopifyOrderParams {
+  shopDomain: string // decrypted/plaintext, e.g. "my-store.myshopify.com"
+  accessToken: string // decrypted Admin API access token (shpat_...)
+  orderId: string // numeric Shopify Order id (the REAL order, not the draft)
+  /** Full amount to refund as a 2-decimal string, e.g. "49.99". */
+  amount: string
+  currency: string // ISO 4217, e.g. "USD"
+  /** Optional note shown on the Shopify refund. */
+  note?: string
+}
+
+export interface RefundShopifyOrderResult {
+  refundId: string // numeric Shopify Refund id (as string)
+  /** True when Shopify reports the order had nothing left to refund. */
+  alreadyRefunded: boolean
+}
+
+interface ShopifyTransaction {
+  id?: number | string
+  kind?: string
+  status?: string
+  gateway?: string
+  parent_id?: number | string | null
+}
+
+/**
+ * Issues a FULL refund against a paid Shopify Order via the Admin REST API.
+ *
+ * Flow (mirrors what Shopify's admin UI does for a "Refund"):
+ *   1. GET the order's transactions and locate the successful parent
+ *      sale/capture transaction (we need its id + gateway to attach the refund).
+ *   2. POST a refund whose single transaction reverses the full amount.
+ *
+ * Our Shopify draft orders carry ONE custom line item priced at the full
+ * checkout total, so a money-only refund of `amount` drives the order's
+ * financial_status to "refunded" without needing per-line restock data.
+ *
+ * Idempotency: if the order has no successful parent transaction left to refund
+ * (already fully refunded), this resolves with alreadyRefunded = true instead of
+ * throwing, so the caller can treat a repeat request as success.
+ */
+export async function refundShopifyOrder(
+  p: RefundShopifyOrderParams
+): Promise<RefundShopifyOrderResult> {
+  const domain = normalizeShopDomain(p.shopDomain)
+  const token = p.accessToken?.trim()
+  if (!token) {
+    throw new ShopifyApiError("config", 500, "Missing Shopify access token for this store.")
+  }
+  const orderId = (p.orderId || "").trim()
+  if (!orderId) {
+    throw new ShopifyApiError("config", 500, "Missing Shopify order id for refund.")
+  }
+
+  const base = `https://${domain}/admin/api/${apiVersion()}`
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Shopify-Access-Token": token,
+  }
+
+  // ── Step 1. Find the successful parent sale/capture transaction ─────────────
+  let txRes: Response
+  try {
+    txRes = await fetch(`${base}/orders/${orderId}/transactions.json`, { method: "GET", headers })
+  } catch (err) {
+    throw new ShopifyApiError("refund order", 502, (err as Error).message)
+  }
+  const txText = await txRes.text()
+  if (!txRes.ok) {
+    throw new ShopifyApiError("refund order", txRes.status, txText.slice(0, 500))
+  }
+
+  let txParsed: { transactions?: ShopifyTransaction[] }
+  try {
+    txParsed = JSON.parse(txText)
+  } catch {
+    throw new ShopifyApiError("refund order", 502, "Shopify returned a non-JSON transactions response.")
+  }
+
+  const transactions = Array.isArray(txParsed.transactions) ? txParsed.transactions : []
+  const parent = transactions.find(
+    (t) =>
+      (t.kind === "sale" || t.kind === "capture") &&
+      String(t.status).toLowerCase() === "success"
+  )
+
+  if (!parent?.id) {
+    // No money captured on this order — nothing to refund. Treat as idempotent.
+    return { refundId: "", alreadyRefunded: true }
+  }
+
+  // ── Step 2. Create the refund (money-only, full amount) ─────────────────────
+  const refundBody = {
+    refund: {
+      currency: p.currency,
+      notify: false,
+      note: p.note || "PayDef refund",
+      transactions: [
+        {
+          parent_id: parent.id,
+          amount: p.amount,
+          kind: "refund",
+          gateway: parent.gateway,
+        },
+      ],
+    },
+  }
+
+  let res: Response
+  try {
+    res = await fetch(`${base}/orders/${orderId}/refunds.json`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(refundBody),
+    })
+  } catch (err) {
+    throw new ShopifyApiError("refund order", 502, (err as Error).message)
+  }
+
+  const text = await res.text()
+  if (!res.ok) {
+    // Shopify returns 422 when there is nothing left to refund — treat as success.
+    if (res.status === 422 && /refund|already|exceed/i.test(text)) {
+      return { refundId: "", alreadyRefunded: true }
+    }
+    throw new ShopifyApiError("refund order", res.status, text.slice(0, 500))
+  }
+
+  let parsed: { refund?: { id?: number | string } }
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    throw new ShopifyApiError("refund order", 502, "Shopify returned a non-JSON refund response.")
+  }
+
+  const refundId = parsed.refund?.id
+  if (!refundId) {
+    throw new ShopifyApiError("refund order", 502, "Shopify did not return a refund id.")
+  }
+
+  return { refundId: String(refundId), alreadyRefunded: false }
+}
+
 /**
  * Verifies a Shopify webhook HMAC.
  *

@@ -28,6 +28,7 @@ import {
 import { checkRateLimit } from "@/lib/gateway-rate-limit"
 import { authenticateStoreHeaders } from "@/lib/gateway-auth"
 import { handleStripeRefund } from "@/lib/stripe-refund"
+import { handleShopifyRefund } from "@/lib/shopify-refund"
 
 // ─── Row shapes ───────────────────────────────────────────────────────────────
 
@@ -129,6 +130,15 @@ export async function POST(req: NextRequest) {
   if (store.providerType === "STRIPE") {
     console.info(`${LOG} Delegating to Stripe refund: storeId=${store.id} txId=${transaction_id}`)
     return handleStripeRefund({ store, transactionId: transaction_id })
+  }
+
+  // ── SHOPIFY branch ────────────────────────────────────────────────────────────
+  // SHOPIFY-provider stores refund the paid Shopify Order (one account per store,
+  // no merchant_accounts rotation / volume). Delegate to the isolated Shopify
+  // handler BEFORE any PayPal-specific lookup so the PayPal path stays untouched.
+  if (store.providerType === "SHOPIFY") {
+    console.info(`${LOG} Delegating to Shopify refund: storeId=${store.id} txId=${transaction_id}`)
+    return handleShopifyRefund({ store, transactionId: transaction_id })
   }
 
   // ── Step 4. Look up the transaction (stateless SQL) ─────────────────────────
