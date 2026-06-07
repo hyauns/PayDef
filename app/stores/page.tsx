@@ -901,7 +901,7 @@ function CreateStoreModal({ onClose, onCreate }: CreateModalProps) {
                     id={`${formId}-shopify-label`}
                     value={shopifyItemLabel}
                     onChange={(e) => setShopifyItemLabel(e.target.value)}
-                    placeholder="Marine Supplies"
+                    placeholder="Marine Supplies, Boat Parts, Dock Gear"
                     autoComplete="off"
                     className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] placeholder:text-[#97a3b6]/40 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
                   />
@@ -1294,7 +1294,7 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
                 <input
                   value={draft.shopifyItemLabelInput ?? draft.shopifyItemLabel ?? ""}
                   onChange={(e) => update({ shopifyItemLabelInput: e.target.value })}
-                  placeholder="Marine Supplies"
+                  placeholder="Marine Supplies, Boat Parts, Dock Gear"
                   autoComplete="off"
                   className="w-full bg-[#1a1d24] border border-[#343947] rounded-md px-3 py-2 text-sm font-mono text-[#e7edf8] placeholder:text-[#97a3b6]/40 focus:outline-none focus:ring-1 focus:ring-[#FFD600]/50 focus:border-[#FFD600]/50 transition-colors"
                 />

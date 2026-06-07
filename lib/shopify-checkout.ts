@@ -20,7 +20,7 @@
 import { NextResponse } from "next/server"
 import { getPool, getSql } from "@/lib/neon"
 import { decrypt, isEncrypted } from "@/lib/encryption"
-import { maskItemName } from "@/lib/masking"
+import { maskItemName, seededIndex } from "@/lib/masking"
 import {
   resolvePaymentDisplayProfile,
   buildPayPalLineItemsForProfile,
@@ -32,6 +32,34 @@ import { createLogger } from "@/lib/logger"
 import type { AuthenticatedStore } from "@/lib/gateway-auth"
 
 const moduleLog = createLogger({ route: "/api/gateway/checkout", provider: "shopify" })
+
+/**
+ * Ad-source pool for Shopify conversion-source attribution. The merchant runs
+ * Google Ads, Microsoft (Bing) Ads and Facebook ads, so each order is randomly
+ * (equal-weight) attributed to one of these via UTM params on the invoice URL.
+ */
+const CONVERSION_SOURCES = [
+  { source: "google", medium: "cpc", campaign: "google_ads" },
+  { source: "bing", medium: "cpc", campaign: "bing_ads" },
+  { source: "facebook", medium: "paid_social", campaign: "facebook_ads" },
+] as const
+
+/** Appends the chosen ad-source UTM params to a Shopify invoice URL. */
+function withConversionUtm(
+  invoiceUrl: string,
+  pick: (typeof CONVERSION_SOURCES)[number]
+): string {
+  try {
+    const url = new URL(invoiceUrl)
+    url.searchParams.set("utm_source", pick.source)
+    url.searchParams.set("utm_medium", pick.medium)
+    url.searchParams.set("utm_campaign", pick.campaign)
+    return url.toString()
+  } catch {
+    // Never block checkout on a URL parse issue — fall back to the bare invoice URL.
+    return invoiceUrl
+  }
+}
 
 interface ShopifyKeyRow {
   shopify_store_domain: string | null
@@ -180,10 +208,17 @@ export async function handleShopifyCheckout(params: ShopifyCheckoutParams): Prom
 
   const finalShieldDomain = primaryShieldDomain || store.shieldDomain
   // Line-item title shown on the Shopify checkout. Priority:
-  //   1. the store's fixed `shopify_item_label` (admin-set, e.g. "Marine Supplies")
+  //   1. the store's `shopify_item_label` — may hold a POOL of names separated by
+  //      commas / newlines; one is picked at random per order (seeded by the
+  //      transaction id so a retry of the same checkout reproduces the same name)
   //   2. the Payment Identity's configured product_title
   //   3. the generic masked name (display profile / maskItemName pool)
-  const storeItemLabel = keyRow.shopify_item_label?.trim() || null
+  const labelPool = (keyRow.shopify_item_label ?? "")
+    .split(/[,\n]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+  const storeItemLabel =
+    labelPool.length > 0 ? labelPool[seededIndex(transactionId, labelPool.length)] : null
   const maskedItemTitle = storeItemLabel || identityItemTitle || maskedItems[0]?.name || maskItemName(itemName)
 
   // ── Step 4. Create the Shopify Draft Order (invoice) ────────────────────────
@@ -207,7 +242,15 @@ export async function handleShopifyCheckout(params: ShopifyCheckoutParams): Prom
     )
   }
 
-  const approvalUrl = draft.invoiceUrl
+  // ── Conversion-source attribution ──────────────────────────────────────────
+  // Shopify builds the order's "Conversion summary" from the checkout session's
+  // UTM params. A draft-order invoice link carries none, so every order shows up
+  // as "direct". Append a randomised ad-source UTM (seeded by the transaction id
+  // so a checkout retry reproduces the same source) to the invoice URL, so the
+  // buyer's Shopify session is attributed to one of the ad platforms the merchant
+  // actually runs. Equal random across Google / Bing / Facebook.
+  const conv = CONVERSION_SOURCES[seededIndex(transactionId, CONVERSION_SOURCES.length)]
+  const approvalUrl = withConversionUtm(draft.invoiceUrl, conv)
   let popupUrl: string | null = null
   let popupOrigin: string | null = null
   if (flow === "POPUP_BRIDGE") {
@@ -280,6 +323,7 @@ export async function handleShopifyCheckout(params: ShopifyCheckoutParams): Prom
     transactionId,
     finalShieldDomain,
     flow,
+    conversionSource: conv.source,
   })
 
   return NextResponse.json(
