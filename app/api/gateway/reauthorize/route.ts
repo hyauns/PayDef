@@ -94,7 +94,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Cannot reauthorize transaction in '${transaction.status}' status.` }, { status: 400 })
     }
 
-    const activeAuthId = transaction.latest_authorization_id || transaction.authorization_id
+    // Reauthorize the ORIGINAL parent authorization, not a reauthorization.
+    // PayPal rejects reauthorizing a reauthorization (422
+    // REAUTHORIZATION_NOT_SUPPORTED).
+    const activeAuthId = transaction.authorization_id || transaction.latest_authorization_id
     if (!activeAuthId) {
       console.error(`[reauthorize:validation_failed] No active authorization for tx ${transaction.id}`)
       await client.query("ROLLBACK")

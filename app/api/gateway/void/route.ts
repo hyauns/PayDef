@@ -223,7 +223,10 @@ export async function POST(req: NextRequest) {
     await voidAuthorization({
       clientId:        merchant.client_id,
       clientSecret:    decryptedSecret,
-      authorizationId: transaction.latest_authorization_id || transaction.authorization_id || authorization_id,
+      // Void the ORIGINAL parent authorization, not a reauthorization. PayPal
+      // rejects voiding a reauthorization (422 CANNOT_BE_VOIDED — "void the
+      // original parent authorization"); voiding the parent releases the chain.
+      authorizationId: transaction.authorization_id || transaction.latest_authorization_id || authorization_id,
       proxyUrl,
     })
   } catch (paypalError) {
