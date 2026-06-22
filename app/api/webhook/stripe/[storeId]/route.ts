@@ -241,8 +241,31 @@ async function completeStripeTransaction(
   const amount = parseFloat(tx.original_amount)
   const currency = tx.original_currency ?? "USD"
 
+  // ── Resolve the merchant webhook target from the TRANSACTION's own store ────
+  // The Stripe webhook arrives at /api/webhook/stripe/[storeId], where [storeId]
+  // is whichever store's endpoint Stripe was configured to call. When several
+  // stores share one Stripe account, Stripe delivers EVERY event in that account
+  // to that single endpoint — so `store` (loaded from the URL) can belong to a
+  // different merchant than the transaction. The merchant webhook must always go
+  // to the transaction's own store, matching the event store_id + signing secret
+  // used by the delivery pipeline (deliverWebhookEvent signs with tx.store_id's
+  // secret). Using `store.webhook_url` here delivered other merchants' payments
+  // to the wrong endpoint (401) and left their orders stuck PENDING.
+  let merchantWebhookUrl = store.webhook_url
+  if (tx.store_id !== store.id) {
+    const rows = (await getSql()`
+      SELECT webhook_url FROM stores WHERE id = ${tx.store_id} LIMIT 1
+    `) as unknown as { webhook_url: string | null }[]
+    merchantWebhookUrl = rows[0]?.webhook_url ?? null
+    log.info("stripe_webhook.cross_store_delivery", "Tx store differs from webhook URL store; delivering to tx store", {
+      txStoreId: tx.store_id,
+      webhookUrlStoreId: store.id,
+      resolvedTarget: merchantWebhookUrl,
+    })
+  }
+
   // ── Deliver merchant webhook (reuse shared delivery pipeline) ───────────────
-  if (store.webhook_url) {
+  if (merchantWebhookUrl) {
     const payload: Omit<StoreWebhookPayload, "event_id"> = {
       event: "payment.capture.completed",
       transaction_id: tx.id,
@@ -263,7 +286,7 @@ async function completeStripeTransaction(
         tenantId: tx.tenant_id,
         storeId: tx.store_id,
         accountId: null,
-        targetUrl: store.webhook_url,
+        targetUrl: merchantWebhookUrl,
         businessKey: buildWebhookBusinessKey("payment.capture.completed", tx.id, "stripe"),
         event: "payment.capture.completed",
         payload,
