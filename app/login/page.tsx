@@ -170,7 +170,7 @@ function LoginForm() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="admin@paydef.io"
+                    placeholder="admin@paylaz.nl"
                     autoComplete="email"
                     required
                     className="w-full bg-[#111111] border border-[#2D2D2D] rounded-none pl-10 pr-3 py-3 font-ibm-mono text-[12px] text-[#F5F5F0] placeholder:text-[#444444] focus:outline-none focus:border-[var(--landing-yellow)] transition-colors"

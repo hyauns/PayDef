@@ -10,7 +10,7 @@ import {
 } from "lucide-react"
 import { DashboardShell } from "@/components/dashboard/DashboardShell"
 
-const GATEWAY_BASE_URL = "https://www.gooytoy.com"
+const GATEWAY_BASE_URL = "https://www.paylaz.nl"
 const CHECKOUT_ENDPOINT = `${GATEWAY_BASE_URL}/api/gateway/checkout`
 const LOOKUP_ENDPOINT = `${GATEWAY_BASE_URL}/api/gateway/transactions/{transactionId}`
 
@@ -203,7 +203,7 @@ export default function ApiDocsPage() {
                   Open Stores
                 </Link>
                 <a
-                  href="https://www.paydef.io"
+                  href="https://www.paylaz.nl"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:text-foreground"

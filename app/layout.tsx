@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     ],
     apple: '/apple-icon.png',
   },
-  metadataBase: new URL('https://www.paydef.io'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? 'https://www.paylaz.nl'),
 }
 
 export default function RootLayout({
