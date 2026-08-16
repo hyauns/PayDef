@@ -5,6 +5,8 @@ import { compareApiKeyCached } from "@/lib/api-key-cache"
 
 export interface AuthenticatedStore {
   id: string
+  /** Merchant-facing store name — also the PayPal invoice_id brand (e.g. "Sansuj-202600042"). */
+  name: string
   tenantId: string
   webhookUrl: string | null
   shieldDomain: string | null
@@ -19,6 +21,7 @@ export interface AuthenticatedStore {
 
 type StoreAuthRow = {
   id: string
+  name: string
   tenant_id: string
   api_key_hash: string
   webhook_url: string | null
@@ -43,6 +46,7 @@ export async function authenticateStoreHeaders(req: NextRequest) {
   const rows = (await sql`
     SELECT
       id,
+      name,
       tenant_id,
       api_key_hash,
       webhook_url,
@@ -70,6 +74,7 @@ export async function authenticateStoreHeaders(req: NextRequest) {
 
   return {
     id: store.id,
+    name: store.name,
     tenantId: store.tenant_id,
     webhookUrl: store.webhook_url,
     shieldDomain: store.shield_domain,

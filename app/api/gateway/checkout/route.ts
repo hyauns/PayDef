@@ -832,10 +832,12 @@ export async function POST(req: NextRequest) {
               identityDomainUsed = true
             }
 
-            // PayPal invoice_id = "TireVix-<order digits>" (merchant-facing,
-            // for tracing the order in the PayPal dashboard). Fixed store brand
-            // instead of the rotating shield brand.
-            invoiceId = buildInvoiceId(finalShieldDomain, body.orderId, "TireVix")
+            // PayPal invoice_id = "<StoreName>-<order digits>" (merchant-facing,
+            // for tracing the order in the PayPal dashboard). The store's own
+            // name, not the rotating shield brand — stores sharing a tenant
+            // (Tirevix + Sansuj) must stay distinguishable. Empty name falls
+            // back to the shield-domain brand inside buildInvoiceId.
+            invoiceId = buildInvoiceId(finalShieldDomain, body.orderId, store.name)
 
             txLog.info("payment_identity.random_descriptor_applied",
               `Order-traceable random descriptor applied: ${displayName}`, {
