@@ -55,3 +55,7 @@ live_logs.txt
 recent_logs.txt
 git_log_all.txt
 reflog-dump.txt
+
+# WooCommerce plugin source lives here but is never part of this app
+# (the folder also holds screenshots containing live secrets).
+plugin woo/

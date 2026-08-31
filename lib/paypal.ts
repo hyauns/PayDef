@@ -829,3 +829,112 @@ export async function reauthorizeAuthorization(
   return data
 }
 
+
+// ─── Add Tracking to an Order ────────────────────────────────────────────────
+//
+// PayPal attaches tracking to a CAPTURE, not to an order or an authorization —
+// so this can only run once the money has actually been taken. On a
+// manual-capture store that means: capture first, then send the tracking.
+
+/** Carrier values PayPal knows. Anything else must go as OTHER + a free name. */
+const PAYPAL_CARRIERS: Record<string, string> = {
+  usps:   "USPS",
+  ups:    "UPS",
+  fedex:  "FEDEX",
+  dhl:    "DHL",
+  "dhl express": "DHL",
+  ontrac: "ONTRAC",
+  lasership: "LASERSHIP",
+  "canada post": "CANADA_POST",
+  "royal mail": "ROYAL_MAIL",
+  dpd:    "DPD",
+  gls:    "GLS",
+  hermes: "HERMES",
+  postnl: "POSTNL",
+  "japan post": "JP_POST",
+  "yamato": "JP_YAMATO",
+  "sagawa": "JP_SAGAWA",
+}
+
+/** Map a free-text carrier name onto PayPal's enum, or OTHER when unknown. */
+export function toPayPalCarrier(name?: string | null): { carrier: string; carrier_name_other?: string } {
+  const raw = (name ?? "").trim()
+  if (!raw) return { carrier: "OTHER", carrier_name_other: "Other" }
+
+  const key = raw.toLowerCase()
+  if (PAYPAL_CARRIERS[key]) return { carrier: PAYPAL_CARRIERS[key] }
+
+  // Tolerate "USPS Priority Mail", "FedEx Ground", …
+  for (const [needle, code] of Object.entries(PAYPAL_CARRIERS)) {
+    if (key.includes(needle)) return { carrier: code }
+  }
+
+  return { carrier: "OTHER", carrier_name_other: raw.slice(0, 64) }
+}
+
+export interface AddOrderTrackingParams {
+  clientId:       string
+  clientSecret:   string
+  paypalOrderId:  string
+  captureId:      string
+  trackingNumber: string
+  carrier?:       string | null
+  notifyPayer?:   boolean
+  proxyUrl?:      string
+}
+
+export interface AddTrackingResponse {
+  id?:     string
+  status?: string
+}
+
+/**
+ * Adds a tracking number to a captured PayPal order, so the payment shows as
+ * shipped in the buyer's PayPal account and in the seller's dispute record.
+ *
+ * Returns the PayPal order payload. Callers should treat a 422 naming an
+ * already-recorded tracker as success — see the gateway route.
+ */
+export async function addOrderTracking(
+  p: AddOrderTrackingParams
+): Promise<AddTrackingResponse> {
+  const token     = await getAccessToken(p.clientId, p.clientSecret, p.proxyUrl)
+  const proxyOpts = createFetchOptions(p.proxyUrl)
+  const ua        = getUserAgent(p.clientId)
+
+  const jitterMs = 200 + Math.floor(Math.random() * 500)
+  await new Promise((r) => setTimeout(r, jitterMs))
+
+  const body = {
+    capture_id:      p.captureId,
+    tracking_number: p.trackingNumber,
+    notify_payer:    p.notifyPayer === true,
+    ...toPayPalCarrier(p.carrier),
+  }
+
+  console.info(`[paypal] Adding tracking ${p.trackingNumber} to order ${p.paypalOrderId} (capture ${p.captureId})`)
+
+  const res = await fetch(
+    `${PAYPAL_BASE}/v2/checkout/orders/${p.paypalOrderId}/track`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type":  "application/json",
+        "Authorization": `Bearer ${token}`,
+        "User-Agent":    ua,
+      },
+      body: JSON.stringify(body),
+      ...proxyOpts,
+    }
+  )
+
+  if (!res.ok) {
+    const text = await res.text()
+    console.error(`[paypal] addOrderTracking FAILED [${res.status}]: ${text}`)
+    throw new PayPalApiError("add order tracking", res.status, text)
+  }
+
+  const data = await res.json().catch(() => ({})) as AddTrackingResponse
+  console.info(`[paypal] addOrderTracking OK: order=${p.paypalOrderId} tracking=${p.trackingNumber}`)
+  return data
+}
