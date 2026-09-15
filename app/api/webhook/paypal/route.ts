@@ -24,6 +24,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSql, getPool } from "@/lib/neon"
 import { getUserAgent } from "@/lib/paypal"
+import { authorizationExpirySql } from "@/lib/paypal-authorization-window"
 import {
   resolveStoreWebhookEvent,
   type StoreWebhookPayload,
@@ -355,7 +356,7 @@ async function handleAuthorizationCreated(
      SET authorization_id = $1,
          status = 'AUTHORIZED',
          authorized_at = NOW(),
-         authorization_expires_at = NOW() + INTERVAL '7 days',
+         authorization_expires_at = ${authorizationExpirySql()},
          checkout_expires_at = NULL,
          gateway_fee = $2,
          updated_at = NOW()

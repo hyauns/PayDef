@@ -28,6 +28,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { createLogger } from "@/lib/logger"
+import { authorizationExpirySql } from "@/lib/paypal-authorization-window"
 import { getPool } from "@/lib/neon"
 import { decrypt } from "@/lib/encryption"
 import { captureApprovedOrder, authorizeApprovedOrder } from "@/lib/paypal"
@@ -320,7 +321,7 @@ export async function POST(req: NextRequest) {
          SET    status = 'AUTHORIZED'::transaction_status,
                 authorization_id = $1,
                 gateway_fee = $2,
-                authorization_expires_at = NOW() + INTERVAL '7 days',
+                authorization_expires_at = ${authorizationExpirySql()},
                 checkout_expires_at = NULL,
                 updated_at = NOW()
          WHERE  id = $3`,
