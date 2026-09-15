@@ -57,6 +57,37 @@ function isStrictProduction(): boolean {
     (!process.env.VERCEL_ENV && process.env.NODE_ENV === "production")
 }
 
+/**
+ * Whether this deployment may accept a PayPal webhook it could not verify.
+ *
+ * This used to be decided by "are we in production?", which meant every
+ * non-production deployment — a Vercel preview included — accepted any
+ * unauthenticated POST to /api/webhook/paypal and let it drive a transaction to
+ * COMPLETED, REFUNDED or DISPUTED. Nobody opted into that; it was simply the
+ * default for anything not recognised as production.
+ *
+ * Skipping verification is now something a deployment has to ask for by name.
+ * A preview or staging environment is closed unless someone deliberately sets
+ * the flag, and local development stays easy for whoever wants it.
+ *
+ * The flag is refused in production regardless of its value: no environment
+ * variable should be able to open this door on a deployment handling real money.
+ */
+function unverifiedWebhooksAllowed(): boolean {
+  const flag = process.env.PAYPAL_WEBHOOK_ALLOW_UNVERIFIED?.trim().toLowerCase()
+  if (flag !== "1" && flag !== "true") return false
+
+  if (isStrictProduction()) {
+    console.error(
+      "[PayPal Webhook] PAYPAL_WEBHOOK_ALLOW_UNVERIFIED is set on a production deployment. " +
+      "Ignoring it and rejecting unverified webhooks."
+    )
+    return false
+  }
+
+  return true
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface PayPalWebhookEvent {
@@ -256,19 +287,20 @@ async function verifyWebhookSignature(
 ): Promise<{ verified: boolean; reason?: string }> {
   const effectiveWebhookId = webhookId ?? process.env.PAYPAL_WEBHOOK_ID
   if (!effectiveWebhookId) {
-    if (isStrictProduction()) {
+    if (!unverifiedWebhooksAllowed()) {
       console.error(
-        "[PayPal Webhook] No webhook ID configured in production. " +
-        "Rejecting webhook until paypal_webhook_id or PAYPAL_WEBHOOK_ID is set."
+        "[PayPal Webhook] No webhook ID configured — rejecting. " +
+        "Set merchant_accounts.paypal_webhook_id (or PAYPAL_WEBHOOK_ID) to verify properly, " +
+        "or PAYPAL_WEBHOOK_ALLOW_UNVERIFIED=1 to accept unverified webhooks in a non-production environment."
       )
       return { verified: false, reason: "missing_webhook_id" }
     }
 
     console.warn(
-      "[PayPal Webhook] No webhook ID configured (account or env). " +
-      "Skipping verification outside production."
+      "[PayPal Webhook] Accepting an UNVERIFIED webhook: no webhook ID configured and " +
+      "PAYPAL_WEBHOOK_ALLOW_UNVERIFIED is set. Anyone who can reach this endpoint can move a transaction."
     )
-    return { verified: true, reason: "dev_mode_skip" }
+    return { verified: true, reason: "unverified_explicitly_allowed" }
   }
 
   // Extract and validate security headers
