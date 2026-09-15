@@ -374,6 +374,16 @@ async function handleAuthorizationCreated(
   }
 }
 
+// States that are strictly LATER than a capture in a transaction's life. A
+// PAYMENT.CAPTURE.COMPLETED arriving while the row sits in one of these is an
+// out-of-order delivery: applying it would erase the newer, more authoritative
+// state and add the amount to merchant volume a second time.
+//
+// EXPIRED is deliberately absent. PayDef expires authorizations on its own
+// clock, never by asking PayPal, so "EXPIRED locally + captured at PayPal"
+// means our clock was wrong and PayPal wins — the row must heal to COMPLETED.
+const CAPTURE_BLOCKING_STATES = ["REFUNDED", "VOIDED", "DISPUTED"]
+
 async function handleCaptureCompleted(
   client: DbClient,
   transaction: TransactionRow,
@@ -382,6 +392,20 @@ async function handleCaptureCompleted(
   if (transaction.status === "COMPLETED") {
     await client.query("ROLLBACK")
     return { status: "already_processed", transaction_id: transaction.id }
+  }
+
+  if (CAPTURE_BLOCKING_STATES.includes(transaction.status)) {
+    await client.query("ROLLBACK")
+    console.warn(
+      `[PayPal Webhook] Ignoring PAYMENT.CAPTURE.COMPLETED for transaction ${transaction.id}: ` +
+      `local status is '${transaction.status}', which is later than a capture. ` +
+      `capture_id=${event.resource.id}`
+    )
+    return {
+      status: "ignored_out_of_order",
+      transaction_id: transaction.id,
+      local_status: transaction.status,
+    }
   }
 
   const captureId      = event.resource.id
@@ -400,13 +424,17 @@ async function handleCaptureCompleted(
     [captureId, gatewayFee.toFixed(2), transaction.id]
   )
 
-  await client.query(
-    `UPDATE merchant_accounts
-     SET current_volume = current_volume + $1,
-         updated_at = NOW()
-     WHERE id = $2`,
-    [originalAmount, transaction.merchant_id]
-  )
+  // merchant_id is NULL for non-PayPal providers (Stripe/Shopify/mock rows), so
+  // this keeps the volume accounting on the PayPal path only.
+  if (transaction.merchant_id) {
+    await client.query(
+      `UPDATE merchant_accounts
+       SET current_volume = current_volume + $1,
+           updated_at = NOW()
+       WHERE id = $2`,
+      [originalAmount, transaction.merchant_id]
+    )
+  }
 
   await client.query("COMMIT")
 
