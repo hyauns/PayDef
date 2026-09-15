@@ -29,6 +29,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createLogger } from "@/lib/logger"
 import { authorizationExpirySql } from "@/lib/paypal-authorization-window"
+import { recordWebhookPersistFailure } from "@/lib/webhook-persist-failure"
 import { getPool } from "@/lib/neon"
 import { decrypt } from "@/lib/encryption"
 import { captureApprovedOrder, authorizeApprovedOrder } from "@/lib/paypal"
@@ -222,6 +223,15 @@ export async function POST(req: NextRequest) {
             authorizationId: tx.authorization_id,
             error: err,
           })
+          await recordWebhookPersistFailure({
+            transactionId,
+            tenantId:  tx.tenant_id,
+            storeId:   tx.store_id,
+            accountId: tx.merchant_id,
+            eventName: "payment.authorization.created",
+            targetUrl: tx.webhook_url,
+            error:     err,
+          })
         }
       }
 
@@ -342,6 +352,7 @@ export async function POST(req: NextRequest) {
 
       // ── Persist webhook event (awaited, uses stateless HTTP driver) ───────
       // Then fire-and-forget delivery — event is durable, cron retries if needed
+      let webhookPersistFailed = false
       if (tx.webhook_url) {
         const payload: Omit<StoreWebhookPayload, "event_id"> = {
           event:              "payment.authorization.created",
@@ -401,6 +412,19 @@ export async function POST(req: NextRequest) {
             webhookEvent: "payment.authorization.created",
             error: persistErr,
           })
+          // No webhook_events row was created, so the recovery cron cannot retry
+          // this. Without a durable record the notification disappears entirely
+          // and the merchant cancels a paid order as "unpaid" an hour later.
+          webhookPersistFailed = true
+          await recordWebhookPersistFailure({
+            transactionId,
+            tenantId:  tx.tenant_id,
+            storeId:   tx.store_id,
+            accountId: tx.merchant_id,
+            eventName: "payment.authorization.created",
+            targetUrl: tx.webhook_url,
+            error:     persistErr,
+          })
         }
       }
 
@@ -440,6 +464,9 @@ export async function POST(req: NextRequest) {
         authorization_id: authId,
         amount:           originalAmount.toFixed(2),
         gateway_fee:      gatewayFee.toFixed(2),
+        // false means the authorization succeeded but the merchant notification
+        // could not be queued, so no webhook will arrive — not even via retry.
+        webhook_event_persisted: !webhookPersistFailed,
       })
 
     } else {
@@ -538,6 +565,7 @@ export async function POST(req: NextRequest) {
 
       // ── Persist webhook event (awaited, uses stateless HTTP driver) ───────
       // Then fire-and-forget delivery — event is durable, cron retries if needed
+      let webhookPersistFailed = false
       if (tx.webhook_url) {
         const payload: Omit<StoreWebhookPayload, "event_id"> = {
           event:             "payment.capture.completed",
@@ -593,6 +621,18 @@ export async function POST(req: NextRequest) {
             webhookEvent: "payment.capture.completed",
             error: persistErr,
           })
+          // Same silent-loss window as the authorize branch: no row means the
+          // recovery cron has nothing to sweep, so record it durably instead.
+          webhookPersistFailed = true
+          await recordWebhookPersistFailure({
+            transactionId,
+            tenantId:  tx.tenant_id,
+            storeId:   tx.store_id,
+            accountId: tx.merchant_id,
+            eventName: "payment.capture.completed",
+            targetUrl: tx.webhook_url,
+            error:     persistErr,
+          })
         }
       }
 
@@ -633,6 +673,9 @@ export async function POST(req: NextRequest) {
         amount:            originalAmount.toFixed(2),
         gateway_fee:       gatewayFee.toFixed(2),
         net_amount:        (originalAmount - gatewayFee).toFixed(2),
+        // false means the capture succeeded but the merchant notification could
+        // not be queued, so no webhook will arrive — not even via retry.
+        webhook_event_persisted: !webhookPersistFailed,
       })
     }
 

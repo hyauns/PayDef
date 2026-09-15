@@ -31,6 +31,7 @@ import {
 } from "@/lib/webhook-delivery"
 import { checkRateLimit } from "@/lib/gateway-rate-limit"
 import { authenticateStoreHeaders } from "@/lib/gateway-auth"
+import { recordWebhookPersistFailure } from "@/lib/webhook-persist-failure"
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const GATEWAY_FEE_PERCENT = 0.02
@@ -297,6 +298,7 @@ export async function POST(req: NextRequest) {
 
     // ── Step 10. Persist webhook event (awaited, stateless HTTP driver) ─────
     // Then fire-and-forget delivery — event is durable, cron retries if needed
+    let webhookPersistFailed = false
     if (store.webhookUrl) {
       const canonicalPayload: Omit<StoreWebhookPayload, "event_id"> = {
         event: "payment.capture.completed",
@@ -332,6 +334,18 @@ export async function POST(req: NextRequest) {
         }
       } catch (persistErr) {
         console.error(`[capture] Webhook event persistence FAILED (capture still succeeded): event=payment.capture.completed tx=${transaction.id} captureId=${captureResult.id}`, persistErr)
+        // No webhook_events row exists, so the recovery cron has nothing to sweep.
+        // Leave a durable trace and tell the caller, instead of losing it silently.
+        webhookPersistFailed = true
+        await recordWebhookPersistFailure({
+          transactionId: transaction.id,
+          tenantId,
+          storeId: store.id,
+          accountId: transaction.merchant_id,
+          eventName: "payment.capture.completed",
+          targetUrl: store.webhookUrl,
+          error: persistErr,
+        })
       }
     }
 
@@ -360,6 +374,9 @@ export async function POST(req: NextRequest) {
         amount:            originalAmount.toFixed(2),
         gateway_fee:       gatewayFee.toFixed(2),
         net_amount:        (originalAmount - gatewayFee).toFixed(2),
+        // false means the capture succeeded but we could not queue the merchant
+        // notification, so no webhook will arrive for it — not even via retry.
+        webhook_event_persisted: !webhookPersistFailed,
       },
       { status: 200 }
     )
