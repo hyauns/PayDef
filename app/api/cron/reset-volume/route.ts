@@ -16,6 +16,7 @@
  */
 import { NextRequest, NextResponse } from "next/server"
 import { getSql } from "@/lib/neon"
+import { describeError } from "@/lib/error-describe"
 
 function isStrictProduction(): boolean {
   return process.env.VERCEL_ENV === "production" ||
@@ -150,7 +151,9 @@ export async function GET(req: NextRequest) {
     })
   } catch (error) {
     const durationMs = Date.now() - startTime
-    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    // Walks the cause chain — the Neon driver often throws an outer Error with
+    // an empty message, which would otherwise be logged as {"error": ""}.
+    const errorMessage = describeError(error)
 
     // Log failure to system_logs
     try {
