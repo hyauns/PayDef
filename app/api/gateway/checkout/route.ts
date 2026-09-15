@@ -45,6 +45,7 @@ import {
   PayPalApiError,
 } from "@/lib/paypal"
 import { sendTelegramMessage } from "@/lib/telegram"
+import { resolveMerchantReturnUrl } from "@/lib/return-url-guard"
 import { recordPayPalError, filterOpenCircuits } from "@/lib/circuit-breaker"
 import { maskItemName, buildShieldUrls, buildOrderMaskedName, buildOrderMaskedLineItems, seededIndex, buildInvoiceId } from "@/lib/masking"
 import { resolvePaymentDisplayProfile, buildPaymentDisplayName, buildPayPalLineItemsForProfile } from "@/lib/payment-display-profiles"
@@ -80,6 +81,12 @@ interface CheckoutBody {
   buyerCountry?: string
   orderId?:      string   // merchant order id — prefixed onto the masked item
                           // name (#orderId) for bundles with use_random_descriptor
+  returnUrl?:    string   // optional per-order success URL. Honoured only when it
+                          // is https and on the same host as the store's configured
+                          // success_return_url; otherwise the store default is used
+                          // (see lib/return-url-guard.ts). Send WooCommerce's
+                          // get_checkout_order_received_url() here — it carries the
+                          // per-order `key` the static store URL cannot.
   items?:        { name: string; amount: number }[]
                           // optional cart lines. When ≥2 and the bundle opts into
                           // use_random_descriptor, each becomes its own masked
@@ -1269,7 +1276,11 @@ export async function POST(req: NextRequest) {
         buyerIp       ?? null,     // $11 — buyer_ip + ip_address
         buyerCountry  ?? null,     // $12 — buyer_country
         intent,                    // $13 — intent (CAPTURE | AUTHORIZE) for execute step
-        store.successReturnUrl ?? null, // $14
+        // Per-order return URL when the merchant sent one on the same host as
+        // the store's configured URL; the store default otherwise. This is what
+        // lets WooCommerce receive its own order key back and fire
+        // woocommerce_thankyou (and with it every analytics purchase event).
+        resolveMerchantReturnUrl(body.returnUrl, store.successReturnUrl ?? null), // $14
         store.cancelReturnUrl ?? null, // $15
       ]
     )
