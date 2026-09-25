@@ -314,19 +314,27 @@ export function maskDescription(seed?: string): string {
  * rule eats "2026-00017", so PayPal would display a different name than the one
  * PayDef recorded. The URL/email/injection rules still run.
  *
+ * `opts.keepApostrophes` skips stripping the bare `'` character while still
+ * stripping `<`, `>` and `"`. Use it only for fields PayPal keeps as its own
+ * record of the transaction — e.g. a shipping name or street line, where
+ * "O'Connor" or "O'Brien" must reach PayPal unmangled for Seller Protection
+ * to match what the buyer actually entered. Defaults to off so every existing
+ * caller's output is unchanged.
+ *
  * @param raw — the string to sanitize
  * @param maxLength — maximum allowed length (default 127 for PayPal fields)
  * @param opts.keepNumbers — when true, do not strip phone-number-like digit runs
+ * @param opts.keepApostrophes — when true, do not strip the `'` character
  */
 export function sanitizePayPalField(
   raw: string,
   maxLength = 127,
-  opts?: { keepNumbers?: boolean },
+  opts?: { keepNumbers?: boolean; keepApostrophes?: boolean },
 ): string {
   let out = raw
     .replace(/https?:\/\/[^\s]+/gi, "")    // strip URLs
     .replace(/[\w.-]+@[\w.-]+/gi, "")       // strip emails
-    .replace(/[<>"'`]/g, "")                // strip injection chars
+    .replace(opts?.keepApostrophes ? /[<>"`]/g : /[<>"'`]/g, "")  // strip injection chars
   if (!opts?.keepNumbers) {
     out = out.replace(/\+?\d[\d\s\-()]{7,}/g, "")   // strip phone numbers
   }
