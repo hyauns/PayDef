@@ -131,6 +131,25 @@ export interface PayPalOrderItem {
   }
 }
 
+/**
+ * PayPal Orders v2 `purchase_units[].shipping`.
+ *
+ * Built by lib/shipping-address.ts from whatever the merchant sent — never
+ * assembled inline, because an invalid address must degrade to NO_SHIPPING
+ * instead of making PayPal reject the order.
+ */
+export interface PayPalShipping {
+  name?: { full_name: string }
+  address: {
+    address_line_1:  string
+    address_line_2?: string
+    admin_area_2?:   string   // city
+    admin_area_1?:   string   // state / province code
+    postal_code?:    string
+    country_code:    string   // ISO-3166-1 alpha-2, uppercase
+  }
+}
+
 export interface CreateOrderParams {
   clientId:      string
   clientSecret:  string
@@ -145,6 +164,11 @@ export interface CreateOrderParams {
   intent?:       "CAPTURE" | "AUTHORIZE"  // default: CAPTURE
   skipRandomization?: boolean  // Phase 3: skip behavioral randomization for profile-driven items
   invoiceId?:    string        // optional — PayPal purchase_units[].invoice_id (merchant-facing)
+  shipping?:     PayPalShipping  // optional — when present, PayPal is told
+                                 // SET_PROVIDED_ADDRESS and shows this exact
+                                 // address. Absent → NO_SHIPPING, i.e. the
+                                 // historical behaviour every other storefront
+                                 // still gets.
 }
 
 export class PayPalApiError extends Error {
@@ -366,6 +390,7 @@ export function buildOrderPayload(p: CreateOrderParams) {
       {
         custom_id:   p.customId,   // opaque UUID — only internal reference
         ...(p.invoiceId ? { invoice_id: p.invoiceId.slice(0, 127) } : {}),
+        ...(p.shipping ? { shipping: p.shipping } : {}),
         description: safeDescription,
         amount: {
           currency_code: p.currencyCode,
@@ -396,7 +421,7 @@ export function buildOrderPayload(p: CreateOrderParams) {
       return_url:          p.returnUrl,
       cancel_url:          p.cancelUrl,
       brand_name:          safeBrand,
-      shipping_preference: "NO_SHIPPING",
+      shipping_preference: p.shipping ? "SET_PROVIDED_ADDRESS" : "NO_SHIPPING",
       user_action:         "PAY_NOW",
       landing_page:        "LOGIN",
     },
