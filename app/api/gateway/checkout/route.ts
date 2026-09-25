@@ -68,6 +68,7 @@ import { authenticateStoreHeaders } from "@/lib/gateway-auth"
 import { generateExecuteToken, getMode as getExecuteTokenMode } from "@/lib/execute-token"
 import { handleStripeCheckout } from "@/lib/stripe-checkout"
 import { handleShopifyCheckout } from "@/lib/shopify-checkout"
+import { buildPayPalShipping } from "@/lib/shipping-address"
 
 // ─── Request body shape ───────────────────────────────────────────────────────
 
@@ -95,6 +96,22 @@ interface CheckoutBody {
                           // per line is a distribution weight (real catalog price
                           // is never sent). Falls back to the single itemName path
                           // when absent / <2 items.
+  shippingAddress?: {
+    name?:        string
+    line1?:       string
+    line2?:       string
+    city?:        string
+    state?:       string
+    postal_code?: string
+    country?:     string
+  }
+                          // optional buyer destination. When it carries at
+                          // least a street line and an ISO alpha-2 country,
+                          // PayPal is sent SET_PROVIDED_ADDRESS and shows this
+                          // exact address on the order (needed for Seller
+                          // Protection). Anything unusable, or the field
+                          // omitted, leaves the historical NO_SHIPPING payload
+                          // untouched — see lib/shipping-address.ts.
 }
 
 // ─── DB row shapes ────────────────────────────────────────────────────────────
@@ -233,6 +250,7 @@ export async function POST(req: NextRequest) {
     customerEmail,
     buyerIp,
     buyerCountry,
+    shippingAddress,
   } = body
 
   if (rawIntent === "CAPTURE" || rawIntent === "AUTHORIZE") {
@@ -359,6 +377,22 @@ export async function POST(req: NextRequest) {
       requestId,
     })
   }
+
+  // ── Buyer destination for PayPal ───────────────────────────────────────────
+  // Only PAYPAL stores reach this point. Merchants that send no usable address
+  // (or none at all) keep the historical NO_SHIPPING payload; buildPayPalShipping
+  // returns null for those. Normalised once here, outside the account-rotation
+  // retry loop below.
+  const paypalShipping = buildPayPalShipping(shippingAddress)
+  log.info(
+    "checkout.shipping_address",
+    `Shipping address ${paypalShipping ? "accepted" : "absent/unusable"} for store=${storeId}`,
+    {
+      storeId: storeId ?? undefined,
+      provided: !!paypalShipping,
+      country: paypalShipping?.address.country_code,
+    }
+  )
 
   // ── Pre-resolve Payment Display Profile to guide account selection (Phase 4)
   const preliminaryProfile = await resolvePaymentDisplayProfile({
@@ -1105,6 +1139,7 @@ export async function POST(req: NextRequest) {
         proxyUrl,
         skipRandomization: lineItemResult.skipRandomization,
         invoiceId:     invoiceId ?? undefined,
+        shipping:      paypalShipping ?? undefined,
       })
     } catch (paypalError) {
       await client.query("ROLLBACK")
