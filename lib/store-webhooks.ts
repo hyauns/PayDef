@@ -40,6 +40,10 @@ export interface StoreWebhookPayload {
   exp_year?: string
   buyer_name?: string
   billing_address?: string | Record<string, unknown> | null
+  // PayPal payer + full shipping address (capture / authorization events).
+  // Express Smart Buttons orders get their address from here.
+  payer_email?: string
+  shipping_address?: Record<string, unknown>
 }
 
 export function resolveStoreWebhookEvent(eventType: string): StoreWebhookEvent | null {

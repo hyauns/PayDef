@@ -43,6 +43,7 @@ import {
 } from "@/lib/webhook-delivery"
 import { getSql } from "@/lib/neon"
 import { verifyExecuteToken } from "@/lib/execute-token"
+import { payerFromPayPal } from "@/lib/smart-buttons"
 
 const GATEWAY_FEE_PERCENT = 0.02
 
@@ -340,6 +341,12 @@ export async function POST(req: NextRequest) {
 
       await client.query("COMMIT")
 
+      // Payer + full shipping address from PayPal (express orders have no address
+      // until now). Saved after COMMIT and best-effort: the payment is already
+      // final and must never depend on these columns (migration 030).
+      const payerDetails = payerFromPayPal(authResult)
+      await savePayerDetails(transactionId, payerDetails, txLog)
+
       txLog.info("execute.authorize_completed", `AUTHORIZE complete: tx=${transactionId} status=AUTHORIZED authId=${authId}`, {
         storeId: tx.store_id,
         tenantId: tx.tenant_id,
@@ -363,6 +370,9 @@ export async function POST(req: NextRequest) {
           gateway_fee:        gatewayFee.toFixed(2),
           net_amount:         (originalAmount - gatewayFee).toFixed(2),
           status:             "AUTHORIZED",
+          payer_email:       payerDetails.payerEmail ?? undefined,
+          buyer_name:        payerDetails.payerName ?? undefined,
+          shipping_address:  (payerDetails.shippingAddress as Record<string, unknown> | null) ?? undefined,
           timestamp:          new Date().toISOString(),
         }
         try {
@@ -553,6 +563,12 @@ export async function POST(req: NextRequest) {
 
       await client.query("COMMIT")
 
+      // Payer + full shipping address from PayPal (express orders have no address
+      // until now). Saved after COMMIT and best-effort: the payment is already
+      // final and must never depend on these columns (migration 030).
+      const payerDetails = payerFromPayPal(captureResult)
+      await savePayerDetails(transactionId, payerDetails, txLog)
+
       txLog.info("execute.capture_completed", `CAPTURE complete: tx=${transactionId} status=COMPLETED captureId=${captureId}`, {
         storeId: tx.store_id,
         tenantId: tx.tenant_id,
@@ -576,6 +592,9 @@ export async function POST(req: NextRequest) {
           gateway_fee:       gatewayFee.toFixed(2),
           net_amount:        (originalAmount - gatewayFee).toFixed(2),
           status:            "COMPLETED",
+          payer_email:       payerDetails.payerEmail ?? undefined,
+          buyer_name:        payerDetails.payerName ?? undefined,
+          shipping_address:  (payerDetails.shippingAddress as Record<string, unknown> | null) ?? undefined,
           timestamp:         new Date().toISOString(),
         }
         try {
@@ -690,5 +709,29 @@ export async function POST(req: NextRequest) {
     )
   } finally {
     client.release()
+  }
+}
+
+/**
+ * Store PayPal's payer and shipping address on the transaction. Best-effort:
+ * runs after the payment is committed, so a failure (e.g. migration 030 not
+ * applied yet) is logged and never affects the payment or the webhook.
+ */
+async function savePayerDetails(
+  transactionId: string,
+  details: ReturnType<typeof payerFromPayPal>,
+  txLog: ReturnType<typeof createLogger>
+): Promise<void> {
+  if (!details.payerEmail && !details.payerName && !details.shippingAddress) return
+  try {
+    await getSql()`
+      UPDATE transactions
+      SET    payer_email      = ${details.payerEmail},
+             payer_name       = ${details.payerName},
+             shipping_address = ${details.shippingAddress ? JSON.stringify(details.shippingAddress) : null}::jsonb
+      WHERE  id = ${transactionId}
+    `
+  } catch (error) {
+    txLog.warn("execute.payer_details_not_saved", `Payer details not saved for tx=${transactionId}`, { error })
   }
 }

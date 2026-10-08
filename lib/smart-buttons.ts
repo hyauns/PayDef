@@ -13,6 +13,28 @@
 
 import { resolveShieldBaseUrl } from "@/lib/masking"
 import type { SessionPageConfig } from "@/lib/button-sessions"
+import type { PayPalPayer, PayPalShippingDetail } from "@/lib/paypal"
+
+/**
+ * Payer and full shipping address from a capture / authorize response. Express
+ * Smart Buttons orders have no address until PayPal returns one here; it is
+ * stored on the transaction and sent to the store in the webhook.
+ */
+export function payerFromPayPal(result: {
+  payer?: PayPalPayer
+  purchase_units?: Array<{ shipping?: PayPalShippingDetail }>
+}): { payerEmail: string | null; payerName: string | null; shippingAddress: PayPalShippingDetail | null } {
+  const email = result.payer?.email_address?.trim() || null
+  const name = [result.payer?.name?.given_name, result.payer?.name?.surname]
+    .map((part) => (part ?? "").trim())
+    .filter(Boolean)
+    .join(" ")
+  return {
+    payerEmail:      email,
+    payerName:       name || null,
+    shippingAddress: result.purchase_units?.[0]?.shipping ?? null,
+  }
+}
 
 export const BUTTONS_PATH = "/checkout/buttons"
 export const MESSAGE_SOURCE = "paydef-buttons"
