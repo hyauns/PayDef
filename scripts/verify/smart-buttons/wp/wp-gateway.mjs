@@ -19,6 +19,9 @@ import { createHmac, randomUUID } from "node:crypto"
 const ROOT = new URL("../../../../", import.meta.url) // repo root
 const pp = await import(new URL("lib/paypal.ts", ROOT).href)
 const sb = await import(new URL("lib/smart-buttons.ts", ROOT).href)
+// Same normaliser /api/gateway/checkout uses, so the PayPal order carries the
+// buyer's address exactly as production sends it (SET_PROVIDED_ADDRESS).
+const { buildPayPalShipping } = await import(new URL("lib/shipping-address.ts", ROOT).href)
 
 if (process.env.PAYPAL_ENV === "live") throw new Error("Refusing to run against live PayPal")
 const clientId = process.env.PP_SANDBOX_CLIENT_ID
@@ -88,12 +91,15 @@ http
         const id = randomUUID()
         const amount = Number(body.amount).toFixed(2)
         const currency = body.currency || "USD"
+        const shipping = buildPayPalShipping(body.shippingAddress)
+        console.log(`shippingAddress from plugin: ${JSON.stringify(body.shippingAddress)} → ${shipping ? "SET_PROVIDED_ADDRESS" : "NO_SHIPPING"}`)
         const order = await pp.createPayPalOrder({
           clientId, clientSecret, amount, currencyCode: currency, intent: "CAPTURE",
           items: [{ name: `#${body.orderId} Smart Buttons test`, quantity: "1", unitAmount: { currencyCode: currency, value: amount } }],
           returnUrl: `${GATEWAY}/order/success?ref=${id}`,
           cancelUrl: `${GATEWAY}/order/cancel?ref=${id}`,
           customId: id,
+          shipping: shipping ?? undefined,
         })
         const tx = { id, status: "PENDING", paypalOrderId: order.id, amount, currency, orderId: body.orderId }
         txs.set(id, tx)
@@ -139,7 +145,7 @@ http
         if (tx.status === "PENDING") {
           const r = await pp.captureApprovedOrder({ clientId, clientSecret, orderId: tx.paypalOrderId })
           tx.status = r.status === "COMPLETED" ? "COMPLETED" : "FAILED"
-          console.log(`capture tx ${tx.id} → ${r.status}`)
+          console.log(`capture tx ${tx.id} → ${r.status}; shipping on the PayPal order: ${JSON.stringify(r.purchase_units?.[0]?.shipping ?? null)}`)
           if (tx.status === "COMPLETED") await sendWebhook(tx, "payment.capture.completed", { capture_id: r.id })
         }
         return json(res, 200, { status: tx.status, transaction_id: tx.id })
