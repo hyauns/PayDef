@@ -50,7 +50,8 @@ import { recordPayPalError, filterOpenCircuits } from "@/lib/circuit-breaker"
 import { maskItemName, buildShieldUrls, buildOrderMaskedName, buildOrderMaskedLineItems, seededIndex, buildInvoiceId } from "@/lib/masking"
 import { resolvePaymentDisplayProfile, buildPaymentDisplayName, buildPayPalLineItemsForProfile } from "@/lib/payment-display-profiles"
 import {
-  buildPopupBridgeUrl,
+  buildFlowUrls,
+  effectiveFlowForProvider,
   getCheckoutPreferences,
   resolveCheckoutFlow,
 } from "@/lib/checkout-flow"
@@ -354,7 +355,7 @@ export async function POST(req: NextRequest) {
       customerEmail,
       buyerIp,
       buyerCountry,
-      flow,
+      flow: effectiveFlowForProvider(flow, store.providerType),
       requestId,
     })
   }
@@ -373,7 +374,7 @@ export async function POST(req: NextRequest) {
       customerEmail,
       buyerIp,
       buyerCountry,
-      flow,
+      flow: effectiveFlowForProvider(flow, store.providerType),
       requestId,
     })
   }
@@ -418,6 +419,8 @@ export async function POST(req: NextRequest) {
   let approvalUrl:   string
   let popupUrl:      string | null = null
   let popupOrigin:   string | null = null
+  let embedUrl:      string | null = null
+  let embedOrigin:   string | null = null
   const excludedAccountIds = new Set<string>()
   let exhaustedInvalidAccounts = false
 
@@ -1266,10 +1269,13 @@ export async function POST(req: NextRequest) {
       currency,
     })
     approvalUrl = getApprovalUrl(paypalOrder)
-    if (flow === "POPUP_BRIDGE") {
-      popupUrl = buildPopupBridgeUrl(finalShieldDomain, approvalUrl, transactionId)
-      popupOrigin = new URL(popupUrl).origin
-    }
+    ;({ popupUrl, popupOrigin, embedUrl, embedOrigin } = buildFlowUrls({
+      flow,
+      shieldDomain: finalShieldDomain,
+      approvalUrl,
+      transactionId,
+      executeToken,
+    }))
 
     // ── Step 10. INSERT PENDING transaction ──────────────────────────────────
     // Status is always PENDING at this point — the order is created on PayPal
@@ -1360,6 +1366,8 @@ export async function POST(req: NextRequest) {
       flow,
       popupUrl,
       popupOrigin,
+      embedUrl,
+      embedOrigin,
       intent,
       status: "PENDING",
       merchantReturnConfigured: !!(store.successReturnUrl || store.cancelReturnUrl),

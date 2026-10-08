@@ -1,5 +1,6 @@
 import { getSql } from "@/lib/neon"
 import { resolveShieldBaseUrl } from "@/lib/masking"
+import { buildSmartButtonsUrl } from "@/lib/smart-buttons"
 
 export const CHECKOUT_FLOW_VALUES = ["REDIRECT", "POPUP_BRIDGE", "SMART_BUTTONS"] as const
 
@@ -89,4 +90,27 @@ export function buildPopupBridgeUrl(
   })
 
   return `${base}/checkout/popup?${params.toString()}`
+}
+
+/**
+ * Presentation URLs for one checkout. approvalUrl is never altered: every
+ * flow still returns it, so integrations that ignore popupUrl/embedUrl keep
+ * redirecting exactly as before.
+ */
+export function buildFlowUrls(input: {
+  flow: CheckoutFlow
+  shieldDomain: string | null | undefined
+  approvalUrl: string
+  transactionId: string
+  executeToken: string | null
+}): { popupUrl: string | null; popupOrigin: string | null; embedUrl: string | null; embedOrigin: string | null } {
+  if (input.flow === "POPUP_BRIDGE") {
+    const popupUrl = buildPopupBridgeUrl(input.shieldDomain, input.approvalUrl, input.transactionId)
+    return { popupUrl, popupOrigin: new URL(popupUrl).origin, embedUrl: null, embedOrigin: null }
+  }
+  if (input.flow === "SMART_BUTTONS") {
+    const embedUrl = buildSmartButtonsUrl(input.shieldDomain, input.transactionId, input.executeToken)
+    return { popupUrl: null, popupOrigin: null, embedUrl, embedOrigin: new URL(embedUrl).origin }
+  }
+  return { popupUrl: null, popupOrigin: null, embedUrl: null, embedOrigin: null }
 }
