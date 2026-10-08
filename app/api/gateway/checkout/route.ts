@@ -70,6 +70,12 @@ import { generateExecuteToken, getMode as getExecuteTokenMode } from "@/lib/exec
 import { handleStripeCheckout } from "@/lib/stripe-checkout"
 import { handleShopifyCheckout } from "@/lib/shopify-checkout"
 import { buildPayPalShipping } from "@/lib/shipping-address"
+import {
+  type CheckoutSessionRow,
+  isExpressCheckout,
+  pickPinnedAccount,
+  resolveCheckoutSession,
+} from "@/lib/button-sessions"
 
 // ─── Request body shape ───────────────────────────────────────────────────────
 
@@ -113,6 +119,16 @@ interface CheckoutBody {
                           // Protection). Anything unusable, or the field
                           // omitted, leaves the historical NO_SHIPPING payload
                           // untouched — see lib/shipping-address.ts.
+  buttonSessionId?: string
+                          // Smart Buttons rendered before the order existed
+                          // (POST /api/gateway/button-session): the order is
+                          // created on the account pinned by that session, or
+                          // the request fails with 409 button_session_*.
+  express?: boolean
+                          // cart / product page buttons: no address yet, so
+                          // PayPal collects it (GET_FROM_FILE) and the total is
+                          // updated through /api/gateway/order-amount.
+                          // Honoured only with a cart / product session.
 }
 
 // ─── DB row shapes ────────────────────────────────────────────────────────────
@@ -379,12 +395,32 @@ export async function POST(req: NextRequest) {
     })
   }
 
+  // ── Smart Buttons session (buttons rendered before the order existed) ──────
+  let buttonSession: CheckoutSessionRow | null = null
+  if (typeof body.buttonSessionId === "string" && body.buttonSessionId) {
+    const sessionRows = (await sql`
+      SELECT id, store_id, merchant_account_id, context, amount, currency, expires_at
+      FROM   button_sessions
+      WHERE  id::text = ${body.buttonSessionId}
+      LIMIT  1
+    `) as unknown as CheckoutSessionRow[]
+    const resolved = resolveCheckoutSession(sessionRows[0] ?? null, store.id, new Date())
+    if (!resolved.ok) {
+      return NextResponse.json(
+        { error: "Button session is invalid or expired.", code: resolved.code },
+        { status: resolved.status }
+      )
+    }
+    buttonSession = resolved.session
+  }
+  const express = isExpressCheckout(body, buttonSession)
+
   // ── Buyer destination for PayPal ───────────────────────────────────────────
   // Only PAYPAL stores reach this point. Merchants that send no usable address
   // (or none at all) keep the historical NO_SHIPPING payload; buildPayPalShipping
   // returns null for those. Normalised once here, outside the account-rotation
-  // retry loop below.
-  const paypalShipping = buildPayPalShipping(shippingAddress)
+  // retry loop below. Express orders have no address yet: PayPal collects it.
+  const paypalShipping = express ? null : buildPayPalShipping(shippingAddress)
   log.info(
     "checkout.shipping_address",
     `Shipping address ${paypalShipping ? "accepted" : "absent/unusable"} for store=${storeId}`,
@@ -421,6 +457,7 @@ export async function POST(req: NextRequest) {
   let popupOrigin:   string | null = null
   let embedUrl:      string | null = null
   let embedOrigin:   string | null = null
+  let paypalOrderIdOut: string | null = null
   const excludedAccountIds = new Set<string>()
   let exhaustedInvalidAccounts = false
 
@@ -473,46 +510,67 @@ export async function POST(req: NextRequest) {
     // ── Step 5. Filter by warm-up cap + daily limit → weighted random ────────
     const eligible = filterEligibleAccounts(allAccounts, amount)
 
-    if (eligible.length === 0) {
-      await client.query("ROLLBACK")
-      return NextResponse.json(
-        { error: "System Overloaded — all accounts have reached their daily limit." },
-        { status: 403 }
-      )
-    }
-
-    // ── Phase 4: Payment Display Profile Consistency Filter ────────────────
-    let matchedAccounts = eligible
-    let usedProfileMatchedAccounts = false
-    let fallbackReason = "no_profile_requested"
-    let matchingAccountCount = 0
-
-    if (preferredProfileId) {
-      const matched = eligible.filter(a => a.display_profile_id === preferredProfileId)
-      matchingAccountCount = matched.length
-      if (matched.length > 0) {
-        matchedAccounts = matched
-        usedProfileMatchedAccounts = true
-        fallbackReason = "none"
-      } else {
-        fallbackReason = "no_matched_accounts_available"
+    let candidate: MerchantAccountRow
+    if (buttonSession) {
+      // ── Smart Buttons session: the account was pinned when the buttons
+      // rendered and its client-id is already loaded in the buyer's browser.
+      // That account or nothing — another account's order would not match the
+      // SDK. A 409 makes the storefront drop the session and fall back.
+      const pinned = pickPinnedAccount(eligible, buttonSession)
+      if (!pinned) {
+        await client.query("ROLLBACK")
+        log.warn("checkout.button_session_account_unavailable",
+          `Pinned account ${buttonSession.merchant_account_id} not eligible for amount=${amount} (session=${buttonSession.id})`,
+          { storeId: store.id, tenantId }
+        )
+        return NextResponse.json(
+          { error: "The selected payment account is no longer available.", code: "button_session_account_unavailable" },
+          { status: 409 }
+        )
       }
+      candidate = pinned
+    } else {
+      if (eligible.length === 0) {
+        await client.query("ROLLBACK")
+        return NextResponse.json(
+          { error: "System Overloaded — all accounts have reached their daily limit." },
+          { status: 403 }
+        )
+      }
+
+      // ── Phase 4: Payment Display Profile Consistency Filter ────────────────
+      let matchedAccounts = eligible
+      let usedProfileMatchedAccounts = false
+      let fallbackReason = "no_profile_requested"
+      let matchingAccountCount = 0
+
+      if (preferredProfileId) {
+        const matched = eligible.filter(a => a.display_profile_id === preferredProfileId)
+        matchingAccountCount = matched.length
+        if (matched.length > 0) {
+          matchedAccounts = matched
+          usedProfileMatchedAccounts = true
+          fallbackReason = "none"
+        } else {
+          fallbackReason = "no_matched_accounts_available"
+        }
       
-      log.info("payment_display_profile.account_filter", "Account filtered by profile preference", {
-        tenantId,
-        storeId: store.id,
-        resolvedProfileId: preferredProfileId,
-        eligibleAccountCount: eligible.length,
-        matchingAccountCount,
-        usedProfileMatchedAccounts,
-        fallbackReason,
-      })
+        log.info("payment_display_profile.account_filter", "Account filtered by profile preference", {
+          tenantId,
+          storeId: store.id,
+          resolvedProfileId: preferredProfileId,
+          eligibleAccountCount: eligible.length,
+          matchingAccountCount,
+          usedProfileMatchedAccounts,
+          fallbackReason,
+        })
+      }
+
+      // ── Circuit breaker filter (shadow/enforce) ──────────────────────────────
+      const circuitFiltered = await filterOpenCircuits(matchedAccounts, store.id)
+
+      candidate = await selectByStrategy(circuitFiltered, tenantId, getSql())
     }
-
-    // ── Circuit breaker filter (shadow/enforce) ──────────────────────────────
-    const circuitFiltered = await filterOpenCircuits(matchedAccounts, store.id)
-
-    const candidate = await selectByStrategy(circuitFiltered, tenantId, getSql())
 
     // ── Step 6. SELECT … FOR UPDATE — row-level lock ─────────────────────────
     // Acquires an exclusive row lock on the chosen merchant account.
@@ -1143,6 +1201,7 @@ export async function POST(req: NextRequest) {
         skipRandomization: lineItemResult.skipRandomization,
         invoiceId:     invoiceId ?? undefined,
         shipping:      paypalShipping ?? undefined,
+        shippingPreference: express ? "GET_FROM_FILE" : undefined,
       })
     } catch (paypalError) {
       await client.query("ROLLBACK")
@@ -1269,6 +1328,7 @@ export async function POST(req: NextRequest) {
       currency,
     })
     approvalUrl = getApprovalUrl(paypalOrder)
+    paypalOrderIdOut = paypalOrder.id
     // Per-order return URL when the merchant sent one on the same host as
     // the store's configured URL; the store default otherwise. This is what
     // lets WooCommerce receive its own order key back and fire
@@ -1335,6 +1395,19 @@ export async function POST(req: NextRequest) {
       ]
     )
 
+    // Smart Buttons session orders only — a separate statement so the INSERT
+    // above (every other checkout) never depends on migration 030's columns.
+    // express_item_total is the item_total the PayPal order was created with;
+    // /api/gateway/order-amount only ever adds shipping and tax on top of it.
+    if (buttonSession) {
+      await client.query(
+        `UPDATE transactions
+         SET    button_session_id = $1, express = $2, express_item_total = $3
+         WHERE  id = $4`,
+        [buttonSession.id, express, express ? amountStr : null, transactionId]
+      )
+    }
+
     // ── Step 11. Volume is NOT incremented here ───────────────────────────────
     // Volume is deferred to POST /api/gateway/execute where actual PayPal
     // execution succeeds. This prevents phantom volume from:
@@ -1377,6 +1450,7 @@ export async function POST(req: NextRequest) {
       popupOrigin,
       embedUrl,
       embedOrigin,
+      paypalOrderId: paypalOrderIdOut,
       intent,
       status: "PENDING",
       merchantReturnConfigured: !!(store.successReturnUrl || store.cancelReturnUrl),

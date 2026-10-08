@@ -115,3 +115,31 @@ export function decideSessionPage(input: {
     },
   }
 }
+
+// ─── /api/gateway/checkout with a button session ──────────────────────────────
+
+export interface CheckoutSessionRow {
+  id:                  string
+  store_id:            string
+  merchant_account_id: string
+  context:             string
+  amount:              string
+  currency:            string
+  expires_at:          string | Date
+}
+
+export function resolveCheckoutSession(
+  row: CheckoutSessionRow | null,
+  storeId: string,
+  now: Date
+): { ok: true; session: CheckoutSessionRow } | { ok: false; status: 409; code: "button_session_invalid" } {
+  if (!row || row.store_id !== storeId || new Date(row.expires_at).getTime() <= now.getTime()) {
+    return { ok: false, status: 409, code: "button_session_invalid" }
+  }
+  return { ok: true, session: row }
+}
+
+/** Express (PayPal collects the address) = a cart / product session that asked for it. */
+export function isExpressCheckout(body: { express?: unknown }, session: { context: string } | null): boolean {
+  return body.express === true && !!session && session.context !== "checkout"
+}
