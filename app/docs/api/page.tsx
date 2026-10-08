@@ -85,6 +85,8 @@ const checkoutResponse = `{
   "flow": "REDIRECT",
   "popupUrl": "https://shield-domain.com/checkout/popup?...",
   "popupOrigin": "https://shield-domain.com",
+  "embedUrl": null,
+  "embedOrigin": null,
   "intent": "CAPTURE",
   "status": "PENDING",
   "merchantReturnConfigured": true
@@ -143,6 +145,42 @@ function verifySignature(rawBody: string, timestamp: string, signature: string, 
 
   return timingSafeEqual(expectedBuffer, receivedBuffer)
 }`
+
+const smartButtonsSnippet = `<div id="paydef-buttons"></div>
+<script>
+(function () {
+  // Both values come from your backend's POST /api/gateway/checkout response.
+  var embedUrl = "{{embedUrl}}";
+  var approvalUrl = "{{approvalUrl}}";
+  if (!embedUrl) { window.location.href = approvalUrl; return; }
+
+  var origin = new URL(embedUrl).origin;
+  var frame = document.createElement("iframe");
+  frame.src = embedUrl;
+  frame.allow = "payment";
+  frame.title = "PayPal";
+  frame.style.cssText = "width:100%;border:0;height:160px;";
+  document.getElementById("paydef-buttons").appendChild(frame);
+
+  window.addEventListener("message", function (e) {
+    var m = e.data;
+    if (e.origin !== origin || !m || m.source !== "paydef-buttons") return;
+    if (m.type === "resize" && m.height) frame.style.height = m.height + "px";
+    if ((m.type === "approved" || m.type === "failed") && m.redirectUrl) window.location.href = m.redirectUrl;
+    if (m.type === "error") window.location.href = approvalUrl; // fall back to the classic redirect
+  });
+})();
+</script>`
+
+const smartButtonsMessages = [
+  { type: "ready", fields: "—", meaning: "Buttons rendered." },
+  { type: "resize", fields: "height", meaning: "Content height in px; resize the iframe." },
+  { type: "cancelled", fields: "—", meaning: "Buyer closed the PayPal popup. The transaction stays PENDING and the buttons stay usable." },
+  { type: "approved", fields: "status, redirectUrl", meaning: "Payment COMPLETED or AUTHORIZED." },
+  { type: "failed", fields: "status, redirectUrl", meaning: "Payment ended FAILED, CANCELED, EXPIRED or similar." },
+  { type: "pending", fields: "—", meaning: "No final status after ~30 s. Rely on the webhook." },
+  { type: "error", fields: "code, message?", meaning: "No buttons can be shown. Fall back to approvalUrl." },
+]
 
 function CodeBlock({ code, language = "json" }: { code: string; language?: string }) {
   return (
@@ -290,6 +328,7 @@ export default function ApiDocsPage() {
                     <div className="rounded-lg border border-border bg-background px-4 py-3 text-[11px] leading-6 text-muted-foreground">
                       <div>`POPUP_BRIDGE`: open `popupUrl`</div>
                       <div>`REDIRECT`: navigate to `approvalUrl`</div>
+                      <div>`SMART_BUTTONS`: frame `embedUrl` (PayPal stores); on an `error` message fall back to `approvalUrl`</div>
                       <div>Always reconcile final payment state through webhook</div>
                     </div>
                   </div>
@@ -446,7 +485,7 @@ export default function ApiDocsPage() {
                   1. Merchant backend calls <span className="text-cyan-400">`POST /api/gateway/checkout`</span>.
                 </div>
                 <div className="rounded-lg border border-border bg-background px-4 py-3">
-                  2. Merchant frontend opens <span className="text-cyan-400">`popupUrl`</span> for `POPUP_BRIDGE`, or redirects to <span className="text-cyan-400">`approvalUrl`</span> for `REDIRECT`.
+                  2. Merchant frontend opens <span className="text-cyan-400">`popupUrl`</span> for `POPUP_BRIDGE`, frames <span className="text-cyan-400">`embedUrl`</span> for `SMART_BUTTONS`, or redirects to <span className="text-cyan-400">`approvalUrl`</span> for `REDIRECT`.
                 </div>
                 <div className="rounded-lg border border-border bg-background px-4 py-3">
                   3. Merchant store receives webhook updates at its configured <span className="text-cyan-400">`webhook_url`</span> and deduplicates by <span className="text-cyan-400">`event_id`</span>.
@@ -492,6 +531,41 @@ export default function ApiDocsPage() {
                   <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="smart-buttons" className="rounded-lg border border-border bg-card p-6">
+          <SectionTitle
+            icon={<ArrowRight className="h-5 w-5" />}
+            eyebrow="PayPal Smart Buttons"
+            title="Embed PayPal Buttons In Your Storefront (SMART_BUTTONS)"
+            description="Turn on Smart Buttons for a PayPal store under Stores → Checkout Experience. Your backend calls the checkout API as usual; the response then also contains embedUrl. Frame it where you would have redirected. The page only loads on the origin of your store's Success / Cancel return URL, so at least one must be set."
+          />
+          <div className="mt-5 space-y-4">
+            <CodeBlock code={smartButtonsSnippet} language="html" />
+            <div className="overflow-hidden rounded-lg border border-border">
+              <table className="w-full text-left text-[11px] leading-6">
+                <thead className="bg-background text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-2 font-medium">type</th>
+                    <th className="px-4 py-2 font-medium">fields</th>
+                    <th className="px-4 py-2 font-medium">meaning</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {smartButtonsMessages.map((m) => (
+                    <tr key={m.type} className="border-t border-border">
+                      <td className="px-4 py-2 text-cyan-400">{m.type}</td>
+                      <td className="px-4 py-2 text-foreground">{m.fields}</td>
+                      <td className="px-4 py-2 text-muted-foreground">{m.meaning}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="rounded-lg border border-border bg-background px-4 py-3 text-[11px] leading-6 text-muted-foreground">
+              Every message has <span className="text-foreground">{'source: "paydef-buttons"'}</span> and <span className="text-foreground">transactionId</span>. Always check <span className="text-foreground">event.origin === new URL(embedUrl).origin</span>. The webhook is still the final source of truth.
             </div>
           </div>
         </section>
