@@ -61,7 +61,8 @@ export async function GET(req: NextRequest) {
   const token = verifyExecuteToken(ref, et)
   const decision = decideButtonPage({
     row: rows[0] ?? null,
-    executeToken: et,
+    // Shadow mode renders even with a bad token; never echo one that failed.
+    executeToken: token.valid ? et : null,
     tokenShouldBlock: token.shouldBlock,
     now: new Date(),
   })

@@ -134,6 +134,18 @@ export function buildMerchantReturnUrl(
   return url.toString()
 }
 
+// Return URLs become a target="_top" href and a top-level redirect, so only
+// http(s) may reach the page (store URLs are not scheme-validated on save).
+function httpUrlOrNull(value: string | null): string | null {
+  if (!value) return null
+  try {
+    const { protocol } = new URL(value)
+    return protocol === "https:" || protocol === "http:" ? value : null
+  } catch {
+    return null
+  }
+}
+
 function finishedResult(row: ButtonSessionRow, status: string): ButtonFinishedResult {
   const type = SUCCESS_STATUSES.has(status) ? "approved" : "failed"
   return {
@@ -180,8 +192,8 @@ export function decideButtonPage(input: {
       clientId:      row.client_id.trim(),
       currency:      (row.original_currency || "USD").toUpperCase(),
       intent:        toSdkIntent(row.intent),
-      successUrl:    row.merchant_success_url,
-      cancelUrl:     row.merchant_cancel_url,
+      successUrl:    httpUrlOrNull(row.merchant_success_url),
+      cancelUrl:     httpUrlOrNull(row.merchant_cancel_url),
     },
   }
 }
@@ -300,6 +312,8 @@ ${POST_FN}
       });
     } catch (e) {}
     var s = await finalStatus();
+    // The order is spent either way; a second approval could only error out.
+    document.getElementById("paydef-buttons").style.display = "none";
     if (!s) { say("Payment is still processing."); post({ type: "pending" }); return; }
     var ok = SUCCESS.indexOf(s.status) >= 0;
     var url = returnUrl(ok ? CFG.successUrl : CFG.cancelUrl, s);
