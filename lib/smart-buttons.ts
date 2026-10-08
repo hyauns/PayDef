@@ -140,3 +140,184 @@ export function decideButtonPage(input: {
     },
   }
 }
+
+// ─── HTML rendering ───────────────────────────────────────────────────────────
+
+export function buildSdkUrl(c: Pick<ButtonPageConfig, "clientId" | "currency" | "intent">): string {
+  const params = new URLSearchParams({
+    "client-id":        c.clientId,
+    currency:           c.currency,
+    intent:             c.intent,
+    components:         "buttons",
+    "integration-date": SDK_INTEGRATION_DATE,
+  })
+  return `https://www.paypal.com/sdk/js?${params.toString()}`
+}
+
+function escapeAttr(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+}
+
+// JSON that is safe inside an inline <script>: no "</script>", no HTML comment
+// openers, no JS line terminators.
+function scriptJson(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029")
+}
+
+const PAGE_STYLE =
+  "html,body{margin:0;padding:0;background:transparent;font:14px/1.4 system-ui,-apple-system,Segoe UI,sans-serif;color:#333}" +
+  "#paydef-status{margin:6px 2px 0;min-height:1em;font-size:13px;color:#555}" +
+  "#paydef-continue{display:inline-block;margin-top:8px}"
+
+// Shared by both pages: posts to every allowed origin explicitly (never "*");
+// the browser silently drops the ones that are not the parent.
+const POST_FN = `
+  function post(msg) {
+    msg.source = ${scriptJson(MESSAGE_SOURCE)};
+    msg.transactionId = CFG.transactionId;
+    for (var i = 0; i < ORIGINS.length; i++) {
+      try { window.parent.postMessage(msg, ORIGINS[i]); } catch (e) {}
+    }
+  }`
+
+export function renderButtonsPage(config: ButtonPageConfig, allowedOrigins: string[]): string {
+  const sdkSrc = escapeAttr(buildSdkUrl(config))
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Checkout</title>
+<style>${PAGE_STYLE}</style>
+</head>
+<body>
+<div id="paydef-buttons"></div>
+<p id="paydef-status" role="status"></p>
+<a id="paydef-continue" target="_top" hidden>Continue</a>
+<script src="${sdkSrc}"></script>
+<script>
+(function () {
+  var CFG = ${scriptJson(config)};
+  var ORIGINS = ${scriptJson(allowedOrigins)};
+  var SUCCESS = ["AUTHORIZED", "COMPLETED"];
+  var FAILURE = ["FAILED", "REFUNDED", "DISPUTED", "CANCELED", "EXPIRED"];
+  var statusEl = document.getElementById("paydef-status");
+  var busy = false;
+${POST_FN}
+  function say(text) { statusEl.textContent = text; }
+  function returnUrl(base, s) {
+    if (!base) return null;
+    try {
+      var u = new URL(base);
+      u.searchParams.set("transaction_id", s.transaction_id);
+      u.searchParams.set("status", s.status);
+      if (s.paypal_order_id) u.searchParams.set("paypal_order_id", s.paypal_order_id);
+      return u.toString();
+    } catch (e) { return null; }
+  }
+  function showContinue(url) {
+    if (!url) return;
+    var a = document.getElementById("paydef-continue");
+    a.href = url;
+    a.hidden = false;
+  }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  async function finalStatus() {
+    for (var i = 0; i < 20; i++) {
+      try {
+        var r = await fetch("/api/gateway/browser-status/" + encodeURIComponent(CFG.transactionId), { cache: "no-store" });
+        var s = await r.json();
+        if (r.ok && (SUCCESS.indexOf(s.status) >= 0 || FAILURE.indexOf(s.status) >= 0)) return s;
+      } catch (e) {}
+      await sleep(1500);
+    }
+    return null;
+  }
+  async function execute() {
+    say("Confirming payment\\u2026");
+    try {
+      await fetch("/api/gateway/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ transactionId: CFG.transactionId, executeToken: CFG.executeToken || undefined })
+      });
+    } catch (e) {}
+    var s = await finalStatus();
+    if (!s) { say("Payment is still processing."); post({ type: "pending" }); return; }
+    var ok = SUCCESS.indexOf(s.status) >= 0;
+    var url = returnUrl(ok ? CFG.successUrl : CFG.cancelUrl, s);
+    say(ok ? "Payment confirmed." : "Payment was not completed.");
+    showContinue(url);
+    post({ type: ok ? "approved" : "failed", status: s.status, redirectUrl: url });
+  }
+
+  if (!window.paypal || !window.paypal.Buttons) {
+    say("PayPal could not be loaded.");
+    post({ type: "error", code: "sdk_load_failed" });
+    return;
+  }
+
+  window.paypal.Buttons({
+    // The order already exists (created by /api/gateway/checkout on this exact
+    // account), so the button just hands PayPal its id.
+    createOrder: function () { return CFG.paypalOrderId; },
+    onApprove: function () {
+      if (busy) return;
+      busy = true;
+      return execute();
+    },
+    // Deliberately NOT the cancel endpoint: the buyer may click again and
+    // PayPal reuses the same order. Expiry is the 30-minute sweep's job.
+    onCancel: function () { post({ type: "cancelled" }); },
+    onError: function (err) {
+      say("PayPal reported an error.");
+      post({ type: "error", code: "paypal_error", message: String((err && err.message) || err).slice(0, 200) });
+    }
+  }).render("#paydef-buttons").then(function () {
+    post({ type: "ready" });
+  }).catch(function () {
+    post({ type: "error", code: "render_failed" });
+  });
+
+  if (window.ResizeObserver) {
+    new ResizeObserver(function () {
+      post({ type: "resize", height: document.documentElement.scrollHeight });
+    }).observe(document.body);
+  }
+})();
+</script>
+</body>
+</html>`
+}
+
+export function renderButtonsErrorPage(code: ButtonErrorCode, allowedOrigins: string[]): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Checkout</title>
+<style>${PAGE_STYLE}</style>
+</head>
+<body>
+<p id="paydef-status" role="status">This checkout session is no longer available.</p>
+<script>
+(function () {
+  var CFG = { transactionId: null };
+  var ORIGINS = ${scriptJson(allowedOrigins)};
+${POST_FN}
+  post({ type: "error", code: ${scriptJson(code)} });
+})();
+</script>
+</body>
+</html>`
+}
