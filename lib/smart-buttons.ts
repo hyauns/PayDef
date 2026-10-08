@@ -248,25 +248,11 @@ const POST_FN = `
     }
   }`
 
-export function renderButtonsPage(config: ButtonPageConfig, allowedOrigins: string[]): string {
-  const sdkSrc = escapeAttr(buildSdkUrl(config))
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Checkout</title>
-<style>${PAGE_STYLE}</style>
-</head>
-<body>
-<div id="paydef-buttons"></div>
-<p id="paydef-status" role="status"></p>
-<a id="paydef-continue" target="_top" hidden>Continue</a>
-<script src="${sdkSrc}"></script>
-<script>
-(function () {
-  var CFG = ${scriptJson(config)};
-  var ORIGINS = ${scriptJson(allowedOrigins)};
+// Runtime shared by both page modes. Expects CFG and ORIGINS in scope:
+// CFG.transactionId / CFG.executeToken are fixed for a transaction page and
+// assigned once the shop has created the order on a session page. Return
+// URLs come from CFG or, failing that, from browser-status.
+const RUNTIME_JS = `
   var SUCCESS = ["AUTHORIZED", "COMPLETED"];
   var FAILURE = ["FAILED", "REFUNDED", "DISPUTED", "CANCELED", "EXPIRED"];
   var statusEl = document.getElementById("paydef-status");
@@ -277,6 +263,7 @@ ${POST_FN}
     if (!base) return null;
     try {
       var u = new URL(base);
+      if (u.protocol !== "https:" && u.protocol !== "http:") return null;
       u.searchParams.set("transaction_id", s.transaction_id);
       u.searchParams.set("status", s.status);
       if (s.paypal_order_id) u.searchParams.set("paypal_order_id", s.paypal_order_id);
@@ -316,11 +303,33 @@ ${POST_FN}
     document.getElementById("paydef-buttons").style.display = "none";
     if (!s) { say("Payment is still processing."); post({ type: "pending" }); return; }
     var ok = SUCCESS.indexOf(s.status) >= 0;
-    var url = returnUrl(ok ? CFG.successUrl : CFG.cancelUrl, s);
+    var url = returnUrl(ok ? (CFG.successUrl || s.merchant_success_url) : (CFG.cancelUrl || s.merchant_cancel_url), s);
     say(ok ? "Payment confirmed." : "Payment was not completed.");
     showContinue(url);
     post({ type: ok ? "approved" : "failed", status: s.status, redirectUrl: url });
   }
+`
+
+export function renderButtonsPage(config: ButtonPageConfig, allowedOrigins: string[]): string {
+  const sdkSrc = escapeAttr(buildSdkUrl(config))
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Checkout</title>
+<style>${PAGE_STYLE}</style>
+</head>
+<body>
+<div id="paydef-buttons"></div>
+<p id="paydef-status" role="status"></p>
+<a id="paydef-continue" target="_top" hidden>Continue</a>
+<script src="${sdkSrc}"></script>
+<script>
+(function () {
+  var CFG = ${scriptJson(config)};
+  var ORIGINS = ${scriptJson(allowedOrigins)};
+${RUNTIME_JS}
 
   if (!window.paypal || !window.paypal.Buttons) {
     say("PayPal could not be loaded.");
