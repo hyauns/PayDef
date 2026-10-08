@@ -12,6 +12,7 @@
  */
 
 import { resolveShieldBaseUrl } from "@/lib/masking"
+import type { SessionPageConfig } from "@/lib/button-sessions"
 
 export const BUTTONS_PATH = "/checkout/buttons"
 export const MESSAGE_SOURCE = "paydef-buttons"
@@ -354,6 +355,115 @@ ${RUNTIME_JS}
       post({ type: "error", code: "paypal_error", message: String((err && err.message) || err).slice(0, 200) });
     }
   }).render("#paydef-buttons").then(function () {
+    post({ type: "ready" });
+  }).catch(function () {
+    post({ type: "error", code: "render_failed" });
+  });
+
+  if (window.ResizeObserver) {
+    new ResizeObserver(function () {
+      post({ type: "resize", height: document.documentElement.scrollHeight });
+    }).observe(document.body);
+  }
+})();
+</script>
+</body>
+</html>`
+}
+
+/**
+ * Session page: buttons rendered BEFORE the order exists (checkout, cart and
+ * product pages). PayPal's callbacks are relayed to the shop page, which owns
+ * the WooCommerce order:
+ *   createOrder               → "create-order"    ⇄ "order-created" | "order-failed"
+ *   onShippingAddressChange   → "shipping-change" ⇄ "shipping-updated" | "shipping-rejected"
+ *     (express sessions only — on the checkout page the buyer typed the address)
+ * Replies are accepted only from the session's allowed (shop) origins.
+ */
+export function renderSessionButtonsPage(config: SessionPageConfig, allowedOrigins: string[]): string {
+  const sdkSrc = escapeAttr(buildSdkUrl(config))
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Checkout</title>
+<style>${PAGE_STYLE}</style>
+</head>
+<body>
+<div id="paydef-buttons"></div>
+<p id="paydef-status" role="status"></p>
+<a id="paydef-continue" target="_top" hidden>Continue</a>
+<script src="${sdkSrc}"></script>
+<script>
+(function () {
+  var SESSION = ${scriptJson(config)};
+  var CFG = { transactionId: null, executeToken: null, successUrl: null, cancelUrl: null };
+  var ORIGINS = ${scriptJson(allowedOrigins)};
+${RUNTIME_JS}
+  var seq = 0;
+  var waiting = {};
+  function ask(msg, timeoutMs) {
+    var id = String(++seq) + "-" + Date.now();
+    msg.requestId = id;
+    return new Promise(function (resolve, reject) {
+      waiting[id] = resolve;
+      setTimeout(function () {
+        if (waiting[id]) { delete waiting[id]; reject(new Error("timeout")); }
+      }, timeoutMs);
+      post(msg);
+    });
+  }
+  window.addEventListener("message", function (e) {
+    var m = e.data;
+    if (ORIGINS.indexOf(e.origin) < 0 || !m || m.source !== "paydef-shop" || !waiting[m.requestId]) return;
+    var resolve = waiting[m.requestId];
+    delete waiting[m.requestId];
+    resolve(m);
+  });
+
+  if (!window.paypal || !window.paypal.Buttons) {
+    say("PayPal could not be loaded.");
+    post({ type: "error", code: "sdk_load_failed" });
+    return;
+  }
+
+  var options = {
+    // The shop creates its order and asks PayDef for the PayPal order on the
+    // account pinned by this session; we just hand the id to PayPal.
+    createOrder: function () {
+      return ask({ type: "create-order" }, 60000).then(function (m) {
+        if (m.type !== "order-created" || !m.paypalOrderId) throw new Error(m.message || "order_failed");
+        CFG.transactionId = m.transactionId;
+        CFG.executeToken = m.executeToken || null;
+        return m.paypalOrderId;
+      });
+    },
+    onApprove: function () {
+      if (busy) return;
+      busy = true;
+      return execute();
+    },
+    onCancel: function () { post({ type: "cancelled" }); },
+    onError: function (err) {
+      say("PayPal reported an error.");
+      post({ type: "error", code: "paypal_error", message: String((err && err.message) || err).slice(0, 200) });
+    }
+  };
+
+  if (SESSION.express) {
+    // Cart / product page: the shop prices shipping for the address the buyer
+    // picks in PayPal and PayDef updates the order total — or the shop rejects it.
+    options.onShippingAddressChange = function (data, actions) {
+      return ask({ type: "shipping-change", address: data.shippingAddress }, 20000).then(function (m) {
+        if (m.type !== "shipping-updated") return actions.reject(data.errors[m.reason] || data.errors.ADDRESS_ERROR);
+      }, function () {
+        return actions.reject(data.errors.ADDRESS_ERROR);
+      });
+    };
+  }
+
+  window.paypal.Buttons(options).render("#paydef-buttons").then(function () {
     post({ type: "ready" });
   }).catch(function () {
     post({ type: "error", code: "render_failed" });
