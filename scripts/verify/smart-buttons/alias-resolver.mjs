@@ -1,6 +1,6 @@
 
 const ROOT = new URL("../../../", import.meta.url).href // repo root (this file lives in scripts/verify/smart-buttons/)
-const STUBS = { "https-proxy-agent": "./stub-proxy-agent.mjs", "@/lib/neon": "./stub-neon.mjs", "next/server": "./stub-next-server.mjs" }
+const STUBS = { "https-proxy-agent": "./stub-proxy-agent.mjs", "@/lib/neon": "./stub-neon.mjs", "next/server": "./stub-next-server.mjs", "@/lib/gateway-auth": "./stub-gateway-auth.mjs", "@/lib/gateway-rate-limit": "./stub-rate-limit.mjs" }
 
 export async function resolve(specifier, context, next) {
   if (STUBS[specifier]) {
