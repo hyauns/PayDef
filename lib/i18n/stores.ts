@@ -83,6 +83,13 @@ export const storesCopy = {
     popupBridgeDesc: "Buyer approves in a popup while the shield domain handles the return and cancel flow.",
     checkoutExpDesc: "Existing API clients remain compatible because the gateway still returns the classic approvalUrl.",
     checkoutExpWarning: "Add at least one return URL to send buyers back to the merchant storefront after shield-domain completion.",
+    smartButtonsLabel: "Smart Buttons (iframe)",
+    smartButtonsDesc: "PayPal buttons appear inside the storefront in an iframe from the shield domain. The buyer never leaves the page.",
+    smartButtonsBadge: "PayPal",
+    smartButtonsPaypalOnly: "Available for PayPal stores only.",
+    smartButtonsHowTo: "Smart Buttons needs the storefront to embed embedUrl (see the API docs). Until it does, buyers keep getting the redirect.",
+    smartButtonsDocsLink: "API docs",
+    smartButtonsNeedsReturnUrl: "Smart Buttons needs a Success or Cancel return URL: the iframe only loads on that site.",
 
     // Provider Descriptions
     providerPaypal: "Includes item masking and account rotation for the current production flow.",
@@ -244,6 +251,13 @@ export const storesCopy = {
     popupBridgeDesc: "Người mua xác nhận trong popup trong khi tên miền shield xử lý luồng trả về và hủy.",
     checkoutExpDesc: "Các tích hợp API hiện tại vẫn tương thích vì gateway vẫn trả về approvalUrl kiểu cũ.",
     checkoutExpWarning: "Thêm ít nhất một URL trả về để đưa người mua quay lại cửa hàng người bán sau khi hoàn tất thanh toán trên tên miền shield.",
+    smartButtonsLabel: "Smart Buttons (iframe)",
+    smartButtonsDesc: "Nút PayPal hiện ngay trong trang cửa hàng qua iframe từ tên miền shield. Người mua không rời khỏi trang.",
+    smartButtonsBadge: "PayPal",
+    smartButtonsPaypalOnly: "Chỉ dùng được cho cửa hàng PayPal.",
+    smartButtonsHowTo: "Smart Buttons cần cửa hàng nhúng embedUrl (xem tài liệu API). Khi chưa nhúng, người mua vẫn được chuyển hướng như cũ.",
+    smartButtonsDocsLink: "Tài liệu API",
+    smartButtonsNeedsReturnUrl: "Smart Buttons cần ít nhất một URL trả về (Success hoặc Cancel): iframe chỉ hiển thị trên đúng trang web đó.",
 
     // Provider Descriptions
     providerPaypal: "Bao gồm masking thông tin món hàng và xoay vòng tài khoản cho luồng vận hành thực tế hiện tại.",

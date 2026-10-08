@@ -37,7 +37,7 @@ import {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type StoreStatus = "Active" | "Suspended" | "Trial"
-type CheckoutFlow = "REDIRECT" | "POPUP_BRIDGE"
+type CheckoutFlow = "REDIRECT" | "POPUP_BRIDGE" | "SMART_BUTTONS"
 type ProviderType = "PAYPAL" | "CUSTOM_MOCK" | "STRIPE" | "SHOPIFY"
 type CopyField = "id" | "key" | "secret" | "checkout" | "webhookUrl"
 
@@ -51,6 +51,11 @@ const CHECKOUT_FLOW_OPTIONS: { value: CheckoutFlow; label: string; desc: string 
     value: "POPUP_BRIDGE",
     label: "Popup + Shield Bridge",
     desc: "Buyer approves in a popup while the shield domain handles the return and cancel flow.",
+  },
+  {
+    value: "SMART_BUTTONS",
+    label: "Smart Buttons (iframe)",
+    desc: "PayPal buttons appear inside the storefront in an iframe from the shield domain.",
   },
 ]
 
@@ -1440,11 +1445,23 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
             <div className="grid grid-cols-1 gap-2">
               {CHECKOUT_FLOW_OPTIONS.map((option) => {
                 const active = draft.checkoutFlow === option.value
+                const unavailable =
+                  option.value === "SMART_BUTTONS" &&
+                  (draft.providerType === "STRIPE" || draft.providerType === "SHOPIFY")
+                const label =
+                  option.value === "REDIRECT" ? t.classicRedirectLabel
+                  : option.value === "POPUP_BRIDGE" ? t.popupBridgeLabel
+                  : t.smartButtonsLabel
+                const desc =
+                  option.value === "REDIRECT" ? t.classicRedirectDesc
+                  : option.value === "POPUP_BRIDGE" ? t.popupBridgeDesc
+                  : t.smartButtonsDesc
                 return (
                   <button
                     key={option.value}
+                    disabled={unavailable}
                     onClick={() => update({ checkoutFlow: option.value, checkoutFlowOverride: true })}
-                    className={`text-left p-3 rounded-lg border transition-all ${
+                    className={`text-left p-3 rounded-lg border transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                       active
                         ? "border-[#FFD600]/40 bg-[#FFD600]/5 text-[#e7edf8]"
                         : "border-[#343947] bg-[#1a1d24] text-[#97a3b6] hover:border-[#343947]/80 hover:text-[#e7edf8]"
@@ -1452,9 +1469,17 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
                   >
                     <div className="flex items-center gap-2 mb-1">
                       <span className={`w-2 h-2 rounded-full border-2 flex-shrink-0 ${active ? "border-[#FFD600] bg-[#FFD600]" : "border-[#97a3b6]"}`} />
-                      <span className="text-xs font-mono font-semibold">{option.value === "REDIRECT" ? t.classicRedirectLabel : t.popupBridgeLabel}</span>
+                      <span className="text-xs font-mono font-semibold">{label}</span>
+                      {option.value === "SMART_BUTTONS" && (
+                        <span className="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded border border-[#343947] text-[#97a3b6]">
+                          {t.smartButtonsBadge}
+                        </span>
+                      )}
                     </div>
-                    <p className="text-xs font-mono leading-relaxed pl-4">{option.value === "REDIRECT" ? t.classicRedirectDesc : t.popupBridgeDesc}</p>
+                    <p className="text-xs font-mono leading-relaxed pl-4">{desc}</p>
+                    {unavailable && (
+                      <p className="text-xs font-mono leading-relaxed pl-4 mt-1 text-[#97a3b6]">{t.smartButtonsPaypalOnly}</p>
+                    )}
                   </button>
                 )
               })}
@@ -1465,6 +1490,17 @@ function EditSlideOver({ store, readyShieldDomains, onClose, onSave, onDelete, o
             {draft.checkoutFlow === "POPUP_BRIDGE" && !draft.successReturnUrl && !draft.cancelReturnUrl && (
               <p className="text-xs font-mono text-amber-400">
                 {t.checkoutExpWarning}
+              </p>
+            )}
+            {draft.checkoutFlow === "SMART_BUTTONS" && (
+              <p className="text-xs font-mono text-[#97a3b6]">
+                {t.smartButtonsHowTo}{" "}
+                <a href="/docs/api#smart-buttons" className="text-[#FFD600] hover:underline">{t.smartButtonsDocsLink} →</a>
+              </p>
+            )}
+            {draft.checkoutFlow === "SMART_BUTTONS" && !draft.successReturnUrl && !draft.cancelReturnUrl && (
+              <p className="text-xs font-mono text-amber-400">
+                {t.smartButtonsNeedsReturnUrl}
               </p>
             )}
           </div>
