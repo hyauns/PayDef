@@ -98,6 +98,7 @@ export type ButtonErrorCode =
   | "invalid_token"
   | "no_paypal_order"
   | "framing_not_configured"
+  | "expired"          // session pages: the button session ran out (re-render the shop page)
 
 // A transaction that is no longer payable (paid, failed, swept or simply past
 // checkout_expires_at). The parent gets the real outcome and where to send the

@@ -22,7 +22,13 @@ import {
   renderButtonsErrorPage,
   renderButtonsFinishedPage,
   renderButtonsPage,
+  renderSessionButtonsPage,
 } from "@/lib/smart-buttons"
+import {
+  type ButtonSessionRow as SessionRow,
+  decideSessionPage,
+  verifySessionToken,
+} from "@/lib/button-sessions"
 
 export const dynamic = "force-dynamic"
 
@@ -40,9 +46,51 @@ function htmlResponse(body: string, status: number, origins: string[]): Response
   })
 }
 
+/**
+ * ?session=<id>&st=<token> — buttons rendered before the order exists
+ * (checkout / cart / product page). The SDK loads with the account the
+ * session pinned; createOrder and shipping changes are relayed to the shop.
+ */
+async function sessionPage(sessionId: string, st: string | null): Promise<Response> {
+  if (!isTransactionRef(sessionId)) {
+    return htmlResponse(renderButtonsErrorPage("invalid_ref", []), 400, [])
+  }
+
+  const rows = (await getSql()`
+    SELECT s.id, s.store_id, s.merchant_account_id, s.shield_domain, s.context,
+           s.amount, s.currency, s.intent, s.allowed_origins, s.expires_at,
+           ma.client_id
+    FROM   button_sessions s
+    JOIN   merchant_accounts ma ON ma.id = s.merchant_account_id
+    WHERE  s.id = ${sessionId}
+    LIMIT  1
+  `) as unknown as SessionRow[]
+
+  const token = verifySessionToken(sessionId, st)
+  const decision = decideSessionPage({ row: rows[0] ?? null, tokenShouldBlock: token.shouldBlock, now: new Date() })
+
+  if (decision.kind === "error") {
+    log.warn("smart_buttons.session_refused", `Session page refused session=${sessionId} code=${decision.code}`, {
+      sessionId, code: decision.code, tokenReason: token.reason,
+    })
+    // The error page posts {type:"error", code} so the shop falls back.
+    return htmlResponse(renderButtonsErrorPage(decision.code, decision.allowedOrigins), decision.status, decision.allowedOrigins)
+  }
+
+  log.info("smart_buttons.session_rendered", `Session page rendered session=${sessionId} express=${decision.config.express}`, {
+    sessionId, express: decision.config.express, tokenReason: token.reason,
+  })
+  return htmlResponse(renderSessionButtonsPage(decision.config, decision.allowedOrigins), 200, decision.allowedOrigins)
+}
+
 export async function GET(req: NextRequest) {
   const ref = req.nextUrl.searchParams.get("ref")
   const et  = req.nextUrl.searchParams.get("et")
+
+  const session = req.nextUrl.searchParams.get("session")
+  if (session !== null && ref === null) {
+    return sessionPage(session, req.nextUrl.searchParams.get("st"))
+  }
 
   if (!isTransactionRef(ref)) {
     return htmlResponse(renderButtonsErrorPage("invalid_ref", []), 400, [])
