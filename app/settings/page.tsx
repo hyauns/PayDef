@@ -52,6 +52,10 @@ const CHECKOUT_FLOW_OPTIONS = [
   },
 ] as const
 
+// Per-store choices. SMART_BUTTONS is per-store opt-in only and never a
+// platform default (see lib/checkout-flow.ts PLATFORM_DEFAULT_FLOW_VALUES).
+const STORE_CHECKOUT_FLOW_VALUES = ["REDIRECT", "POPUP_BRIDGE", "SMART_BUTTONS"] as const
+
 // ─── SWR Fetcher ──────────────────────────────────────────────────────────────
 
 const fetcher = (url: string) => fetch(url).then(r => {
@@ -86,6 +90,7 @@ interface MerchantStore {
   captureMode: string   // 'INSTANT' | 'MANUAL'
   checkoutFlow: string
   checkoutFlowOverride: boolean
+  providerType: string
 }
 
 interface MerchantStoreApiRow {
@@ -103,6 +108,8 @@ interface MerchantStoreApiRow {
   checkout_flow?: string | null
   checkoutFlowOverride?: boolean | null
   checkout_flow_override?: boolean | null
+  providerType?: string | null
+  provider_type?: string | null
 }
 
 interface MerchantStoresResponse {
@@ -620,6 +627,7 @@ export default function SettingsPage() {
     captureMode: s.captureMode ?? s.capture_mode ?? "INSTANT",
     checkoutFlow: s.checkoutFlow ?? s.checkout_flow ?? "REDIRECT",
     checkoutFlowOverride: s.checkoutFlowOverride ?? s.checkout_flow_override ?? false,
+    providerType: s.providerType ?? s.provider_type ?? "PAYPAL",
   }))
 
   // Capture mode toggle handler
@@ -656,6 +664,11 @@ export default function SettingsPage() {
       setCaptureSaving(null)
     }
   }
+
+  const flowLabel = (flow: string) =>
+    flow === "POPUP_BRIDGE" ? t.popupBridge : flow === "SMART_BUTTONS" ? t.smartButtons : t.classicRedirect
+  const flowDesc = (flow: string) =>
+    flow === "POPUP_BRIDGE" ? t.popupBridgeDesc : flow === "SMART_BUTTONS" ? t.smartButtonsDesc : t.classicRedirectDesc
 
   const handleCheckoutFlowChange = async (store: MerchantStore, checkoutFlow: string | null) => {
     setCheckoutFlowSaving(store.id)
@@ -880,7 +893,7 @@ export default function SettingsPage() {
                         <Loader2 className="w-3 h-3 text-[#FFD600] animate-spin" />
                       )}
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                       <button
                         onClick={() => handleCheckoutFlowChange(store, null)}
                         disabled={checkoutFlowSaving === store.id}
@@ -895,28 +908,32 @@ export default function SettingsPage() {
                           <span className="text-base font-semibold text-[#e7edf8]">{t.usePlatformDefault}</span>
                         </div>
                         <p className="text-sm text-[#aab4c5] leading-6 pl-4">
-                          {t.currentlyUsing} {store.checkoutFlow === "POPUP_BRIDGE" ? t.popupBridge : t.classicRedirect}.
+                          {t.currentlyUsing} {flowLabel(store.checkoutFlow)}.
                         </p>
                       </button>
-                      {CHECKOUT_FLOW_OPTIONS.map((option) => {
-                        const label = option.value === "POPUP_BRIDGE" ? t.popupBridge : t.classicRedirect
-                        const desc = option.value === "POPUP_BRIDGE" ? t.popupBridgeDesc : t.classicRedirectDesc
+                      {STORE_CHECKOUT_FLOW_VALUES.map((value) => {
+                        const selected = store.checkoutFlowOverride && store.checkoutFlow === value
+                        const unavailable =
+                          value === "SMART_BUTTONS" &&
+                          (store.providerType === "STRIPE" || store.providerType === "SHOPIFY")
                         return (
                           <button
-                            key={option.value}
-                            onClick={() => handleCheckoutFlowChange(store, option.value)}
-                            disabled={checkoutFlowSaving === store.id}
-                            className={`text-left p-3 rounded-lg border transition-all disabled:opacity-60 ${
-                              store.checkoutFlowOverride && store.checkoutFlow === option.value
+                            key={value}
+                            onClick={() => handleCheckoutFlowChange(store, value)}
+                            disabled={checkoutFlowSaving === store.id || unavailable}
+                            className={`text-left p-3 rounded-lg border transition-all disabled:opacity-60 disabled:cursor-not-allowed ${
+                              selected
                                 ? "border-[#FFD600]/40 bg-[#FFD600]/5 text-[#e7edf8]"
                                 : "border-[#343947] bg-[#151821] text-[#97a3b6] hover:border-[#343947]/80 hover:text-[#e7edf8]"
                             }`}
                           >
                             <div className="flex items-center gap-2 mb-1">
-                              <span className={`w-3 h-3 rounded-full border-2 flex-shrink-0 ${store.checkoutFlowOverride && store.checkoutFlow === option.value ? "border-[#FFD600] bg-[#FFD600]" : "border-[#343947]"}`} />
-                              <span className="text-base font-semibold text-[#e7edf8]">{label}</span>
+                              <span className={`w-3 h-3 rounded-full border-2 flex-shrink-0 ${selected ? "border-[#FFD600] bg-[#FFD600]" : "border-[#343947]"}`} />
+                              <span className="text-base font-semibold text-[#e7edf8]">{flowLabel(value)}</span>
                             </div>
-                            <p className="text-sm text-[#aab4c5] leading-6 pl-4">{desc}</p>
+                            <p className="text-sm text-[#aab4c5] leading-6 pl-4">
+                              {unavailable ? t.smartButtonsPaypalOnly : flowDesc(value)}
+                            </p>
                           </button>
                         )
                       })}

@@ -38,6 +38,9 @@ export const settingsCopy = {
     classicRedirectDesc: "Buyer leaves the store page and completes approval on PayPal in the same tab.",
     popupBridge: "Popup + Shield Bridge",
     popupBridgeDesc: "Buyer approves inside a popup while the shield domain handles return and cancel.",
+    smartButtons: "Smart Buttons (iframe)",
+    smartButtonsDesc: "PayPal buttons inside the storefront, served in an iframe from the shield domain.",
+    smartButtonsPaypalOnly: "Available for PayPal stores only.",
 
     // Payment Display Profile
     paymentDisplayProfile: "Payment Display Profile",
@@ -145,6 +148,9 @@ export const settingsCopy = {
     classicRedirectDesc: "Người mua rời khỏi trang cửa hàng và hoàn tất xác nhận trên PayPal trong cùng một tab.",
     popupBridge: "Popup + Shield Bridge",
     popupBridgeDesc: "Người mua xác nhận trong popup trong khi tên miền shield xử lý trả về và hủy.",
+    smartButtons: "Smart Buttons (iframe)",
+    smartButtonsDesc: "Nút PayPal nằm ngay trong trang cửa hàng, qua iframe từ tên miền shield.",
+    smartButtonsPaypalOnly: "Chỉ dùng được cho cửa hàng PayPal.",
 
     // Payment Display Profile
     paymentDisplayProfile: "Hồ sơ hiển thị thanh toán",
