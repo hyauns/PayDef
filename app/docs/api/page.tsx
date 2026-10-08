@@ -189,6 +189,34 @@ const smartButtonsMessages = [
   { type: "error", fields: "code, message?", meaning: "No buttons can be shown. Fall back to approvalUrl." },
 ]
 
+const buttonSessionExample = `POST /api/gateway/button-session      (X-Store-ID, X-API-Key)
+{ "amount": 49.99, "currency": "USD", "context": "product" }   // checkout | cart | product
+
+200 { "enabled": false, "reason": "flow" }      // not a SMART_BUTTONS PayPal store
+200 { "enabled": true,
+      "sessionId": "uuid",
+      "embedUrl": "https://shield-domain.com/checkout/buttons?session=…&st=…",
+      "embedOrigin": "https://shield-domain.com",
+      "expiresAt": "2026-10-08T12:30:00.000Z" }`
+
+const sessionCheckoutExample = `POST /api/gateway/checkout   — when the buyer clicks the framed button
+{ …usual fields…,
+  "buttonSessionId": "uuid",   // create the order on the account the session pinned
+  "express": true }            // cart/product: PayPal collects the address (GET_FROM_FILE)
+
+201 { …usual fields…, "paypalOrderId": "5O190127TN364715T" }
+409 { "code": "button_session_account_unavailable" }   // drop the session, use the classic flow
+
+POST /api/gateway/order-amount   — express only, after the buyer picks an address in PayPal
+{ "transactionId": "uuid", "shipping": "9.00", "taxTotal": "0.00", "total": "29.00" }
+200 { "ok": true, "amount": "29.00" }
+409 { "code": "total_mismatch", "expected": "29.00" }   // total must be item total + shipping + tax`
+
+const sessionMessages = [
+  { type: "create-order", dir: "iframe → shop", meaning: "Buyer clicked. Create your order, call checkout with buttonSessionId, reply order-created { requestId, transactionId, executeToken, paypalOrderId } or order-failed." },
+  { type: "shipping-change", dir: "iframe → shop", meaning: "Express only. { requestId, transactionId, address { city, state, countryCode, postalCode } }. Price shipping, call order-amount, reply shipping-updated or shipping-rejected { reason: ADDRESS_ERROR | COUNTRY_ERROR | STATE_ERROR | ZIP_ERROR }." },
+]
+
 function CodeBlock({ code, language = "json" }: { code: string; language?: string }) {
   return (
     <pre className="overflow-x-auto rounded-lg border border-border bg-background px-4 py-3 text-[11px] leading-6 text-foreground">
@@ -573,6 +601,38 @@ export default function ApiDocsPage() {
             </div>
             <div className="rounded-lg border border-border bg-background px-4 py-3 text-[11px] leading-6 text-muted-foreground">
               Every message has <span className="text-foreground">{'source: "paydef-buttons"'}</span> and <span className="text-foreground">transactionId</span>. Always check <span className="text-foreground">event.origin === new URL(embedUrl).origin</span>. The webhook is still the final source of truth.
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Buttons before the order exists (checkout, cart and product pages)</p>
+              <div className="rounded-lg border border-border bg-background px-4 py-3 text-[11px] leading-6 text-muted-foreground">
+                Ask for a button session when the page renders; the iframe loads PayPal for the account PayDef pins. When the buyer clicks, the iframe asks your page to create the order. On cart and product pages PayPal collects the address and reports it so you can price shipping. Replies to the iframe use <span className="text-foreground">{'source: "paydef-shop"'}</span> and must echo the <span className="text-foreground">requestId</span>.
+              </div>
+              <CodeBlock code={buttonSessionExample} language="http" />
+              <CodeBlock code={sessionCheckoutExample} language="http" />
+              <div className="overflow-hidden rounded-lg border border-border">
+                <table className="w-full text-left text-[11px] leading-6">
+                  <thead className="bg-background text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-2 font-medium">type</th>
+                      <th className="px-4 py-2 font-medium">direction</th>
+                      <th className="px-4 py-2 font-medium">meaning</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sessionMessages.map((m) => (
+                      <tr key={m.type} className="border-t border-border">
+                        <td className="px-4 py-2 text-cyan-400">{m.type}</td>
+                        <td className="px-4 py-2 text-foreground">{m.dir}</td>
+                        <td className="px-4 py-2 text-muted-foreground">{m.meaning}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="rounded-lg border border-border bg-background px-4 py-3 text-[11px] leading-6 text-muted-foreground">
+                <span className="text-foreground">payment.capture.completed</span> and <span className="text-foreground">payment.authorization.created</span> webhooks now also carry <span className="text-foreground">payer_email</span>, <span className="text-foreground">buyer_name</span> and <span className="text-foreground">shipping_address</span> (PayPal&apos;s full address) — express orders take their address from there.
+              </div>
             </div>
           </div>
         </section>
