@@ -12,7 +12,8 @@
     "start": "next start",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "db:push": "echo 'Use migrate.sql scripts directly with Neon'"
+    "db:push": "echo 'Use migrate.sql scripts directly with Neon'",
+    "verify:smart-buttons": "node scripts/verify/smart-buttons/run-all.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
