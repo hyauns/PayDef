@@ -1,0 +1,21 @@
+{
+  "$schema": "https://playground.wordpress.net/blueprint-schema.json",
+  "landingPage": "/wp-admin/admin.php?page=wc-settings&tab=checkout&section=paydef",
+  "preferredVersions": { "php": "8.2", "wp": "latest" },
+  "features": { "networking": true },
+  "steps": [
+    {
+      "step": "installPlugin",
+      "pluginData": { "resource": "wordpress.org/plugins", "slug": "woocommerce" },
+      "options": { "activate": true }
+    },
+    {
+      "step": "activatePlugin",
+      "pluginPath": "paydef-woocommerce/paydef-woocommerce.php"
+    },
+    {
+      "step": "runPHP",
+      "code": "<?php require_once '/wordpress/wp-load.php'; update_option('permalink_structure', '/%postname%/'); update_option('woocommerce_currency', 'USD'); update_option('woocommerce_default_country', 'US:CA'); update_option('woocommerce_coming_soon', 'no'); update_option('woocommerce_store_pages_only', 'no'); WC_Install::create_pages(); wp_update_post(array('ID' => wc_get_page_id('checkout'), 'post_content' => '[woocommerce_checkout]')); wp_update_post(array('ID' => wc_get_page_id('cart'), 'post_content' => '[woocommerce_cart]')); $p = new WC_Product_Simple(); $p->set_name('Smart Buttons Test Product'); $p->set_regular_price('1.00'); $p->set_virtual(true); $p->set_status('publish'); $p->save(); update_option('woocommerce_paydef_settings', array('enabled' => 'yes', 'title' => 'PayPal', 'description' => 'Pay with PayPal.', 'flow' => 'paypal', 'force_redirect' => 'no', 'base_url' => 'http://localhost:4200', 'store_id' => 'local-test-store', 'api_key' => 'local-test-key', 'webhook_secret' => 'local-test-webhook-secret', 'capture_status' => '', 'debug' => 'yes')); flush_rewrite_rules(); echo 'PAYDEF-RIG product=' . $p->get_id() . ' checkout=' . wc_get_page_id('checkout');"
+    }
+  ]
+}
