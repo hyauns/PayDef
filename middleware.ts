@@ -52,6 +52,7 @@ const SHIELD_ROUTE_MAP = new Map<string, string>([
 
 const SHIELD_PASSTHROUGH_PREFIXES = [
   "/checkout/popup",
+  "/checkout/buttons",
   "/order/success",
   "/order/cancel",
   "/api/gateway",
