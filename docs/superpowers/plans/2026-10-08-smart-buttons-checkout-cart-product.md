@@ -107,7 +107,7 @@
 
 ## Part A — PayDef
 
-### Task A1: Migration 030
+### Task 1 — A1: Migration 030
 
 **Files:** Create `scripts/030-button-sessions.sql`, `scripts/run-030-migration.cjs`
 
@@ -160,7 +160,7 @@ Expected after apply: `t=1, c=6`.
 - [ ] **Step 4: Dry run only.** Run `node scripts/run-030-migration.cjs`. Expected: the production host is printed along with the SQL. **Do not pass `--yes`.**
 - [ ] **Step 5: Commit** `feat(db): migration 030 — button sessions and express transaction fields`.
 
-### Task A2: `lib/paypal.ts` — GET_FROM_FILE, amount PATCH, payer/shipping types
+### Task 2 — A2: `lib/paypal.ts` — GET_FROM_FILE, amount PATCH, payer/shipping types
 
 **Interfaces — Produces:**
 - `CreateOrderParams.shippingPreference?: "GET_FROM_FILE"`
@@ -253,7 +253,7 @@ The `tax_total` of `0.00` is always sent. PayPal accepts zero-value breakdown en
 - [ ] **Step 3:** Run `npm run verify:smart-buttons`. Expected: all scripts pass, including `test-paypal-express`. Then `npx tsc --noEmit -p .` must exit 0.
 - [ ] **Step 4: Commit** `feat(paypal): GET_FROM_FILE orders and amount PATCH for express Smart Buttons`.
 
-### Task A3: `lib/button-sessions.ts` (pure)
+### Task 3 — A3: `lib/button-sessions.ts` (pure)
 
 **Interfaces — Produces:**
 - `sessionToken(sessionId): string | null` is `generateExecuteToken("button-session:" + id)`.
@@ -274,7 +274,7 @@ The `tax_total` of `0.00` is always sent. PayPal accepts zero-value breakdown en
 - [ ] **Step 2: Implement** (all functions are straightforward; reuse `toSdkIntent` and `frameAncestorOrigins` from `lib/smart-buttons.ts` and `resolveShieldBaseUrl` from `lib/masking.ts`). `decideSessionPage` keeps `allowedOrigins = row.allowed_origins` (already filtered by `frameAncestorOrigins` when the session was created).
 - [ ] **Step 3:** Run `npm run verify:smart-buttons` (all pass) and `tsc` (0). **Step 4: Commit** `feat(smart-buttons): button-session primitives`.
 
-### Task A4: `lib/smart-buttons.ts` — session page with relayed `createOrder` and shipping
+### Task 4 — A4: `lib/smart-buttons.ts` — session page with relayed `createOrder` and shipping
 
 **Interfaces — Produces:** `renderSessionButtonsPage(config: SessionPageConfig, allowedOrigins: string[]): string`.
 
@@ -348,7 +348,7 @@ The message contract is the iframe ↔ shop page protocol. Messages **to** the s
 
 - [ ] **Step 4:** Run `npm run verify:smart-buttons` (all pass, including the parse-check over the new page) and `tsc` (0). **Step 5: Commit** `feat(smart-buttons): session page relays createOrder and shipping changes to the shop`.
 
-### Task A5: `POST /api/gateway/button-session`
+### Task 5 — A5: `POST /api/gateway/button-session`
 
 **Files:** Create `app/api/gateway/button-session/route.ts`. Test `test-button-session-route.mjs` (fake SQL, same pattern as `test-buttons-route.mjs`; stub `@/lib/merchant-rotation` `selectByStrategy` and `@/lib/circuit-breaker` through the harness STUBS map).
 
@@ -366,7 +366,7 @@ Tests cover: flow off → `enabled:false`; no origins → `enabled:false`; happy
 
 - [ ] Steps: failing test → implement → `npm run verify:smart-buttons` + `tsc` → commit `feat(gateway): button-session endpoint pins a PayPal account when buttons render`.
 
-### Task A6: `/api/gateway/checkout` — pinned account and express
+### Task 6 — A6: `/api/gateway/checkout` — pinned account and express
 
 - [ ] **Step 1: Failing test** `test-checkout-pin.mjs` for a pure helper added to `lib/button-sessions.ts`: `resolveCheckoutSession(row, storeId, now)`. It returns `{ ok: true, session }` or `{ ok: false, status: 409, code: "button_session_invalid" }` when the row is missing, belongs to another store, or is expired.
 - [ ] **Step 2: Route edits** (`app/api/gateway/checkout/route.ts`):
@@ -400,7 +400,7 @@ Tests cover: flow off → `enabled:false`; no origins → `enabled:false`; happy
 - [ ] **Step 3:** `npm run verify:smart-buttons` (all pass), `tsc` (0), and `npx eslint app/api/gateway/checkout/route.ts` (no new warnings beyond the 3 pre-existing). Review the diff line by line: REDIRECT, POPUP_BRIDGE, SMART_BUTTONS-without-session, Stripe and Shopify paths must be untouched.
 - [ ] **Step 4: Commit** `feat(gateway): checkout honours a button session (pinned account) and express GET_FROM_FILE`.
 
-### Task A7: `POST /api/gateway/order-amount`
+### Task 7 — A7: `POST /api/gateway/order-amount`
 
 Store-authenticated. Body `{transactionId, shipping, taxTotal, total}` (strings or numbers).
 
@@ -425,7 +425,7 @@ When all pass:
 
 The test `test-order-amount-route.mjs` covers: 404, `not_pending`, `not_express`, `total_mismatch` (expected 30.65, sent 30.00), and the happy path (stubbed `patchOrderAmount` called with `itemTotal "20.00"` and UPDATE executed). Commit `feat(gateway): order-amount endpoint updates an express PayPal order's total`.
 
-### Task A8: `/checkout/buttons` — session mode
+### Task 8 — A8: `/checkout/buttons` — session mode
 
 In `app/checkout/buttons/route.ts`:
 1. If `session` is present (and `ref` is absent), validate it with `isTransactionRef`.
@@ -434,7 +434,7 @@ In `app/checkout/buttons/route.ts`:
 
 The existing `ref` mode is unchanged. Extend `test-buttons-route.mjs` with session cases: 200 render with `client-id` of the joined account; 410 expired; 404 unknown. Commit `feat(shield): /checkout/buttons serves session pages`.
 
-### Task A9: Payer and address from PayPal into transactions, webhooks and lookup
+### Task 9 — A9: Payer and address from PayPal into transactions, webhooks and lookup
 
 1. In `execute/route.ts`, in both the authorize and the capture branch, before the `UPDATE`, compute:
 ```ts
@@ -450,7 +450,7 @@ The existing `ref` mode is unchanged. Extend `test-buttons-route.mjs` with sessi
 
 Commit `feat(gateway): keep PayPal's payer and shipping address and send them to the store`.
 
-### Task A10: API docs
+### Task 10 — A10: API docs
 
 Add to `/docs/api#smart-buttons`:
 - the button-session request and response;
@@ -467,14 +467,14 @@ Run `npx eslint app/docs/api/page.tsx` and `tsc`. Commit.
 
 All PHP is linted after each task with `node <scratchpad>/php-lint/lint.cjs "<plugin dir>"`, and the linter is proven to catch a deliberate error once. PHP cannot be executed here, so behaviour is verified by the JS bridge test (B5) and the Playground rig (C2).
 
-### Task B1: Client methods and placement settings
+### Task 11 — B1: Client methods and placement settings
 - `Paydef_Client::button_session( array $args )` sends POST `/api/gateway/button-session`.
 - `Paydef_Client::order_amount( array $args )` sends POST `/api/gateway/order-amount`.
 - Both go through the existing `post()`.
 - Gateway settings, after `force_redirect`: three checkboxes `sb_checkout`, `sb_cart`, `sb_product` (title "Show PayPal buttons on", labels "Checkout page", "Cart page", "Product pages", default `yes`). Description: *"Needs Checkout Experience = Smart Buttons (iframe) on the PayDef dashboard. Buyers never choose; untick a page to keep the classic flow there."*
 - New gateway method `smart_buttons_enabled( $context )`: true only if the gateway is available, flow is `paypal`, `force_redirect` is not ticked, and `sb_{$context}` is `yes`.
 
-### Task B2: `includes/class-paydef-express.php`
+### Task 12 — B2: `includes/class-paydef-express.php`
 Static methods:
 - `create_from_cart()` (`WC_Order|WP_Error`):
   1. `WC()->checkout()->create_order( array( 'payment_method' => 'paydef' ) )` inside try/catch.
@@ -505,7 +505,7 @@ Static methods:
   - Add a note and save.
 - `owns( $order )`: `_paydef_express_owner` equals the current session customer id (strict string compare, non-empty).
 
-### Task B3: `includes/class-paydef-smart-buttons.php`
+### Task 13 — B3: `includes/class-paydef-smart-buttons.php`
 Hooks:
 - `woocommerce_proceed_to_checkout` (priority 30) → `render_cart()`
 - `woocommerce_after_add_to_cart_button` (priority 20) → `render_product()`
@@ -534,14 +534,14 @@ Functions:
   - `get_transaction( txid )`: COMPLETED → `fill_from_paypal` plus `payment_complete`; AUTHORIZED → `fill_from_paypal` plus `update_status( 'processing', … )`, mirroring the webhook's authorization handling.
   - Anything else → `update_status( 'cancelled', __( 'PayDef: express checkout not completed within 30 minutes.', 'paydef-woocommerce' ) )`.
 
-### Task B4: Gateway changes
+### Task 14 — B4: Gateway changes
 - `payment_fields()`: when `smart_buttons_enabled( 'checkout' )` and `is_checkout()` and not `is_wc_endpoint_url( 'order-pay' )`, call `Paydef_Smart_Buttons::session( 'checkout', WC()->cart->get_total( 'edit' ), get_woocommerce_currency() )` and render the container (`data-context="checkout"`) after the description.
 - `process_payment()`:
   - With `$_POST['paydef_smart_session']`, call `process_smart_checkout( $order, $session_id )`: `create_checkout( order_common_args + buttonSessionId )`. On success store the meta as in `process_redirect_checkout` and return `array( 'result' => 'success', 'redirect' => '', 'paydef_transaction_id' => …, 'paydef_execute_token' => …, 'paydef_paypal_order_id' => … )`. On error, `wc_add_notice` and `array( 'result' => 'failure' )`.
   - With `$_POST['paydef_force_redirect']`, `process_redirect_checkout` ignores `embedUrl` (classic redirect).
   - Otherwise unchanged. The 1.10.0 order-pay `receipt_page()` stays as the no-JS fallback.
 
-### Task B5: `assets/paydef-smart-buttons.js` and its test
+### Task 15 — B5: `assets/paydef-smart-buttons.js` and its test
 Parent-side bridge. Its responsibilities:
 - `mount(el)`: create the iframe (`allow="payment"`, width 100%, max 480 px), start the 10 s ready timer, and listen for messages from `el.dataset.embedOrigin` with `source === "paydef-buttons"`. `ready` stops the timer; `resize` sets the height.
   - Checkout context, `ready` → hide `#place_order` while the PayDef radio is checked.
@@ -566,7 +566,7 @@ Test `scripts/verify/smart-buttons/test-plugin-bridge.mjs` loads the asset with 
 5. No `ready` within 10 s: checkout gets the hidden `paydef_force_redirect` and a visible `#place_order`.
 6. `approved` navigates to `redirectUrl`.
 
-### Task B6: Webhook address fill, bootstrap, version
+### Task 16 — B6: Webhook address fill, bootstrap, version
 - `class-paydef-webhook.php`: in the `payment.capture.completed` and `payment.authorization.created` cases, when `_paydef_express` is set and `$payload['shipping_address']` is an array, call `Paydef_Express::fill_from_paypal( $order, $payload['shipping_address'], $payload['payer_email'] ?? '', $payload['buyer_name'] ?? '' )` before the status change.
 - `paydef-woocommerce.php`: require the two new classes, run `Paydef_Smart_Buttons::init()` in `paydef_wc_init()`, and keep `Version: 1.10.0`.
 - `readme.txt`: rewrite the 1.10.0 changelog entry to describe checkout, cart and product buttons, address-based shipping, the 30-minute expiry and the placement settings.
@@ -576,7 +576,7 @@ Test `scripts/verify/smart-buttons/test-plugin-bridge.mjs` loads the asset with 
 
 ## Part C — Verification
 
-### Task C1: Rig
+### Task 17 — C1: Rig
 
 1. `wp-gateway.mjs` implements:
    - `button-session`: `enabled:true` with the sandbox client id; `session=` embed URL.
@@ -589,7 +589,7 @@ Test `scripts/verify/smart-buttons/test-plugin-bridge.mjs` loads the asset with 
    - zones: "California" (state CA) flat rate $9; "Alaska" (state AK) with **no methods**; "United States" flat rate $5;
    - products: physical simple "Test Tire" $20 and a variable "Test Rim" (Size 16/17, $30/$35); PayDef settings with all three placements on.
 
-### Task C2: Sandbox scenarios (user-assisted)
+### Task 18 — C2: Sandbox scenarios (user-assisted)
 
 The user needs a **US sandbox personal account**: developer.paypal.com → Testing Tools → Sandbox Accounts → Create account → Personal, United States. The user logs in inside the PayPal popup; the agent never types PayPal credentials. Checks per scenario:
 
@@ -604,7 +604,7 @@ The user needs a **US sandbox personal account**: developer.paypal.com → Testi
 | 7 | Any | Tick "Always redirect" | No buttons on cart/product; checkout shows "Place order"; order redirects to PayPal |
 | 8 | Checkout | Block `localhost:4200` in the browser so the iframe can't load | After 10 s "Place order" appears; clicking it redirects |
 
-### Task C3: Final whole-branch review
+### Task 19 — C3: Final whole-branch review
 Opus reviewer over `c7d812e..HEAD` with this plan, the Review Focus list and the ledger rulings; then one fix pass.
 
 ---
