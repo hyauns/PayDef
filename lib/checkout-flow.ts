@@ -1,6 +1,6 @@
 import { getSql } from "@/lib/neon"
 import { resolveShieldBaseUrl } from "@/lib/masking"
-import { buildSmartButtonsUrl } from "@/lib/smart-buttons"
+import { buildSmartButtonsUrl, frameAncestorOrigins } from "@/lib/smart-buttons"
 
 export const CHECKOUT_FLOW_VALUES = ["REDIRECT", "POPUP_BRIDGE", "SMART_BUTTONS"] as const
 
@@ -96,6 +96,11 @@ export function buildPopupBridgeUrl(
  * Presentation URLs for one checkout. approvalUrl is never altered: every
  * flow still returns it, so integrations that ignore popupUrl/embedUrl keep
  * redirecting exactly as before.
+ *
+ * returnUrls are this transaction's merchant success/cancel URLs. The buttons
+ * page may only be framed by their origins; when none qualifies, the browser
+ * would refuse the frame without the parent ever hearing about it, so no
+ * embedUrl is handed out and the storefront falls back to approvalUrl.
  */
 export function buildFlowUrls(input: {
   flow: CheckoutFlow
@@ -103,12 +108,13 @@ export function buildFlowUrls(input: {
   approvalUrl: string
   transactionId: string
   executeToken: string | null
+  returnUrls: Array<string | null | undefined>
 }): { popupUrl: string | null; popupOrigin: string | null; embedUrl: string | null; embedOrigin: string | null } {
   if (input.flow === "POPUP_BRIDGE") {
     const popupUrl = buildPopupBridgeUrl(input.shieldDomain, input.approvalUrl, input.transactionId)
     return { popupUrl, popupOrigin: new URL(popupUrl).origin, embedUrl: null, embedOrigin: null }
   }
-  if (input.flow === "SMART_BUTTONS") {
+  if (input.flow === "SMART_BUTTONS" && frameAncestorOrigins(input.returnUrls).length > 0) {
     const embedUrl = buildSmartButtonsUrl(input.shieldDomain, input.transactionId, input.executeToken)
     return { popupUrl: null, popupOrigin: null, embedUrl, embedOrigin: new URL(embedUrl).origin }
   }

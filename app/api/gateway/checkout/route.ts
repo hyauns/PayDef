@@ -1269,13 +1269,26 @@ export async function POST(req: NextRequest) {
       currency,
     })
     approvalUrl = getApprovalUrl(paypalOrder)
+    // Per-order return URL when the merchant sent one on the same host as
+    // the store's configured URL; the store default otherwise. This is what
+    // lets WooCommerce receive its own order key back and fire
+    // woocommerce_thankyou (and with it every analytics purchase event).
+    const merchantSuccessUrl = resolveMerchantReturnUrl(body.returnUrl, store.successReturnUrl ?? null)
+    const merchantCancelUrl  = store.cancelReturnUrl ?? null
     ;({ popupUrl, popupOrigin, embedUrl, embedOrigin } = buildFlowUrls({
       flow,
       shieldDomain: finalShieldDomain,
       approvalUrl,
       transactionId,
       executeToken,
+      returnUrls: [merchantSuccessUrl, merchantCancelUrl],
     }))
+    if (flow === "SMART_BUTTONS" && !embedUrl) {
+      txLog.warn("checkout.smart_buttons_unavailable",
+        `SMART_BUTTONS store has no https return URL to frame the buttons; returning approvalUrl only (store=${store.id})`,
+        { storeId: store.id, tenantId }
+      )
+    }
 
     // ── Step 10. INSERT PENDING transaction ──────────────────────────────────
     // Status is always PENDING at this point — the order is created on PayPal
@@ -1317,12 +1330,8 @@ export async function POST(req: NextRequest) {
         buyerIp       ?? null,     // $11 — buyer_ip + ip_address
         buyerCountry  ?? null,     // $12 — buyer_country
         intent,                    // $13 — intent (CAPTURE | AUTHORIZE) for execute step
-        // Per-order return URL when the merchant sent one on the same host as
-        // the store's configured URL; the store default otherwise. This is what
-        // lets WooCommerce receive its own order key back and fire
-        // woocommerce_thankyou (and with it every analytics purchase event).
-        resolveMerchantReturnUrl(body.returnUrl, store.successReturnUrl ?? null), // $14
-        store.cancelReturnUrl ?? null, // $15
+        merchantSuccessUrl,        // $14 — see buildFlowUrls above
+        merchantCancelUrl,         // $15
       ]
     )
 

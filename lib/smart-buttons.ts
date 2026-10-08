@@ -95,14 +95,56 @@ export type ButtonErrorCode =
   | "invalid_ref"
   | "not_found"
   | "invalid_token"
-  | "not_pending"
-  | "expired"
   | "no_paypal_order"
   | "framing_not_configured"
 
+// A transaction that is no longer payable (paid, failed, swept or simply past
+// checkout_expires_at). The parent gets the real outcome and where to send the
+// buyer, never an "error" — the documented fallback for "error" is PayPal's
+// approvalUrl, which is wrong for an order that is already finished.
+export interface ButtonFinishedResult {
+  type:        "approved" | "failed"
+  status:      string
+  redirectUrl: string | null
+}
+
 export type ButtonPageDecision =
   | { kind: "render"; config: ButtonPageConfig; allowedOrigins: string[] }
+  | { kind: "finished"; status: number; result: ButtonFinishedResult; allowedOrigins: string[] }
   | { kind: "error"; status: number; code: ButtonErrorCode; allowedOrigins: string[] }
+
+const SUCCESS_STATUSES = new Set(["AUTHORIZED", "COMPLETED"])
+
+/** Merchant return URL with the same query the shield success page appends. http(s) only. */
+export function buildMerchantReturnUrl(
+  base: string | null | undefined,
+  params: { transactionId: string; status: string; paypalOrderId: string | null }
+): string | null {
+  if (!base) return null
+  let url: URL
+  try {
+    url = new URL(base)
+  } catch {
+    return null
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") return null
+  url.searchParams.set("transaction_id", params.transactionId)
+  url.searchParams.set("status", params.status)
+  if (params.paypalOrderId) url.searchParams.set("paypal_order_id", params.paypalOrderId)
+  return url.toString()
+}
+
+function finishedResult(row: ButtonSessionRow, status: string): ButtonFinishedResult {
+  const type = SUCCESS_STATUSES.has(status) ? "approved" : "failed"
+  return {
+    type,
+    status,
+    redirectUrl: buildMerchantReturnUrl(
+      type === "approved" ? row.merchant_success_url : row.merchant_cancel_url,
+      { transactionId: row.id, status, paypalOrderId: row.paypal_order_id }
+    ),
+  }
+}
 
 export function decideButtonPage(input: {
   row: ButtonSessionRow | null
@@ -118,9 +160,12 @@ export function decideButtonPage(input: {
     ({ kind: "error", status, code, allowedOrigins })
 
   if (input.tokenShouldBlock) return fail(403, "invalid_token")
-  if (row.status !== "PENDING") return fail(409, "not_pending")
+  if (row.status !== "PENDING") {
+    return { kind: "finished", status: 409, result: finishedResult(row, row.status), allowedOrigins }
+  }
   if (row.checkout_expires_at && new Date(row.checkout_expires_at).getTime() <= input.now.getTime()) {
-    return fail(410, "expired")
+    // Past its window but not yet swept: report it as the sweep will record it.
+    return { kind: "finished", status: 410, result: finishedResult(row, "EXPIRED"), allowedOrigins }
   }
   if (!row.paypal_order_id) return fail(409, "no_paypal_order")
   if (allowedOrigins.length === 0) return fail(409, "framing_not_configured")
@@ -293,6 +338,38 @@ ${POST_FN}
       post({ type: "resize", height: document.documentElement.scrollHeight });
     }).observe(document.body);
   }
+})();
+</script>
+</body>
+</html>`
+}
+
+export function renderButtonsFinishedPage(
+  result: ButtonFinishedResult,
+  allowedOrigins: string[],
+  transactionId: string | null = null
+): string {
+  const text = result.type === "approved" ? "Payment confirmed." : "Payment was not completed."
+  const link = result.redirectUrl
+    ? `<a id="paydef-continue" target="_top" href="${escapeAttr(result.redirectUrl)}">Continue</a>`
+    : ""
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Checkout</title>
+<style>${PAGE_STYLE}</style>
+</head>
+<body>
+<p id="paydef-status" role="status">${text}</p>
+${link}
+<script>
+(function () {
+  var CFG = ${scriptJson({ transactionId })};
+  var ORIGINS = ${scriptJson(allowedOrigins)};
+${POST_FN}
+  post(${scriptJson(result)});
 })();
 </script>
 </body>

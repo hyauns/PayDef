@@ -162,9 +162,16 @@ const smartButtonsSnippet = `<div id="paydef-buttons"></div>
   frame.style.cssText = "width:100%;border:0;height:160px;";
   document.getElementById("paydef-buttons").appendChild(frame);
 
+  // A browser that refuses the frame (e.g. this page's host is not your return
+  // URL's host) sends no message at all — fall back if "ready" never arrives.
+  var ready = false;
+  var fallback = setTimeout(function () { if (!ready) window.location.href = approvalUrl; }, 10000);
+
   window.addEventListener("message", function (e) {
     var m = e.data;
     if (e.origin !== origin || !m || m.source !== "paydef-buttons") return;
+    if (m.type === "ready") { ready = true; clearTimeout(fallback); }
+    if (m.type === "approved" || m.type === "failed" || m.type === "error") clearTimeout(fallback);
     if (m.type === "resize" && m.height) frame.style.height = m.height + "px";
     if ((m.type === "approved" || m.type === "failed") && m.redirectUrl) window.location.href = m.redirectUrl;
     if (m.type === "error") window.location.href = approvalUrl; // fall back to the classic redirect
@@ -173,11 +180,11 @@ const smartButtonsSnippet = `<div id="paydef-buttons"></div>
 </script>`
 
 const smartButtonsMessages = [
-  { type: "ready", fields: "—", meaning: "Buttons rendered." },
+  { type: "ready", fields: "—", meaning: "Buttons rendered. If it never arrives (~10 s), the frame was refused: fall back to approvalUrl." },
   { type: "resize", fields: "height", meaning: "Content height in px; resize the iframe." },
   { type: "cancelled", fields: "—", meaning: "Buyer closed the PayPal popup. The transaction stays PENDING and the buttons stay usable." },
-  { type: "approved", fields: "status, redirectUrl", meaning: "Payment COMPLETED or AUTHORIZED." },
-  { type: "failed", fields: "status, redirectUrl", meaning: "Payment ended FAILED, CANCELED, EXPIRED or similar." },
+  { type: "approved", fields: "status, redirectUrl", meaning: "Payment COMPLETED or AUTHORIZED (also when an already-paid session is reloaded)." },
+  { type: "failed", fields: "status, redirectUrl", meaning: "Payment ended FAILED, CANCELED, EXPIRED or similar. Also sent when an already-finished or expired session is reloaded." },
   { type: "pending", fields: "—", meaning: "No final status after ~30 s. Rely on the webhook." },
   { type: "error", fields: "code, message?", meaning: "No buttons can be shown. Fall back to approvalUrl." },
 ]

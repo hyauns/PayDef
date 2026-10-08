@@ -20,6 +20,7 @@ import {
   frameAncestorsCsp,
   isTransactionRef,
   renderButtonsErrorPage,
+  renderButtonsFinishedPage,
   renderButtonsPage,
 } from "@/lib/smart-buttons"
 
@@ -64,6 +65,18 @@ export async function GET(req: NextRequest) {
     tokenShouldBlock: token.shouldBlock,
     now: new Date(),
   })
+
+  if (decision.kind === "finished") {
+    log.info("smart_buttons.finished", `Buttons page for finished tx=${ref} status=${decision.result.status}`, {
+      transactionId: ref,
+      status: decision.result.status,
+    })
+    return htmlResponse(
+      renderButtonsFinishedPage(decision.result, decision.allowedOrigins, ref),
+      decision.status,
+      decision.allowedOrigins
+    )
+  }
 
   if (decision.kind === "error") {
     log.warn("smart_buttons.refused", `Buttons page refused tx=${ref} code=${decision.code}`, {
