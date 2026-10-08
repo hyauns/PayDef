@@ -1,14 +1,22 @@
 import { getSql } from "@/lib/neon"
 import { resolveShieldBaseUrl } from "@/lib/masking"
 
-export const CHECKOUT_FLOW_VALUES = ["REDIRECT", "POPUP_BRIDGE"] as const
+export const CHECKOUT_FLOW_VALUES = ["REDIRECT", "POPUP_BRIDGE", "SMART_BUTTONS"] as const
 
 export type CheckoutFlow = (typeof CHECKOUT_FLOW_VALUES)[number]
 
 export const DEFAULT_CHECKOUT_FLOW: CheckoutFlow = "REDIRECT"
 
+// The platform-wide default may only be a flow that works for every store and
+// every existing integration with no storefront change. SMART_BUTTONS needs the
+// storefront to frame embedUrl and exists only for PayPal, so it is a per-store
+// opt-in and never a default.
+export const PLATFORM_DEFAULT_FLOW_VALUES = ["REDIRECT", "POPUP_BRIDGE"] as const
+
+export type PlatformDefaultFlow = (typeof PLATFORM_DEFAULT_FLOW_VALUES)[number]
+
 export interface CheckoutPreferences {
-  defaultFlow: CheckoutFlow
+  defaultFlow: PlatformDefaultFlow
 }
 
 interface SettingsRow {
@@ -21,6 +29,12 @@ export function normalizeCheckoutFlow(value: unknown): CheckoutFlow {
     : DEFAULT_CHECKOUT_FLOW
 }
 
+export function normalizePlatformDefaultFlow(value: unknown): PlatformDefaultFlow {
+  return PLATFORM_DEFAULT_FLOW_VALUES.includes(value as PlatformDefaultFlow)
+    ? (value as PlatformDefaultFlow)
+    : "REDIRECT"
+}
+
 export async function getCheckoutPreferences(sql: ReturnType<typeof getSql>): Promise<CheckoutPreferences> {
   try {
     const rows = (await sql`
@@ -31,11 +45,25 @@ export async function getCheckoutPreferences(sql: ReturnType<typeof getSql>): Pr
     `) as unknown as SettingsRow[]
 
     return {
-      defaultFlow: normalizeCheckoutFlow(rows[0]?.value?.defaultFlow),
+      defaultFlow: normalizePlatformDefaultFlow(rows[0]?.value?.defaultFlow),
     }
   } catch {
-    return { defaultFlow: DEFAULT_CHECKOUT_FLOW }
+    return { defaultFlow: "REDIRECT" }
   }
+}
+
+// Stripe and Shopify have no embeddable button page; a store that was switched
+// to SMART_BUTTONS and later moved to one of them keeps working as a redirect.
+const PROVIDERS_WITHOUT_SMART_BUTTONS = new Set(["STRIPE", "SHOPIFY"])
+
+export function effectiveFlowForProvider(
+  flow: CheckoutFlow,
+  providerType: string | null | undefined
+): CheckoutFlow {
+  if (flow !== "SMART_BUTTONS") return flow
+  return PROVIDERS_WITHOUT_SMART_BUTTONS.has(String(providerType ?? "").toUpperCase())
+    ? "REDIRECT"
+    : flow
 }
 
 export function resolveCheckoutFlow(

@@ -16,7 +16,7 @@ import {
   getCheckoutPreferences,
   normalizeCheckoutFlow,
   resolveCheckoutFlow,
-  type CheckoutFlow,
+  type PlatformDefaultFlow,
 } from "@/lib/checkout-flow"
 import { encrypt } from "@/lib/encryption"
 import { generateWebhookSecret } from "@/lib/store-webhooks"
@@ -124,7 +124,7 @@ interface StoreTxRow {
 function mapStoreResponse(
   store: StoreRow,
   txStats: { count: number; volume: number; completed: number; failed: number; pending: number },
-  defaultFlow: CheckoutFlow
+  defaultFlow: PlatformDefaultFlow
 ) {
   const checkoutFlow = resolveCheckoutFlow(store.checkout_flow, { defaultFlow })
 
