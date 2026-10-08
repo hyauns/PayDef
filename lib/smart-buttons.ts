@@ -220,7 +220,10 @@ function scriptJson(value: unknown): string {
 const PAGE_STYLE =
   "html,body{margin:0;padding:0;background:transparent;font:14px/1.4 system-ui,-apple-system,Segoe UI,sans-serif;color:#333}" +
   "#paydef-status{margin:6px 2px 0;min-height:1em;font-size:13px;color:#555}" +
-  "#paydef-continue{display:inline-block;margin-top:8px}"
+  "#paydef-continue{display:inline-block;margin-top:8px}" +
+  // The id rule above would otherwise override the hidden attribute and show
+  // an empty Continue link before payment.
+  "#paydef-continue[hidden]{display:none}"
 
 // Shared by both pages: posts to every allowed origin explicitly (never "*");
 // the browser silently drops the ones that are not the parent.
