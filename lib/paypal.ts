@@ -169,6 +169,10 @@ export interface CreateOrderParams {
                                  // address. Absent → NO_SHIPPING, i.e. the
                                  // historical behaviour every other storefront
                                  // still gets.
+  shippingPreference?: "GET_FROM_FILE"  // express (cart / product page Smart Buttons):
+                                        // no address yet — PayPal collects it and the
+                                        // total is PATCHed once it is known. Ignored
+                                        // when `shipping` is set.
 }
 
 export class PayPalApiError extends Error {
@@ -421,7 +425,9 @@ export function buildOrderPayload(p: CreateOrderParams) {
       return_url:          p.returnUrl,
       cancel_url:          p.cancelUrl,
       brand_name:          safeBrand,
-      shipping_preference: p.shipping ? "SET_PROVIDED_ADDRESS" : "NO_SHIPPING",
+      shipping_preference: p.shipping
+        ? "SET_PROVIDED_ADDRESS"
+        : p.shippingPreference === "GET_FROM_FILE" ? "GET_FROM_FILE" : "NO_SHIPPING",
       user_action:         "PAY_NOW",
       landing_page:        "LOGIN",
     },
@@ -576,11 +582,32 @@ export interface OrderExecuteParams {
   proxyUrl?:    string
 }
 
+/** `payer` on a capture / authorize response. */
+export interface PayPalPayer {
+  email_address?: string
+  name?: { given_name?: string; surname?: string }
+}
+
+/** `purchase_units[].shipping` on a capture / authorize response (full address). */
+export interface PayPalShippingDetail {
+  name?: { full_name?: string }
+  address?: {
+    address_line_1?: string
+    address_line_2?: string
+    admin_area_2?:   string   // city
+    admin_area_1?:   string   // state / province
+    postal_code?:    string
+    country_code?:   string
+  }
+}
+
 export interface OrderCaptureResult {
   id:     string    // paypal capture ID
   status: string    // "COMPLETED" | "DECLINED" | ...
   amount?: { currency_code: string; value: string }
+  payer?: PayPalPayer
   purchase_units?: Array<{
+    shipping?: PayPalShippingDetail
     payments?: {
       captures?: Array<{ id: string; status: string; amount: { currency_code: string; value: string } }>
     }
@@ -591,7 +618,9 @@ export interface OrderAuthorizeResult {
   id:     string    // paypal authorization ID
   status: string    // "CREATED" | "VOIDED" | ...
   amount?: { currency_code: string; value: string }
+  payer?: PayPalPayer
   purchase_units?: Array<{
+    shipping?: PayPalShippingDetail
     payments?: {
       authorizations?: Array<{ id: string; status: string; amount: { currency_code: string; value: string } }>
     }
@@ -962,4 +991,63 @@ export async function addOrderTracking(
   const data = await res.json().catch(() => ({})) as AddTrackingResponse
   console.info(`[paypal] addOrderTracking OK: order=${p.paypalOrderId} tracking=${p.trackingNumber}`)
   return data
+}
+
+// ─── Express Smart Buttons: update the total once the buyer's address is known ─
+//
+// An express order (cart / product page) is created with GET_FROM_FILE and
+// item_total = amount. When PayPal reports the buyer's address, the shop prices
+// shipping and tax and PayDef replaces the amount. item_total never changes, so
+// the masked line items stay valid.
+
+function toCents(value: string): number {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n < 0) throw new Error(`invalid amount: ${value}`)
+  return Math.round(n * 100)
+}
+
+export function buildAmountPatch(p: { currency: string; itemTotal: string; shipping: string; taxTotal: string }) {
+  const item = toCents(p.itemTotal)
+  const ship = toCents(p.shipping)
+  const tax  = toCents(p.taxTotal)
+  const money = (cents: number) => ({ currency_code: p.currency, value: (cents / 100).toFixed(2) })
+  const total = ((item + ship + tax) / 100).toFixed(2)
+  return {
+    total,
+    patch: [{
+      op: "replace",
+      path: "/purchase_units/@reference_id=='default'/amount",
+      value: {
+        currency_code: p.currency,
+        value: total,
+        breakdown: { item_total: money(item), shipping: money(ship), tax_total: money(tax) },
+      },
+    }],
+  }
+}
+
+export async function patchOrderAmount(p: {
+  clientId: string
+  clientSecret: string
+  proxyUrl?: string
+  orderId: string
+  currency: string
+  itemTotal: string
+  shipping: string
+  taxTotal: string
+}): Promise<{ total: string }> {
+  const { total, patch } = buildAmountPatch(p)
+  const token = await getAccessToken(p.clientId, p.clientSecret, p.proxyUrl)
+  const res = await fetch(`${PAYPAL_BASE}/v2/checkout/orders/${p.orderId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type":  "application/json",
+      "Authorization": `Bearer ${token}`,
+      "User-Agent":    getUserAgent(p.clientId),
+    },
+    body: JSON.stringify(patch),
+    ...createFetchOptions(p.proxyUrl),
+  })
+  if (!res.ok) throw new PayPalApiError("patch order amount", res.status, await res.text())
+  return { total }
 }
