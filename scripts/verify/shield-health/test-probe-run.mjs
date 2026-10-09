@@ -76,6 +76,29 @@ domains[0] = { ...domains[0], probe_up: true, probe_failures: 1 }
 s = await sh.runShieldHealthProbe(sql, { mode: "shadow", fetchImpl: allDead, now: NOW, send: async () => { throw new Error("telegram down") } })
 assert.equal(s.flips.length, 1)
 
+// a failed state write drops only THAT domain's flip; the others are still alerted
+{
+  const ds = [
+    { id: "w1", domain: "pay.dead.com", probe_up: true, probe_failures: 1, probe_changed_at: null },
+    { id: "w2", domain: "pay.back.com", probe_up: true, probe_failures: 1, probe_changed_at: null },
+  ]
+  const wsql = async (strings, ...values) => {
+    const q = strings.join("?")
+    if (q.includes("FROM   shield_domains") && q.includes("is_active")) return ds
+    if (q.includes("FROM   merchant_accounts")) return accounts
+    if (q.includes("UPDATE shield_domains")) { if (values.includes("w1")) throw new Error("write boom"); return [] }
+    throw new Error("unexpected query: " + q)
+  }
+  const wsent = []
+  const wsend = async (bot, chat, text) => { wsent.push(text); return { ok: true } }
+  const ws = await sh.runShieldHealthProbe(wsql, { mode: "shadow", fetchImpl: allDead, now: NOW, send: wsend })
+  assert.deepEqual(ws.flips.map((f) => `${f.domain}:${f.to}`), ["pay.back.com:down"])
+  assert.equal(wsent.length, 1)
+  assert.match(wsent[0], /pay\.back\.com/)
+  assert.doesNotMatch(wsent[0], /pay\.dead\.com/)
+  assert.equal(ws.alerts, 1)
+}
+
 // safe wrapper never throws
 const r = await sh.safeRunShieldHealthProbe(async () => { throw new Error("db down") }, { fetchImpl, now: NOW, send })
 assert.match(r.error, /db down/)

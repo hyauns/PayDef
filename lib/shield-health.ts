@@ -275,10 +275,9 @@ export async function runShieldHealthProbe(
     const res = results[i]
     const domain = normalizeDomain(row.domain)
     const next = nextHealth({ probe_up: row.probe_up, probe_failures: row.probe_failures }, res.ok)
-    upByDomain.set(domain, next.probe_up)
-    if (next.flipped) flips.push({ domain, to: next.flipped, error: res.error, downSince: next.flipped === "up" ? (row.probe_changed_at ? new Date(row.probe_changed_at) : null) : null })
     // health_ok (read by the rest of the system) only follows the probe in enforce.
-    await sql`
+    try {
+      await sql`
       UPDATE shield_domains
       SET    probe_up         = ${next.probe_up},
              probe_failures   = ${next.probe_failures},
@@ -289,6 +288,14 @@ export async function runShieldHealthProbe(
              health_ok = CASE WHEN ${enforce} AND ${next.probe_up}::boolean IS NOT NULL THEN ${next.probe_up}::boolean ELSE health_ok END
       WHERE  id = ${row.id}
     `
+    } catch (err) {
+      // not persisted → the flip is not reported now; it happens again next run
+      console.error(`[shield-health] state write failed domain=${domain} :`, err instanceof Error ? err.message : err)
+      upByDomain.set(domain, row.probe_up)
+      continue
+    }
+    upByDomain.set(domain, next.probe_up)
+    if (next.flipped) flips.push({ domain, to: next.flipped, error: res.error, downSince: next.flipped === "up" ? (row.probe_changed_at ? new Date(row.probe_changed_at) : null) : null })
     if (next.flipped) console.warn(`[shield-health] ${domain} is ${next.flipped.toUpperCase()} (${res.error ?? "ok"}) mode=${mode}`)
   }
 
