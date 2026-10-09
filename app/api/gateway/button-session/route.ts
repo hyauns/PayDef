@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
           ) ho ON ho.merchant_id = ma.id
           WHERE  ma.tenant_id = ${tenantId}
             AND  ma.status IN ('ACTIVE', 'WARMING_UP')
-          ORDER BY ma.priority DESC
+          ORDER BY ma.priority DESC, ma.id -- stable order: checkout advances the pointer in this list
         `) as unknown as MerchantAccountRow[],
       preferredProfileId: async () =>
         (await resolvePaymentDisplayProfile({ tenantId: store.tenantId, storeId: store.id, storeName: store.name })).profileId ?? null,

@@ -1,7 +1,13 @@
 // /api/gateway/checkout with a button session, run through the real route with a
 // fake pool / SQL / PayPal fetch.
 import assert from "node:assert/strict"
+// Circuit breaker on (enforce) against a fake Upstash REST endpoint: accounts in
+// scenario.open have an open circuit.
+process.env.UPSTASH_REDIS_REST_URL = "https://redis.test"
+process.env.UPSTASH_REDIS_REST_TOKEN = "t"
+process.env.CIRCUIT_BREAKER_MODE = "enforce"
 const { POST } = await import("@/app/api/gateway/checkout/route")
+const { clearRotationCache } = await import("@/lib/merchant-rotation")
 
 const STORE = {
   id: "store-1", name: "Shop", tenantId: "tenant-1", webhookUrl: null, shieldDomain: null, isActive: true,
@@ -27,7 +33,7 @@ globalThis.__harnessSql = (strings, ...values) => {
   const q = strings.join("?")
   sqlLog.push({ q, values })
   if (q.includes("FROM   button_sessions")) return [scenario.session]
-  if (q.includes("FROM tenants")) return [{ rotation_strategy: "SEQUENTIAL", rotation_interval: 120, last_rotation_index: 0, last_rotation_at: null }]
+  if (q.includes("FROM tenants")) return [{ rotation_strategy: "SEQUENTIAL", rotation_interval: 120, last_rotation_index: 0, last_rotation_at: null, ...scenario.rotation }]
   return []
 }
 globalThis.__harnessPool = {
@@ -35,22 +41,37 @@ globalThis.__harnessPool = {
     release() {},
     async query(text, params) {
       if (/^(BEGIN|COMMIT|ROLLBACK)$/.test(text)) return { rows: [] }
-      if (text.includes("FROM   merchant_accounts ma")) return { rows: scenario.accounts }
+      if (text.includes("FROM   merchant_accounts ma")) {
+        // equal priorities must come back in the same order the session saw
+        assert.match(text, /ORDER BY ma\.priority DESC, ma\.id\b/)
+        return { rows: scenario.accounts }
+      }
       if (text.includes("FOR UPDATE")) return { rows: [scenario.locked(params[0])] }
       if (/RETURNING\s+id/i.test(text) || /gen_random_uuid/i.test(text)) return { rows: [{ id: "99999999-8888-7777-6666-555555555555" }] }
       return { rows: [] }
     },
   }),
 }
-globalThis.fetch = async (url) => {
+globalThis.fetch = async (url, init) => {
   const u = String(url)
   const json = (b) => ({ ok: true, status: 200, json: async () => b, text: async () => JSON.stringify(b), headers: new Headers() })
+  if (u.startsWith("https://redis.test")) {
+    // auto-pipeline: [[cmd, ...args], ...] → [{ result }, ...] (base64-encoded strings)
+    const open = scenario.open || []
+    const answer = ([cmd, ...keys]) =>
+      String(cmd).toLowerCase() === "mget"
+        ? { result: keys.map((k) => (open.some((id) => k.endsWith(id)) ? Buffer.from("1").toString("base64") : null)) }
+        : { result: null }
+    const cmds = JSON.parse(init.body)
+    return json(Array.isArray(cmds[0]) ? cmds.map(answer) : answer(cmds))
+  }
   if (u.includes("/v1/oauth2/token")) return json({ access_token: "tok", expires_in: 3600 })
   if (u.includes("/v2/checkout/orders")) return json({ id: "5O190127TN364715T", status: "CREATED", links: [{ rel: "approve", href: "https://www.paypal.com/checkoutnow?token=5O190127TN364715T" }, { rel: "payer-action", href: "https://www.paypal.com/checkoutnow?token=5O190127TN364715T" }] })
   return json({})
 }
 
 const call = async (body) => {
+  clearRotationCache("tenant-1")
   const r = await POST({ json: async () => body, headers: { get: () => null } })
   return { status: r.status, body: await r.json() }
 }
@@ -63,6 +84,22 @@ assert.equal(r.status, 201, JSON.stringify(r.body))
 const upd = sqlLog.filter((s) => s.q.includes("UPDATE tenants"))
 assert.equal(upd.length, 1, "checkout did not advance the rotation pointer")
 assert.deepEqual(upd[0].values, [1, "tenant-1"])
+
+// ── The pointer is computed in the list the session chose from: circuit-open
+// accounts are left out at checkout too. [B(open), A, C], pointer 0 → the
+// session pinned A (index 0 of [A, C]) → next is 1 (C), not 2 (A again).
+sqlLog.length = 0
+scenario = {
+  session: { ...SESSION, merchant_account_id: "acct-a" },
+  accounts: [acct("acct-b"), acct("acct-a"), acct("acct-c")],
+  open: ["acct-b"],
+  locked: (id) => acct(id),
+}
+r = await call(BODY)
+assert.equal(r.status, 201, JSON.stringify(r.body))
+const upd2 = sqlLog.filter((s) => s.q.includes("UPDATE tenants"))
+assert.equal(upd2.length, 1)
+assert.equal(upd2[0].values[0], 1, "pointer written in the session's (circuit-filtered) list")
 
 // ── Fix 2: single-account tenant, the pinned account fails the locked re-check
 // (volume committed meanwhile) → 409 for the session, not 403 "System Overloaded"

@@ -546,7 +546,7 @@ export async function selectMerchant(opts: RotationOptions): Promise<SelectedMer
     ) ho ON ho.merchant_id = ma.id
     WHERE ma.tenant_id = ${tenantId}
       AND ma.status IN ('ACTIVE', 'WARMING_UP')
-    ORDER BY ma.priority DESC
+    ORDER BY ma.priority DESC, ma.id
   `) as unknown as MerchantAccountRow[]
 
   if (accounts.length === 0) {

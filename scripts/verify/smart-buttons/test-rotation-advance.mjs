@@ -72,7 +72,11 @@ globalThis.__harnessSql = (strings, ...values) => {
   if (q.includes("UPDATE tenants")) { updates.push({ q, values }); return [] }
   if (q.includes("FROM tenants")) return [{ rotation_strategy: "SEQUENTIAL", rotation_interval: 120, last_rotation_index: 0, last_rotation_at: null }]
   if (q.includes("INSERT INTO button_sessions")) { pinned.push(values[2]); return [{ id: "sess-" + pinned.length, expires_at: "2026-10-08T12:30:00.000Z" }] }
-  if (q.includes("FROM   merchant_accounts ma")) return [acct("acct-1"), acct("acct-2")]
+  if (q.includes("FROM   merchant_accounts ma")) {
+    // same tiebreaker as checkout: equal priorities keep one order
+    assert.match(q, /ORDER BY ma\.priority DESC, ma\.id\b/)
+    return [acct("acct-1"), acct("acct-2")]
+  }
   return []
 }
 const req = (body) => ({ json: async () => body, headers: { get: () => null } })

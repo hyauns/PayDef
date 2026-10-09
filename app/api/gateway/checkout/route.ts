@@ -491,7 +491,8 @@ export async function POST(req: NextRequest) {
        ) ho ON ho.merchant_id = ma.id
        WHERE  ma.tenant_id = $1
          AND  ma.status IN ('ACTIVE', 'WARMING_UP')
-       ORDER BY ma.priority DESC`,
+       ORDER BY ma.priority DESC, ma.id -- one stable order for the rotation pointer (same as /api/gateway/button-session)
+      `,
       [tenantId]
     )
 
@@ -536,9 +537,12 @@ export async function POST(req: NextRequest) {
         )
       }
       candidate = pinned
-      // Same preference the session applied before rotating (lib/button-session-create.ts)
+      // The list the session rotated over (lib/button-session-create.ts):
+      // eligible → display-profile preference → circuit breaker. The pointer
+      // index only means something in that same list.
       const profileMatched = preferredProfileId ? eligible.filter((a) => a.display_profile_id === preferredProfileId) : []
-      rotationCandidates = profileMatched.length > 0 ? profileMatched : eligible
+      const preferred = profileMatched.length > 0 ? profileMatched : eligible
+      rotationCandidates = await filterOpenCircuits(preferred, store.id)
     } else {
       if (eligible.length === 0) {
         await client.query("ROLLBACK")
