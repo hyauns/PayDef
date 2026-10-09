@@ -64,4 +64,16 @@ const upd = sqlLog.filter((s) => s.q.includes("UPDATE tenants"))
 assert.equal(upd.length, 1, "checkout did not advance the rotation pointer")
 assert.deepEqual(upd[0].values, [1, "tenant-1"])
 
+// ── Fix 2: single-account tenant, the pinned account fails the locked re-check
+// (volume committed meanwhile) → 409 for the session, not 403 "System Overloaded"
+scenario = { session: SESSION, accounts: [acct("acct-1")], locked: (id) => acct(id, { current_volume: "995" }) }
+r = await call(BODY)
+assert.equal(r.status, 409, JSON.stringify(r.body))
+assert.equal(r.body.code, "button_session_account_unavailable")
+// same when the pinned account is gone from the pool entirely
+scenario = { session: SESSION, accounts: [], locked: (id) => acct(id) }
+r = await call(BODY)
+assert.equal(r.status, 409, JSON.stringify(r.body))
+assert.equal(r.body.code, "button_session_account_unavailable")
+
 console.log("PASS test-checkout-session-route")

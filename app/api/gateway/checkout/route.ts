@@ -497,7 +497,10 @@ export async function POST(req: NextRequest) {
 
     const allAccounts = eligibleQuery.rows.filter((account) => !excludedAccountIds.has(account.id))
 
-    if (allAccounts.length === 0) {
+    // A button session has no fallback account: an empty pool (or its pinned
+    // account excluded by a re-check below) is answered with the session's 409
+    // by the pinned branch, so the storefront drops the session and falls back.
+    if (allAccounts.length === 0 && !buttonSession) {
       await client.query("ROLLBACK")
       if (exhaustedInvalidAccounts) {
         return NextResponse.json(
