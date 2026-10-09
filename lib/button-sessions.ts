@@ -128,12 +128,23 @@ export interface CheckoutSessionRow {
   expires_at:          string | Date
 }
 
+/**
+ * The session must belong to the store, be unexpired and be in the order's
+ * currency — the buyer's SDK was loaded with the session currency, so an
+ * order in another one would not match it.
+ */
 export function resolveCheckoutSession(
   row: CheckoutSessionRow | null,
   storeId: string,
-  now: Date
+  now: Date,
+  currency: string
 ): { ok: true; session: CheckoutSessionRow } | { ok: false; status: 409; code: "button_session_invalid" } {
-  if (!row || row.store_id !== storeId || new Date(row.expires_at).getTime() <= now.getTime()) {
+  if (
+    !row ||
+    row.store_id !== storeId ||
+    new Date(row.expires_at).getTime() <= now.getTime() ||
+    (row.currency || "USD").toUpperCase() !== String(currency).toUpperCase()
+  ) {
     return { ok: false, status: 409, code: "button_session_invalid" }
   }
   return { ok: true, session: row }

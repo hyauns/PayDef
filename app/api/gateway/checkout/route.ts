@@ -405,7 +405,7 @@ export async function POST(req: NextRequest) {
       WHERE  id::text = ${body.buttonSessionId}
       LIMIT  1
     `) as unknown as CheckoutSessionRow[]
-    const resolved = resolveCheckoutSession(sessionRows[0] ?? null, store.id, new Date())
+    const resolved = resolveCheckoutSession(sessionRows[0] ?? null, store.id, new Date(), currency)
     if (!resolved.ok) {
       return NextResponse.json(
         { error: "Button session is invalid or expired.", code: resolved.code },

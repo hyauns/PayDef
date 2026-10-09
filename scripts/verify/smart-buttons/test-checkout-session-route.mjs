@@ -76,4 +76,10 @@ r = await call(BODY)
 assert.equal(r.status, 409, JSON.stringify(r.body))
 assert.equal(r.body.code, "button_session_account_unavailable")
 
+// ── Fix 3: the order currency must match the session's (the SDK was loaded with it)
+scenario = { session: SESSION, accounts: [acct("acct-1")], locked: (id) => acct(id) }
+r = await call({ ...BODY, currency: "EUR" })
+assert.equal(r.status, 409, JSON.stringify(r.body))
+assert.equal(r.body.code, "button_session_invalid")
+
 console.log("PASS test-checkout-session-route")
