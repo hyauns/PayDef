@@ -42,6 +42,7 @@ let seen
 const sqlOk = async (strings, ...values) => { seen = { q: strings.join("?"), values }; return health }
 assert.deepEqual(await sh.loadShieldHealth(sqlOk, ["Pay.Dead.com", "pay.dead.com", null, "pay.ok.com"]), health)
 assert.match(seen.q, /FROM shield_domains/)
+assert.match(seen.q, /is_active\s*=\s*true/, "inactive duplicate rows cannot shadow the active one")
 assert.deepEqual(seen.values[0], ["pay.dead.com", "pay.ok.com"])
 assert.deepEqual(await sh.loadShieldHealth(async () => { throw new Error("db down") }, ["pay.ok.com"]), [])
 let queried = false

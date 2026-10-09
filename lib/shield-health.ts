@@ -124,7 +124,7 @@ export async function loadShieldHealth(sql: SqlTag, domains: Array<string | null
     return (await sql`
       SELECT domain, probe_up, probe_checked_at
       FROM shield_domains
-      WHERE LOWER(domain) = ANY(${list})
+      WHERE LOWER(domain) = ANY(${list}) AND is_active = true
     `) as ShieldHealthRow[]
   } catch (err) {
     console.warn("[shield-health] health lookup failed (treated as healthy):", err instanceof Error ? err.message : err)
