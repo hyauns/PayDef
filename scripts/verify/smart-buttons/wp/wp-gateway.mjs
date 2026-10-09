@@ -242,7 +242,7 @@ http.createServer(async (req, res) => {
       if (tx.status !== "AUTHORIZED") return json(res, 409, { error: `Transaction is ${tx.status}.` })
       const c = await pp.captureAuthorization({ clientId, clientSecret, authorizationId: authorization_id })
       tx.status = c.status === "COMPLETED" ? "COMPLETED" : tx.status
-      log(`capture-on-ship tx ${tx.id} auth=${authorization_id} → ${c.status} capture=${c.id} amount=${c.amount?.value}`)
+      log(`capture-on-ship tx ${tx.id} auth=${authorization_id} → ${c.status} capture=${c.id} amount=${c.amount?.value ?? tx.amount + " (full authorization; PayPal omits it in a minimal reply)"}`)
       if (tx.status === "COMPLETED") await sendWebhook(tx, "payment.capture.completed", { paypal_capture_id: c.id })
       return json(res, 200, { status: tx.status, capture_id: c.id, transaction_id: tx.id })
     }
