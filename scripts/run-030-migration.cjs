@@ -49,10 +49,10 @@ async function migrate() {
     const rows = await sql`
       SELECT (SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'button_sessions')::int AS t,
              (SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'transactions'
-                AND column_name IN ('button_session_id', 'express', 'express_item_total', 'payer_email', 'payer_name', 'shipping_address'))::int AS c
+                AND column_name IN ('button_session_id', 'express', 'express_item_total', 'express_priced_at', 'payer_email', 'payer_name', 'shipping_address'))::int AS c
     `;
     console.log("Verification:", rows[0]);
-    if (rows[0].t !== 1 || rows[0].c !== 6) {
+    if (rows[0].t !== 1 || rows[0].c !== 7) {
       console.error("Migration verification FAILED");
       process.exit(1);
     }
