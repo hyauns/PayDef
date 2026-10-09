@@ -5,51 +5,82 @@ const rot = await import("@/lib/merchant-rotation")
 
 const A = { id: "acct-a" }
 const B = { id: "acct-b" }
+const C = { id: "acct-c" }
 const updates = []
 const tenants = {
   "t-seq": { rotation_strategy: "SEQUENTIAL", rotation_interval: 120, last_rotation_index: 0, last_rotation_at: null },
   "t-seq-default": { rotation_strategy: "SEQUENTIAL", rotation_interval: 120, last_rotation_index: 0, last_rotation_at: null },
+  "t-mixed": { rotation_strategy: "SEQUENTIAL", rotation_interval: 120, last_rotation_index: 0, last_rotation_at: null },
   "t-time": { rotation_strategy: "TIME", rotation_interval: 60, last_rotation_index: 0, last_rotation_at: "2026-01-01T00:00:00Z" },
 }
+// A stateful tenants table. Compare-and-set UPDATEs (… AND MOD(last_rotation_index, n) = i)
+// only apply while the pointer is where the caller expects it.
 const sql = async (strings, ...values) => {
   const q = strings.join("?")
-  if (q.includes("UPDATE tenants")) { updates.push({ q, values }); return [] }
-  if (q.includes("FROM tenants")) return [tenants[values[0]]]
+  if (q.includes("UPDATE tenants")) {
+    updates.push({ q, values })
+    const row = tenants[values[1]]
+    if (q.includes("MOD(")) {
+      const [, , n, expect] = values
+      if (row.last_rotation_index % n !== expect) return []
+      if (q.includes("last_rotation_at <=") && row.last_rotation_at &&
+          Date.now() - new Date(row.last_rotation_at).getTime() < row.rotation_interval * 60_000) return []
+    }
+    row.last_rotation_index = values[0]
+    if (q.includes("last_rotation_at = NOW()")) row.last_rotation_at = new Date().toISOString()
+    return [{ id: values[1] }]
+  }
+  if (q.includes("FROM tenants")) return [{ ...tenants[values[0]] }]
   return []
 }
+const peek = (list, t) => rot.selectByStrategy(list, t, sql, { advance: false }).then((a) => a.id)
 
 // ── SEQUENTIAL: page views (advance:false) keep showing the current account
-assert.equal((await rot.selectByStrategy([A, B], "t-seq", sql, { advance: false })).id, "acct-a")
-assert.equal((await rot.selectByStrategy([A, B], "t-seq", sql, { advance: false })).id, "acct-a")
+assert.equal(await peek([A, B], "t-seq"), "acct-a")
+assert.equal(await peek([A, B], "t-seq"), "acct-a")
 assert.equal(updates.length, 0, "a page view wrote the rotation pointer")
 // the order on A moves the pointer past A
 await rot.advanceRotationPast([A, B], "acct-a", "t-seq", sql)
-assert.equal(updates.length, 1)
-assert.deepEqual(updates[0].values, [1, "t-seq"])
-assert.equal((await rot.selectByStrategy([A, B], "t-seq", sql, { advance: false })).id, "acct-b")
+assert.equal(tenants["t-seq"].last_rotation_index, 1)
+assert.equal(await peek([A, B], "t-seq"), "acct-b")
 // an account no longer in the list changes nothing
 await rot.advanceRotationPast([A, B], "acct-gone", "t-seq", sql)
-assert.equal(updates.length, 1)
+assert.equal(tenants["t-seq"].last_rotation_index, 1)
 
 // ── default (classic checkout) is unchanged: every call advances
 assert.equal((await rot.selectByStrategy([A, B], "t-seq-default", sql)).id, "acct-a")
 assert.equal((await rot.selectByStrategy([A, B], "t-seq-default", sql)).id, "acct-b")
-assert.equal(updates.length, 3)
+assert.equal(tenants["t-seq-default"].last_rotation_index, 0)
+
+// ── classic checkouts and session orders mixed: a session order never moves
+// the pointer backwards. Page view pins A (pointer 0); two classic checkouts
+// take A and B (pointer → 2, C next); the session order on A leaves it at 2.
+assert.equal(await peek([A, B, C], "t-mixed"), "acct-a")
+assert.equal((await rot.selectByStrategy([A, B, C], "t-mixed", sql)).id, "acct-a")
+assert.equal((await rot.selectByStrategy([A, B, C], "t-mixed", sql)).id, "acct-b")
+assert.equal(tenants["t-mixed"].last_rotation_index, 2)
+await rot.advanceRotationPast([A, B, C], "acct-a", "t-mixed", sql)
+assert.equal(tenants["t-mixed"].last_rotation_index, 2, "session order moved the pointer backwards")
+assert.equal(await peek([A, B, C], "t-mixed"), "acct-c", "rotation continues with C")
+// …and when the pointer is still on the pinned account, it advances
+await rot.advanceRotationPast([A, B, C], "acct-c", "t-mixed", sql)
+assert.equal(tenants["t-mixed"].last_rotation_index, 0)
 updates.length = 0
 
 // ── TIME: interval elapsed → page views show the next account but do not rotate
-assert.equal((await rot.selectByStrategy([A, B], "t-time", sql, { advance: false })).id, "acct-b")
-assert.equal((await rot.selectByStrategy([A, B], "t-time", sql, { advance: false })).id, "acct-b")
+assert.equal(await peek([A, B], "t-time"), "acct-b")
+assert.equal(await peek([A, B], "t-time"), "acct-b")
 assert.equal(updates.length, 0, "a page view rotated the TIME pointer")
 // the order on B commits the rotation (index + timestamp)
 await rot.advanceRotationPast([A, B], "acct-b", "t-time", sql)
-assert.equal(updates.length, 1)
-assert.match(updates[0].q, /last_rotation_at = NOW\(\)/)
-assert.deepEqual(updates[0].values, [1, "t-time"])
-// interval restarted → B stays current, and another order on B is a no-op
-assert.equal((await rot.selectByStrategy([A, B], "t-time", sql, { advance: false })).id, "acct-b")
+assert.equal(tenants["t-time"].last_rotation_index, 1)
+const rotatedAt = tenants["t-time"].last_rotation_at
+assert.ok(Date.now() - new Date(rotatedAt).getTime() < 5000, "rotation timestamp set")
+// interval restarted → B stays current, and another order on B changes nothing
+assert.equal(await peek([A, B], "t-time"), "acct-b")
 await rot.advanceRotationPast([A, B], "acct-b", "t-time", sql)
-assert.equal(updates.length, 1)
+assert.equal(tenants["t-time"].last_rotation_index, 1)
+assert.equal(tenants["t-time"].last_rotation_at, rotatedAt, "a second order on B restarted the interval")
 updates.length = 0
 
 // ── the button-session route itself never writes the pointer

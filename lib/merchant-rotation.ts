@@ -446,9 +446,14 @@ export async function selectByStrategy(
 /**
  * Moves the SEQUENTIAL / TIME pointer past an account an order was just created
  * on. Smart Buttons pin the account at page view with { advance: false }, so
- * the rotation is driven by orders, not by page views. `candidates` should be
- * the same kind of list the session chose from; an account no longer in it is
- * a no-op. VOLUME (and unknown strategies) keep no pointer.
+ * the rotation is driven by orders, not by page views. `candidates` must be
+ * the list the session chose from; an account no longer in it is a no-op.
+ * VOLUME (and unknown strategies) keep no pointer.
+ *
+ * Compare-and-set: the UPDATE applies only while the pointer still points at
+ * the pinned account (TIME: at the one before it, with the interval elapsed).
+ * Classic checkouts may have moved it on since the page view; a session order
+ * then leaves it alone instead of moving it backwards.
  */
 export async function advanceRotationPast(
   candidates: { id: string }[],
@@ -456,41 +461,56 @@ export async function advanceRotationPast(
   tenantId: string,
   sql: NeonQueryFunction<false, false>
 ): Promise<void> {
-  if (candidates.length < 2) return
+  const n = candidates.length
+  if (n < 2) return
   const index = candidates.findIndex((c) => c.id === accountId)
   if (index === -1) return
 
   const config = await getRotationConfig(tenantId, sql)
+  let rows: unknown[]
 
   if (config.strategy === "SEQUENTIAL") {
-    const newIndex = (index + 1) % candidates.length
-    await sql`
+    const newIndex = (index + 1) % n
+    rows = (await sql`
       UPDATE tenants
       SET last_rotation_index = ${newIndex}
       WHERE id = ${tenantId}
-    `
-    _settingsCache.set(tenantId, { ...config, lastIndex: newIndex, fetchedAt: Date.now() })
-    return
-  }
-
-  if (config.strategy === "TIME") {
-    // Already the current account → the interval keeps running. Otherwise the
-    // page view saw an elapsed interval and showed the next account: commit
-    // that rotation now.
-    if (config.lastIndex % candidates.length === index) return
-    await sql`
+        AND MOD(last_rotation_index, ${n}::int) = ${index}::int
+      RETURNING id
+    `) as unknown[]
+    if (rows.length > 0) {
+      _settingsCache.set(tenantId, { ...config, lastIndex: newIndex, fetchedAt: Date.now() })
+      return
+    }
+  } else if (config.strategy === "TIME") {
+    // The page view showed the next account because the interval had run out:
+    // commit that rotation. If the pointer is already on this account (or
+    // elsewhere), nothing changes and the interval keeps running.
+    rows = (await sql`
       UPDATE tenants
       SET last_rotation_index = ${index},
           last_rotation_at = NOW()
       WHERE id = ${tenantId}
-    `
-    _settingsCache.set(tenantId, {
-      ...config,
-      lastIndex: index,
-      lastRotationAt: new Date().toISOString(),
-      fetchedAt: Date.now(),
-    })
+        AND MOD(last_rotation_index, ${n}::int) = ${(index - 1 + n) % n}::int
+        AND (last_rotation_at IS NULL OR last_rotation_at <= NOW() - rotation_interval * INTERVAL '1 minute')
+      RETURNING id
+    `) as unknown[]
+    if (rows.length > 0) {
+      _settingsCache.set(tenantId, {
+        ...config,
+        lastIndex: index,
+        lastRotationAt: new Date().toISOString(),
+        fetchedAt: Date.now(),
+      })
+      return
+    }
+  } else {
+    return
   }
+
+  // Not applied: the pointer moved elsewhere (another instance's cache may be
+  // the stale one) — re-read it next time.
+  clearRotationCache(tenantId)
 }
 
 // ─── Core Service ─────────────────────────────────────────────────────────────

@@ -33,6 +33,7 @@ globalThis.__harnessSql = (strings, ...values) => {
   const q = strings.join("?")
   sqlLog.push({ q, values })
   if (q.includes("FROM   button_sessions")) return [scenario.session]
+  if (q.includes("UPDATE tenants")) return [{ id: "tenant-1" }]
   if (q.includes("FROM tenants")) return [{ rotation_strategy: "SEQUENTIAL", rotation_interval: 120, last_rotation_index: 0, last_rotation_at: null, ...scenario.rotation }]
   return []
 }
@@ -83,7 +84,7 @@ let r = await call(BODY)
 assert.equal(r.status, 201, JSON.stringify(r.body))
 const upd = sqlLog.filter((s) => s.q.includes("UPDATE tenants"))
 assert.equal(upd.length, 1, "checkout did not advance the rotation pointer")
-assert.deepEqual(upd[0].values, [1, "tenant-1"])
+assert.deepEqual(upd[0].values, [1, "tenant-1", 2, 0]) // pointer 1, only while it is still on index 0 of 2
 
 // ── The pointer is computed in the list the session chose from: circuit-open
 // accounts are left out at checkout too. [B(open), A, C], pointer 0 → the
