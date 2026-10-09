@@ -28,10 +28,15 @@ const SESSION = {
 
 let scenario
 const sqlLog = []
+const events = [] // BEGIN / COMMIT / ROLLBACK and "rotation" (UPDATE tenants), in call order
 globalThis.__harnessStore = STORE
 globalThis.__harnessSql = (strings, ...values) => {
   const q = strings.join("?")
   sqlLog.push({ q, values })
+  if (q.includes("UPDATE tenants")) {
+    events.push("rotation")
+    if (scenario.rotationThrows) throw new Error("db down")
+  }
   if (q.includes("FROM   button_sessions")) return [scenario.session]
   if (q.includes("UPDATE tenants")) return [{ id: "tenant-1" }]
   if (q.includes("FROM tenants")) return [{ rotation_strategy: "SEQUENTIAL", rotation_interval: 120, last_rotation_index: 0, last_rotation_at: null, ...scenario.rotation }]
@@ -41,7 +46,7 @@ globalThis.__harnessPool = {
   connect: async () => ({
     release() {},
     async query(text, params) {
-      if (/^(BEGIN|COMMIT|ROLLBACK)$/.test(text)) return { rows: [] }
+      if (/^(BEGIN|COMMIT|ROLLBACK)$/.test(text)) { events.push(text); return { rows: [] } }
       if (text.includes("FROM   merchant_accounts ma")) {
         // equal priorities must come back in the same order the session saw
         assert.match(text, /ORDER BY ma\.priority DESC, ma\.id\b/)
@@ -101,6 +106,20 @@ assert.equal(r.status, 201, JSON.stringify(r.body))
 const upd2 = sqlLog.filter((s) => s.q.includes("UPDATE tenants"))
 assert.equal(upd2.length, 1)
 assert.equal(upd2[0].values[0], 1, "pointer written in the session's (circuit-filtered) list")
+
+// ── The pointer moves only after the order is committed, and a failing
+// rotation UPDATE never costs the buyer the order
+events.length = 0
+scenario = { session: SESSION, accounts: [acct("acct-1"), acct("acct-2")], locked: (id) => acct(id) }
+r = await call(BODY)
+assert.equal(r.status, 201)
+assert.deepEqual(events.filter((e) => e !== "BEGIN"), ["COMMIT", "rotation"], "rotation UPDATE before COMMIT")
+events.length = 0
+scenario = { ...scenario, rotationThrows: true }
+r = await call(BODY)
+assert.equal(r.status, 201, "a failing rotation UPDATE broke the checkout: " + JSON.stringify(r.body))
+assert.ok(r.body.paypalOrderId)
+assert.deepEqual(events.filter((e) => e !== "BEGIN"), ["COMMIT", "rotation"])
 
 // ── Fix 2: single-account tenant, the pinned account fails the locked re-check
 // (volume committed meanwhile) → 409 for the session, not 403 "System Overloaded"
