@@ -237,4 +237,20 @@ for (const context of ["product", "cart"]) {
   assert.equal(notices().length, 0, context + ": notice cleared on the next attempt")
 }
 
+// 13. a session PayDef does not know (not_found / invalid_ref page, posted to "*")
+//     → classic flow at once, no waiting for fallbackMs
+for (const code of ["not_found", "invalid_ref"]) {
+  t = boot({ context: "cart" })
+  await settle()
+  t.send(SHIELD, { type: "error", code })
+  assert.equal(t.container.style.display, "none", code + ": cart buttons hidden at once")
+  assert.equal(t.frame(), undefined)
+  assert.equal(t.fetched.filter((f) => f.url === "/?wc-ajax=paydef_button_session").length, 1, code + ": no renewal")
+  t = boot({ context: "checkout" })
+  await settle()
+  t.send(SHIELD, { type: "error", code })
+  assert.equal(t.frame(), undefined)
+  assert.ok(t.form.children.some((c) => c.getAttribute && c.getAttribute("name") === "paydef_force_redirect"), code + ": checkout falls back to redirect")
+}
+
 console.log("PASS test-plugin-bridge")

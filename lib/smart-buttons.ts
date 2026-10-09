@@ -575,3 +575,17 @@ ${POST_FN}
 </body>
 </html>`
 }
+
+/**
+ * Session pages for a session PayDef does not know (no row, or a malformed id):
+ * there are no allowed origins to answer, yet the shop is waiting for a message.
+ * This page carries nothing but the error code, so it is the one page served
+ * frameable (no frame-ancestors) and posting to targetOrigin "*" — the shop
+ * then falls back at once instead of after its timeout. Every other error,
+ * and every page with session or transaction data, keeps its framing.
+ */
+export type UnknownSessionCode = "not_found" | "invalid_ref"
+
+export function renderUnknownSessionPage(code: UnknownSessionCode): string {
+  return renderButtonsErrorPage(code, ["*"])
+}

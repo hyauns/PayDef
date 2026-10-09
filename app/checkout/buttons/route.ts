@@ -23,6 +23,8 @@ import {
   renderButtonsFinishedPage,
   renderButtonsPage,
   renderSessionButtonsPage,
+  renderUnknownSessionPage,
+  type UnknownSessionCode,
 } from "@/lib/smart-buttons"
 import {
   type ButtonSessionRow as SessionRow,
@@ -51,9 +53,26 @@ function htmlResponse(body: string, status: number, origins: string[]): Response
  * (checkout / cart / product page). The SDK loads with the account the
  * session pinned; createOrder and shipping changes are relayed to the shop.
  */
+/**
+ * Unknown / malformed session: no allowed origins exist to restrict framing to
+ * or to post to. The page carries only the error code, so it is served
+ * frameable and posts to "*" (renderUnknownSessionPage) — the shop falls back
+ * at once instead of waiting for its timeout.
+ */
+function unknownSessionResponse(code: UnknownSessionCode, status: number): Response {
+  return new Response(renderUnknownSessionPage(code), {
+    status,
+    headers: {
+      "Content-Type":           "text/html; charset=utf-8",
+      "Cache-Control":          "no-store",
+      "X-Content-Type-Options": "nosniff",
+    },
+  })
+}
+
 async function sessionPage(sessionId: string, st: string | null): Promise<Response> {
   if (!isTransactionRef(sessionId)) {
-    return htmlResponse(renderButtonsErrorPage("invalid_ref", []), 400, [])
+    return unknownSessionResponse("invalid_ref", 400)
   }
 
   const rows = (await getSql()`
@@ -74,6 +93,7 @@ async function sessionPage(sessionId: string, st: string | null): Promise<Respon
       sessionId, code: decision.code, tokenReason: token.reason,
     })
     // The error page posts {type:"error", code} so the shop falls back.
+    if (decision.code === "not_found") return unknownSessionResponse("not_found", decision.status)
     return htmlResponse(renderButtonsErrorPage(decision.code, decision.allowedOrigins), decision.status, decision.allowedOrigins)
   }
 

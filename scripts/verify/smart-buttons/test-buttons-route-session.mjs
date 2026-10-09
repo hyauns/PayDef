@@ -27,12 +27,48 @@ r = await GET(req(`?session=${SID}`))
 assert.equal(r.status, 410)
 assert.ok((await r.text()).includes('"expired"'))
 
+// Run the page's inline script and collect what it posts to the parent.
+const posts = (page) => {
+  const out = []
+  const body = [...page.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]).pop()
+  const window = { parent: { postMessage: (m, origin) => out.push({ m, origin }) } }
+  new Function("window", "document", body)(window, { getElementById: () => ({}) })
+  return out
+}
+
+// An unknown / malformed session has no allowed origins to answer: the page is
+// frameable and tells the shop at once (targetOrigin "*", no data but the code)
+// so the shop falls back instead of waiting for its timeout.
 use([])
 r = await GET(req(`?session=${SID}`))
 assert.equal(r.status, 404)
+assert.ok(!String(r.headers.get("content-security-policy") ?? "").includes("frame-ancestors"), "unknown session page is frameable")
+let sent = posts(await r.text())
+assert.equal(sent.length, 1)
+assert.equal(sent[0].origin, "*")
+assert.equal(sent[0].m.source, "paydef-buttons")
+assert.equal(sent[0].m.type, "error")
+assert.equal(sent[0].m.code, "not_found")
 
 use([ROW])
 r = await GET(req(`?session=not-a-uuid`))
 assert.equal(r.status, 400)
 assert.equal(seen, null, "malformed session id never reaches the DB")
+assert.ok(!String(r.headers.get("content-security-policy") ?? "").includes("frame-ancestors"))
+sent = posts(await r.text())
+assert.deepEqual(sent.map((s) => [s.origin, s.m.type, s.m.code]), [["*", "error", "invalid_ref"]])
+
+// Everything else keeps its framing: expired session (carries the session's
+// origins), and the transaction page's invalid ref
+use([{ ...ROW, expires_at: new Date(Date.now() - 1000).toISOString() }])
+r = await GET(req(`?session=${SID}`))
+assert.equal(r.headers.get("content-security-policy"), "frame-ancestors https://shop.example.com")
+assert.deepEqual(posts(await r.text()).map((s) => s.origin), ["https://shop.example.com"])
+r = await GET(req(`?ref=not-a-uuid`))
+assert.equal(r.status, 400)
+assert.equal(r.headers.get("content-security-policy"), "frame-ancestors 'none'")
+use([])
+r = await GET(req(`?ref=${SID}`))
+assert.equal(r.status, 404)
+assert.equal(r.headers.get("content-security-policy"), "frame-ancestors 'none'")
 console.log("PASS test-buttons-route-session")
