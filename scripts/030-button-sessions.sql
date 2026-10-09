@@ -26,6 +26,9 @@ ALTER TABLE transactions ADD COLUMN IF NOT EXISTS express BOOLEAN NOT NULL DEFAU
 
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS express_item_total NUMERIC(12,2);
 
+-- set by /api/gateway/order-amount; execute refuses an express transaction without it
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS express_priced_at TIMESTAMPTZ;
+
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payer_email TEXT;
 
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payer_name TEXT;

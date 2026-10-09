@@ -74,3 +74,43 @@ export async function updateExpressAmount(
   await deps.saveAmount(row.id, expected)
   return { ok: true, amount: expected }
 }
+
+/**
+ * Was this express (cart / product) transaction approved without ever being
+ * priced? Express orders are created at the item total; shipping and tax are
+ * added by order-amount when the buyer picks an address in PayPal. Capturing
+ * one that was never priced would collect the item total only — the shop would
+ * lose its shipping — so execute refuses it.
+ *
+ * Before migration 030 the columns do not exist and nothing is express (false).
+ * Any other failure is thrown: never capture blind.
+ */
+export async function isUnpricedExpress(
+  load: () => Promise<{ express: boolean | null; express_priced_at: string | Date | null } | null>
+): Promise<boolean> {
+  try {
+    const row = await load()
+    return !!row && row.express === true && !row.express_priced_at
+  } catch (error) {
+    if ((error as { code?: string } | null)?.code === "42703") return false
+    throw error
+  }
+}
+
+type SqlTag = (strings: TemplateStringsArray, ...values: unknown[]) => Promise<unknown>
+
+/** order-amount: the new total, and the mark that this express order was priced. */
+export async function saveExpressAmountSql(sql: SqlTag, transactionId: string, total: string): Promise<void> {
+  await sql`UPDATE transactions SET original_amount = ${total}, express_priced_at = NOW(), updated_at = NOW() WHERE id = ${transactionId}`
+}
+
+/** execute: loader for isUnpricedExpress. */
+export function loadExpressPricingSql(sql: SqlTag, transactionId: string) {
+  return async () => {
+    const rows = (await sql`SELECT express, express_priced_at FROM transactions WHERE id = ${transactionId}`) as Array<{
+      express: boolean | null
+      express_priced_at: string | Date | null
+    }>
+    return rows[0] ?? null
+  }
+}

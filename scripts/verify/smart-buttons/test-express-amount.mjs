@@ -33,4 +33,30 @@ assert.deepEqual(await updateExpressAmount(deps(), input({ shipping: "-1", total
 d = deps(ROW, { patch: async () => { throw new Error("PayPal 422") } })
 assert.deepEqual(await updateExpressAmount(d, input()), { ok: false, status: 502, code: "paypal_patch_failed" })
 assert.equal(d.calls.saved, null, "amount not saved when PayPal refused")
+// isUnpricedExpress: an express transaction must have been priced (shipping +
+// tax for the buyer's PayPal address) before execute may capture it
+{
+  const { isUnpricedExpress } = await import("@/lib/express-amount")
+  const row = (r) => async () => r
+  assert.equal(await isUnpricedExpress(row({ express: true, express_priced_at: null })), true)
+  assert.equal(await isUnpricedExpress(row({ express: true, express_priced_at: "2026-10-09T01:00:00Z" })), false)
+  assert.equal(await isUnpricedExpress(row({ express: false, express_priced_at: null })), false)
+  assert.equal(await isUnpricedExpress(row(null)), false)
+  // before migration 030 the columns do not exist: nothing is express
+  assert.equal(await isUnpricedExpress(async () => { const e = new Error("column does not exist"); e.code = "42703"; throw e }), false)
+  // any other failure: do not capture blind
+  await assert.rejects(isUnpricedExpress(async () => { throw new Error("db down") }), /db down/)
+}
+// the SQL behind it: order-amount marks the transaction priced together with
+// the new amount; execute reads the two columns
+{
+  const { saveExpressAmountSql, loadExpressPricingSql } = await import("@/lib/express-amount")
+  let seen = null
+  const fakeSql = async (strings, ...values) => { seen = { q: strings.join("?"), values }; return [{ express: true, express_priced_at: null }] }
+  await saveExpressAmountSql(fakeSql, "tx1", "29.00")
+  assert.ok(seen.q.includes("UPDATE transactions SET original_amount = ?, express_priced_at = NOW()"), seen.q)
+  assert.deepEqual(seen.values, ["29.00", "tx1"])
+  assert.deepEqual(await loadExpressPricingSql(fakeSql, "tx1")(), { express: true, express_priced_at: null })
+  assert.ok(seen.q.includes("SELECT express, express_priced_at FROM transactions WHERE id = ?"), seen.q)
+}
 console.log("PASS test-express-amount")

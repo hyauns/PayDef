@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Store not found or inactive." }, { status: 401 })
   }
 
-  const { allowed, headers: rlHeaders } = await checkRateLimit(store.id)
+  const { allowed, headers: rlHeaders } = await checkRateLimit(store.id, "button-session")
   if (!allowed) {
     return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429, headers: rlHeaders })
   }

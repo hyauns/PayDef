@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getSql } from "@/lib/neon"
 import { processDueWebhookEvents } from "@/lib/webhook-delivery"
 import { processExpiredTransactions } from "@/lib/gateway-recovery"
+import { purgeExpiredButtonSessions } from "@/lib/button-sessions"
 import { describeError, isTransientConnectionError } from "@/lib/error-describe"
 
 /** One retry only: the next scheduled run is 60s away and picks up anything missed. */
@@ -70,6 +71,17 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Housekeeping, never part of the sweep's outcome: Smart Buttons sessions
+  // pile up with page views and are useless a day after they expire.
+  let purgedButtonSessions: number | null = null
+  if (deliveries && expirations) {
+    try {
+      purgedButtonSessions = await purgeExpiredButtonSessions(sql)
+    } catch (error) {
+      console.warn("[cron/recovery] button session purge failed:", describeError(error))
+    }
+  }
+
   const durationMs = Date.now() - startedAt
 
   if (deliveries && expirations) {
@@ -83,6 +95,7 @@ export async function GET(req: NextRequest) {
           deliveries_processed: deliveries.length,
           expired_sessions: expirations.expiredSessions,
           expired_authorizations: expirations.expiredAuthorizations,
+          purged_button_sessions: purgedButtonSessions,
           duration_ms: durationMs,
           attempts,
           triggered_at: new Date().toISOString(),

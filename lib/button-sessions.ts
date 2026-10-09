@@ -143,3 +143,29 @@ export function resolveCheckoutSession(
 export function isExpressCheckout(body: { express?: unknown }, session: { context: string } | null): boolean {
   return body.express === true && !!session && session.context !== "checkout"
 }
+
+type SqlTag = (strings: TemplateStringsArray, ...values: unknown[]) => Promise<unknown>
+
+/**
+ * Sessions are created on page views and never reused once expired: delete the
+ * ones a day past expiry, at most 5000 per run (the recovery cron calls this
+ * every minute). Transactions keep their row with button_session_id set to
+ * NULL (ON DELETE SET NULL). Before migration 030 there is no table: 0.
+ */
+export async function purgeExpiredButtonSessions(sql: SqlTag): Promise<number> {
+  try {
+    const rows = await sql`
+      DELETE FROM button_sessions
+      WHERE  id IN (
+        SELECT id FROM button_sessions
+        WHERE  expires_at < now() - interval '1 day'
+        LIMIT 5000
+      )
+      RETURNING id
+    `
+    return Array.isArray(rows) ? rows.length : 0
+  } catch (error) {
+    if ((error as { code?: string } | null)?.code === "42P01") return 0
+    throw error
+  }
+}

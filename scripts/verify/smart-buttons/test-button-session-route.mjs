@@ -44,4 +44,8 @@ assert.equal(r.body.enabled, true)
 assert.equal(r.body.sessionId, "sess-9")
 assert.equal(r.body.embedUrl, "https://pay.example.com/checkout/buttons?session=sess-9")
 assert.deepEqual(inserted, ["tenant-1", "store-1", "acct-1", "pay.example.com", "product", "20.00", "EUR", "CAPTURE", ["https://shop.example.com"]])
+// page views have their own rate-limit bucket: a busy shop (or someone calling
+// the public session AJAX) must not use up the limit that checkout, capture and
+// refund share
+assert.deepEqual(globalThis.__rateLimitCalls.at(-1), ["store-1", "button-session"])
 console.log("PASS test-button-session-route")

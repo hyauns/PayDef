@@ -31,6 +31,9 @@ function boot({ context = "checkout", sessionOk = true, checkoutResult, expressR
   form.fields = [["billing_email", "a@b.c"], ["payment_method", "paydef"], ["woocommerce-process-checkout-nonce", "n"]]
   const radio = makeEl("input", { value: "paydef" })
   const body = makeEl("body")
+  // containers currently in the page; WooCommerce re-renders replace them
+  let containers = [container]
+  body.contains = (el) => containers.includes(el) || el === placeOrder || el === form
   const listeners = []
   const fetched = []
   const jq = {}
@@ -39,7 +42,7 @@ function boot({ context = "checkout", sessionOk = true, checkoutResult, expressR
     getElementById: (id) => (id === "place_order" ? placeOrder : null),
     createElement: (t) => makeEl(t),
     querySelector: (s) => (s === "form.checkout" ? form : s.startsWith("input[name=") ? radio : null),
-    querySelectorAll: (s) => (s === ".paydef-smart-buttons" ? [container] : []),
+    querySelectorAll: (s) => (s === ".paydef-smart-buttons" ? containers : []),
   }
   const responses = {
     paydef_button_session: sessionOk
@@ -76,10 +79,21 @@ function boot({ context = "checkout", sessionOk = true, checkoutResult, expressR
   new Function("window", "document", "jQuery", "fetch", "FormData", "URLSearchParams", "setTimeout", "clearTimeout", SRC)(
     window, document, jQuery, fetch, FormData, URLSearchParamsShim, setTimeout, clearTimeout
   )
-  const frame = () => container.children.find((c) => c.tagName === "IFRAME")
+  let current = container
+  const frame = () => current.children.find((c) => c.tagName === "IFRAME")
   const send = (origin, data, from) =>
     listeners.forEach((f) => f({ origin, source: from ?? frame().contentWindow, data: { source: "paydef-buttons", ...data } }))
-  return { container, placeOrder, form, fetched, frame, send, timers, window, jq }
+  // updated_checkout: the payment box (old container + its iframe) is replaced
+  const rerender = ({ withContainer = true } = {}) => {
+    current = makeEl("div", { "data-context": context })
+    containers = withContainer ? [current] : []
+  }
+  const setSession = (ok) => {
+    responses.paydef_button_session = ok
+      ? { success: true, data: { enabled: true, sessionId: "S2", embedUrl: SHIELD + "/checkout/buttons?session=S2", embedOrigin: SHIELD } }
+      : { success: true, data: { enabled: false } }
+  }
+  return { container, placeOrder, form, fetched, frame, send, timers, window, jq, rerender, setSession }
 }
 const settle = () => new Promise((r) => globalThis.setTimeout(r, 20))
 
@@ -160,4 +174,43 @@ assert.equal(sc.body.get("transactionId"), "TX2")
 assert.equal(sc.body.get("address[state]"), "AK")
 assert.equal(sc.body.get("ownerToken"), "OWN2")
 assert.deepEqual(t.frame().contentWindow.posted.at(-1).m, { type: "shipping-rejected", requestId: "r4", reason: "COUNTRY_ERROR", source: "paydef-shop" })
+
+// 9. checkout re-render: the old (ready) entry must not keep Place order hidden
+//    when the new container cannot show buttons
+t = boot({ context: "checkout" })
+await settle()
+t.send(SHIELD, { type: "ready" })
+assert.equal(t.placeOrder.style.display, "none")
+t.rerender()
+t.setSession(false)
+t.jq.updated_checkout.forEach((fn) => fn({ type: "updated_checkout" }))
+await settle()
+t.jq.payment_method_selected.forEach((fn) => fn({ type: "payment_method_selected" }))
+assert.notEqual(t.placeOrder.style.display, "none", "Place order is back when the new box has no buttons")
+
+// 10. a page without a checkout container never touches Place order (another
+//     gateway may have hidden it for its own buttons)
+t = boot({ context: "cart" })
+await settle()
+t.placeOrder.style.display = "none"
+t.jq.payment_method_selected.forEach((fn) => fn({ type: "payment_method_selected" }))
+t.jq.updated_checkout.forEach((fn) => fn({ type: "updated_checkout" }))
+assert.equal(t.placeOrder.style.display, "none", "Place order left alone")
+
+// 11. product / cart: PayDef refuses the session at click time (expired after a
+//     long-open page, or the pinned account is gone) → one fresh session, buttons
+//     stay; a second refusal falls back
+t = boot({ context: "product", expressResult: { success: false, data: { code: "session", message: "Button session is invalid or expired." } } })
+await settle()
+t.send(SHIELD, { type: "ready" })
+t.send(SHIELD, { type: "create-order", requestId: "r5" })
+await settle()
+assert.equal(t.fetched.filter((f) => f.url === "/?wc-ajax=paydef_button_session").length, 2, "a new session was requested")
+assert.notEqual(t.container.style.display, "none", "buttons stay")
+assert.ok(t.frame(), "a new iframe is shown")
+t.send(SHIELD, { type: "ready" })
+t.send(SHIELD, { type: "create-order", requestId: "r6" })
+await settle()
+assert.equal(t.container.style.display, "none", "second refusal: classic flow")
+
 console.log("PASS test-plugin-bridge")

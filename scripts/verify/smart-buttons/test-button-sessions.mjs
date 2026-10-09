@@ -42,3 +42,19 @@ assert.equal(d({ ...ROW, context: "checkout" }).config.express, false)
 assert.equal(d({ ...ROW, context: "product" }).config.express, true)
 assert.equal(d({ ...ROW, intent: "CAPTURE" }).config.intent, "capture")
 console.log("PASS test-button-sessions")
+
+// purgeExpiredButtonSessions: deletes sessions a day past expiry, in batches;
+// before migration 030 (no table) it is a no-op, not an error
+{
+  const seen = []
+  const fakeSql = async (strings, ...values) => { seen.push(strings.join("?")); return [{ id: "x" }, { id: "y" }] }
+  assert.equal(await bs.purgeExpiredButtonSessions(fakeSql), 2)
+  assert.match(seen[0], /DELETE FROM button_sessions/)
+  assert.match(seen[0], /expires_at < now\(\) - interval '1 day'/)
+  assert.match(seen[0], /LIMIT 5000/)
+  const missing = async () => { const e = new Error('relation "button_sessions" does not exist'); e.code = "42P01"; throw e }
+  assert.equal(await bs.purgeExpiredButtonSessions(missing), 0)
+  const down = async () => { throw new Error("connection refused") }
+  await assert.rejects(bs.purgeExpiredButtonSessions(down), /connection refused/)
+}
+console.log("PASS purgeExpiredButtonSessions")

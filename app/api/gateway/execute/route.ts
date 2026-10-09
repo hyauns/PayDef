@@ -44,6 +44,7 @@ import {
 import { getSql } from "@/lib/neon"
 import { verifyExecuteToken } from "@/lib/execute-token"
 import { payerFromPayPal } from "@/lib/smart-buttons"
+import { isUnpricedExpress, loadExpressPricingSql } from "@/lib/express-amount"
 
 const GATEWAY_FEE_PERCENT = 0.02
 
@@ -105,6 +106,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: "Invalid or missing executeToken." },
       { status: 403 }
+    )
+  }
+
+  // ── Express (cart / product) guard ────────────────────────────────────────
+  // Shipping and tax are added when the buyer picks an address in PayPal. An
+  // express transaction approved without ever being priced would be collected
+  // at the item total only, so it is refused (no money moves; the PayPal order
+  // stays uncaptured). Read outside the row lock: the mark is set before the
+  // buyer can approve.
+  if (await isUnpricedExpress(loadExpressPricingSql(getSql(), transactionId))) {
+    txLog.warn("execute.express_not_priced", `Express transaction ${transactionId} was never priced for shipping — refusing to execute`)
+    return NextResponse.json(
+      { error: "This order was not priced for shipping. Please try again.", code: "express_not_priced" },
+      { status: 409 }
     )
   }
 

@@ -224,7 +224,10 @@ export function decideButtonPage(input: {
 
 // ─── HTML rendering ───────────────────────────────────────────────────────────
 
-export function buildSdkUrl(c: Pick<ButtonPageConfig, "clientId" | "currency" | "intent">): string {
+export function buildSdkUrl(
+  c: Pick<ButtonPageConfig, "clientId" | "currency" | "intent">,
+  opts: { express?: boolean } = {}
+): string {
   const params = new URLSearchParams({
     "client-id":        c.clientId,
     currency:           c.currency,
@@ -232,6 +235,11 @@ export function buildSdkUrl(c: Pick<ButtonPageConfig, "clientId" | "currency" | 
     components:         "buttons",
     "integration-date": SDK_INTEGRATION_DATE,
   })
+  // Express (cart / product): shipping is priced only through
+  // onShippingAddressChange. PayPal's guest card button is not proven to fire
+  // it, and an unpriced express order would be paid without shipping, so it is
+  // not offered there. The checkout page sends the typed address and keeps it.
+  if (opts.express) params.set("disable-funding", "card")
   return `https://www.paypal.com/sdk/js?${params.toString()}`
 }
 
@@ -404,7 +412,7 @@ ${RUNTIME_JS}
  * Replies are accepted only from the session's allowed (shop) origins.
  */
 export function renderSessionButtonsPage(config: SessionPageConfig, allowedOrigins: string[]): string {
-  const sdkSrc = escapeAttr(buildSdkUrl(config))
+  const sdkSrc = escapeAttr(buildSdkUrl(config, { express: config.express }))
   return `<!doctype html>
 <html lang="en">
 <head>

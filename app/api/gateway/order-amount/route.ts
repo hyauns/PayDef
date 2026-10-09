@@ -18,7 +18,7 @@ import { checkRateLimit } from "@/lib/gateway-rate-limit"
 import { decrypt, isEncrypted } from "@/lib/encryption"
 import { patchOrderAmount } from "@/lib/paypal"
 import { isTransactionRef } from "@/lib/smart-buttons"
-import { updateExpressAmount, type ExpressTxRow } from "@/lib/express-amount"
+import { saveExpressAmountSql, updateExpressAmount, type ExpressTxRow } from "@/lib/express-amount"
 
 const log = createLogger({ route: "/api/gateway/order-amount" })
 
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
         })
       },
       saveAmount: async (id, total) => {
-        await sql`UPDATE transactions SET original_amount = ${total}, updated_at = NOW() WHERE id = ${id}`
+        await saveExpressAmountSql(sql, id, total)
       },
     },
     { transactionId, storeId: store.id, shipping: body.shipping, taxTotal: body.taxTotal, total: body.total }

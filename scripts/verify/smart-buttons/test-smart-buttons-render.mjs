@@ -55,4 +55,14 @@ assert.ok(errHtml.includes('"error"'))
 assert.ok(errHtml.includes('["https://shop.example.com"]'))
 assert.equal(errHtml.includes("paypal.com/sdk"), false)
 
+// Express sessions (cart / product) price shipping through onShippingAddressChange.
+// PayPal's guest "Debit or Credit Card" button is not shown there, so a payment
+// can never skip the shipping callback; the checkout page (address typed by the
+// buyer) keeps the card button.
+{
+  const page = (express) => sb.renderSessionButtonsPage({ sessionId: "S", clientId: "cid", currency: "USD", intent: "capture", express }, ["https://shop.example.com"])
+  assert.match(page(true), /disable-funding=card/)
+  assert.doesNotMatch(page(false), /disable-funding/)
+  assert.doesNotMatch(sb.buildSdkUrl({ clientId: "cid", currency: "USD", intent: "capture" }), /disable-funding/)
+}
 console.log("PASS test-smart-buttons-render")
