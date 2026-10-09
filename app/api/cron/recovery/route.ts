@@ -3,6 +3,7 @@ import { getSql } from "@/lib/neon"
 import { processDueWebhookEvents } from "@/lib/webhook-delivery"
 import { processExpiredTransactions } from "@/lib/gateway-recovery"
 import { purgeExpiredButtonSessions } from "@/lib/button-sessions"
+import { safeRunShieldHealthProbe } from "@/lib/shield-health"
 import { describeError, isTransientConnectionError } from "@/lib/error-describe"
 
 /** One retry only: the next scheduled run is 60s away and picks up anything missed. */
@@ -82,6 +83,10 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Shield hosts: an unreachable pay.<brand> host means approved PayPal orders
+  // are never captured. Independent of the sweep's outcome and never fatal.
+  const shieldProbe = await safeRunShieldHealthProbe(sql)
+
   const durationMs = Date.now() - startedAt
 
   if (deliveries && expirations) {
@@ -96,6 +101,7 @@ export async function GET(req: NextRequest) {
           expired_sessions: expirations.expiredSessions,
           expired_authorizations: expirations.expiredAuthorizations,
           purged_button_sessions: purgedButtonSessions,
+          shield_probe: shieldProbe,
           duration_ms: durationMs,
           attempts,
           triggered_at: new Date().toISOString(),
@@ -108,6 +114,7 @@ export async function GET(req: NextRequest) {
       deliveries_processed: deliveries.length,
       expired_sessions: expirations.expiredSessions,
       expired_authorizations: expirations.expiredAuthorizations,
+      shield_probe: shieldProbe,
       duration_ms: durationMs,
       attempts,
     })

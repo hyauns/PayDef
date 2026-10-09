@@ -13,6 +13,8 @@
  * gap can never block checkout on its own.
  */
 
+import { sendTelegramMessage } from "@/lib/telegram"
+
 export const PROBE_PATH = "/api/health/shield-popup"
 export const PROBE_BODY = "shield-popup-ok"
 export const PROBE_TIMEOUT_MS = 5_000
@@ -147,4 +149,174 @@ export async function applyShieldHealth<T extends { id: string; shield_domain: s
     )
   }
   return { ...r, refusedAll: mode === "enforce" && r.accounts.length === 0 }
+}
+
+// ─── The probe run (recovery cron, every minute) ─────────────────────────────
+
+interface DomainStateRow {
+  id: string
+  domain: string
+  probe_up: boolean | null
+  probe_failures: number
+  probe_changed_at: string | Date | null
+}
+
+interface AlertAccount {
+  id: string
+  name: string
+  tenant_id: string
+  shield_domain: string | null
+  tenant_name: string
+  telegram_bot_token: string | null
+  telegram_chat_id: string | null
+}
+
+interface Flip {
+  domain: string
+  to: "down" | "up"
+  error: string | null
+  downSince: Date | null // set for "up": when it went down
+}
+
+export interface ShieldProbeSummary {
+  probed: number
+  down: string[]
+  flips: Array<{ domain: string; to: "down" | "up" }>
+  alerts: number
+}
+
+type Sender = (botToken: string, chatId: string, text: string) => Promise<{ ok: boolean; error?: string }>
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+}
+
+function duration(ms: number): string {
+  const min = Math.max(1, Math.round(ms / 60_000))
+  return min < 60 ? `${min} min` : `${Math.floor(min / 60)}h${min % 60 ? ` ${min % 60} min` : ""}`
+}
+
+/** One message per tenant (with a Telegram bot) that has an account behind a flipped shield. */
+export function buildShieldAlerts(input: {
+  flips: Flip[]
+  accounts: AlertAccount[]
+  upByDomain: Map<string, boolean | null>
+  mode: ShieldHealthMode
+  now: Date
+}): Array<{ tenantId: string; botToken: string; chatId: string; text: string }> {
+  const out: Array<{ tenantId: string; botToken: string; chatId: string; text: string }> = []
+  const tenants = new Map<string, AlertAccount[]>()
+  for (const a of input.accounts) {
+    if (!a.telegram_bot_token || !a.telegram_chat_id) continue
+    tenants.set(a.tenant_id, [...(tenants.get(a.tenant_id) ?? []), a])
+  }
+  for (const [tenantId, accts] of tenants) {
+    const lines: string[] = []
+    for (const f of input.flips) {
+      const users = accts.filter((a) => normalizeDomain(a.shield_domain) === f.domain)
+      if (users.length === 0) continue
+      const names = users.map((a) => escapeHtml(a.name)).join(", ")
+      if (f.to === "down") {
+        const effect = input.mode === "enforce" ? "skipped for new PayPal orders" : "shadow mode: NOT skipped"
+        lines.push(`🔴 <b>Shield DOWN</b>: <code>${escapeHtml(f.domain)}</code> — ${escapeHtml(f.error ?? "unknown error")}\nAccounts: ${names} (${effect})`)
+      } else {
+        const down = f.downSince ? ` (down ${duration(input.now.getTime() - new Date(f.downSince).getTime())})` : ""
+        lines.push(`✅ <b>Shield back UP</b>: <code>${escapeHtml(f.domain)}</code>${down}\nAccounts: ${names}`)
+      }
+    }
+    if (lines.length === 0) continue
+    const healthy = accts.some((a) => input.upByDomain.get(normalizeDomain(a.shield_domain)) !== false)
+    if (!healthy) {
+      const what = input.mode === "enforce" ? "PayPal checkout is refused" : "PayPal is still routed to them (shadow mode)"
+      lines.push(`⛔ No PayPal account of ${escapeHtml(accts[0].tenant_name)} has a working shield — ${what}.`)
+    }
+    out.push({ tenantId, botToken: accts[0].telegram_bot_token!, chatId: accts[0].telegram_chat_id!, text: lines.join("\n\n") })
+  }
+  return out
+}
+
+export async function runShieldHealthProbe(
+  sql: SqlTag,
+  opts: { mode?: ShieldHealthMode; fetchImpl?: typeof fetch; now?: Date; send?: Sender } = {}
+): Promise<ShieldProbeSummary> {
+  const mode = opts.mode ?? getShieldHealthMode()
+  const now = opts.now ?? new Date()
+  const send = opts.send ?? sendTelegramMessage
+  const enforce = mode === "enforce"
+
+  const rows = (await sql`
+    SELECT id, domain, probe_up, probe_failures, probe_changed_at
+    FROM   shield_domains
+    WHERE  is_active = true
+  `) as DomainStateRow[]
+  const accounts = (await sql`
+    SELECT ma.id, ma.name, ma.tenant_id, ma.shield_domain,
+           t.name AS tenant_name, t.telegram_bot_token, t.telegram_chat_id
+    FROM   merchant_accounts ma
+    JOIN   tenants t ON t.id = ma.tenant_id
+    WHERE  ma.status IN ('ACTIVE', 'WARMING_UP')
+  `) as AlertAccount[]
+
+  const registered = new Set(rows.map((r) => normalizeDomain(r.domain)))
+  for (const a of accounts) {
+    const d = normalizeDomain(a.shield_domain)
+    if (d && !registered.has(d)) console.warn(`[shield-health] unregistered_domain account=${a.id} shield=${d}`)
+  }
+
+  const results = await Promise.all(rows.map((r) => probeShieldDomain(normalizeDomain(r.domain), opts.fetchImpl)))
+  const flips: Flip[] = []
+  const upByDomain = new Map<string, boolean | null>()
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]
+    const res = results[i]
+    const domain = normalizeDomain(row.domain)
+    const next = nextHealth({ probe_up: row.probe_up, probe_failures: row.probe_failures }, res.ok)
+    upByDomain.set(domain, next.probe_up)
+    if (next.flipped) flips.push({ domain, to: next.flipped, error: res.error, downSince: next.flipped === "up" ? (row.probe_changed_at ? new Date(row.probe_changed_at) : null) : null })
+    // health_ok (read by the rest of the system) only follows the probe in enforce.
+    await sql`
+      UPDATE shield_domains
+      SET    probe_up         = ${next.probe_up},
+             probe_failures   = ${next.probe_failures},
+             probe_error      = ${res.error},
+             probe_checked_at = NOW(),
+             probe_changed_at = CASE WHEN ${next.flipped !== null} THEN NOW() ELSE probe_changed_at END,
+             last_check       = NOW(),
+             health_ok = CASE WHEN ${enforce} AND ${next.probe_up}::boolean IS NOT NULL THEN ${next.probe_up}::boolean ELSE health_ok END
+      WHERE  id = ${row.id}
+    `
+    if (next.flipped) console.warn(`[shield-health] ${domain} is ${next.flipped.toUpperCase()} (${res.error ?? "ok"}) mode=${mode}`)
+  }
+
+  let alerts = 0
+  for (const m of buildShieldAlerts({ flips, accounts, upByDomain, mode, now })) {
+    try {
+      const r = await send(m.botToken, m.chatId, m.text)
+      if (r.ok) alerts++
+      else console.error(`[shield-health] Telegram alert failed tenant=${m.tenantId}: ${r.error}`)
+    } catch (err) {
+      console.error(`[shield-health] Telegram alert error tenant=${m.tenantId}:`, err instanceof Error ? err.message : err)
+    }
+  }
+
+  return {
+    probed: rows.length,
+    down: [...upByDomain].filter(([, up]) => up === false).map(([d]) => d),
+    flips: flips.map((f) => ({ domain: f.domain, to: f.to })),
+    alerts,
+  }
+}
+
+/** For the recovery cron: a failing probe must never fail the sweep. */
+export async function safeRunShieldHealthProbe(
+  sql: SqlTag,
+  opts: Parameters<typeof runShieldHealthProbe>[1] = {}
+): Promise<ShieldProbeSummary | { error: string }> {
+  try {
+    return await runShieldHealthProbe(sql, opts)
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err)
+    console.warn("[shield-health] probe run failed:", error)
+    return { error }
+  }
 }
