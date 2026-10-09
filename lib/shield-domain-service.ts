@@ -1,4 +1,5 @@
 import { getPool, getSql } from "@/lib/neon"
+import { probeShieldDomain } from "@/lib/shield-health"
 import {
   getVercelDomainIntegrationInfo,
   inspectVercelDomain,
@@ -183,27 +184,11 @@ async function checkDomainBridgeHealth(domain: string): Promise<{
   statusCode: number | null
   detail: string
 }> {
-  const url = `https://${domain}/api/health/shield-popup`
-  console.info(`[shield-domain] Health check started: domain=${domain} url=${url}`)
-  try {
-    const res = await fetch(url, {
-      method: "GET",
-      signal: AbortSignal.timeout(5000),
-      headers: { "User-Agent": "PayDef-ShieldHealthCheck/1.0" },
-    })
-    const healthy = res.status === 200
-    // Consume body to properly close connection
-    if (healthy) await res.text().catch(() => {})
-    const detail = healthy
-      ? `Bridge OK (${res.status})`
-      : `Bridge returned ${res.status}`
-    console.info(`[shield-domain] Health check result: domain=${domain} healthy=${healthy} status=${res.status}`)
-    return { healthy, statusCode: res.status, detail }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    console.warn(`[shield-domain] Health check failed: domain=${domain} error=${msg}`)
-    return { healthy: false, statusCode: null, detail: `Fetch failed: ${msg}` }
-  }
+  console.info(`[shield-domain] Health check started: domain=${domain}`)
+  const r = await probeShieldDomain(domain)
+  const detail = r.ok ? `Bridge OK (${r.status})` : `Bridge check failed: ${r.error}`
+  console.info(`[shield-domain] Health check result: domain=${domain} healthy=${r.ok} status=${r.status}`)
+  return { healthy: r.ok, statusCode: r.status, detail }
 }
 
 /**
