@@ -84,7 +84,7 @@ update_option(
 		'store_id'       => 'local-test-store',
 		'api_key'        => 'local-test-key',
 		'webhook_secret' => 'local-test-webhook-secret',
-		'capture_status' => '',
+		'capture_status' => 'completed',
 		'debug'          => 'yes',
 	)
 );

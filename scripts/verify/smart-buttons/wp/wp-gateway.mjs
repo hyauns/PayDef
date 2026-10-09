@@ -48,6 +48,9 @@ const GATEWAY = "http://localhost:4200"
 const SUCCESS_URL = `${WP}/checkout/order-received/`
 const CANCEL_URL = `${WP}/checkout/`
 const ORIGINS = sb.frameAncestorOrigins([SUCCESS_URL, CANCEL_URL])
+// RIG_INTENT=AUTHORIZE mimics a store with capture_mode MANUAL: funds are held at
+// checkout and captured later through /api/gateway/capture (capture on shipment).
+const INTENT = process.env.RIG_INTENT === "AUTHORIZE" ? "AUTHORIZE" : "CAPTURE"
 
 // Kept in a file so a restart does not orphan the sessions WooCommerce has cached
 // (the real PayDef keeps them in the database).
@@ -86,6 +89,24 @@ async function sendWebhook(tx, event, extra) {
 
 async function captureTx(tx) {
   if (tx.status !== "PENDING") return
+  if (INTENT === "AUTHORIZE") {
+    const a = await pp.authorizeApprovedOrder({ clientId, clientSecret, orderId: tx.paypalOrderId })
+    const auth = a.purchase_units?.[0]?.payments?.authorizations?.[0]
+    tx.status = auth ? "AUTHORIZED" : "FAILED"
+    tx.authorizationId = auth?.id ?? null
+    const payer = sb.payerFromPayPal(a)
+    tx.payer = payer
+    log(`authorize tx ${tx.id} → ${tx.status} auth=${tx.authorizationId} amount=${auth?.amount?.value} payer=${payer.payerEmail} shipping=${JSON.stringify(payer.shippingAddress)}`)
+    if (tx.status === "AUTHORIZED") {
+      await sendWebhook(tx, "payment.authorization.created", {
+        authorization_id: tx.authorizationId,
+        payer_email: payer.payerEmail ?? undefined,
+        buyer_name: payer.payerName ?? undefined,
+        shipping_address: payer.shippingAddress ?? undefined,
+      })
+    }
+    return
+  }
   const r = await pp.captureApprovedOrder({ clientId, clientSecret, orderId: tx.paypalOrderId })
   tx.status = r.status === "COMPLETED" ? "COMPLETED" : "FAILED"
   const payer = sb.payerFromPayPal(r)
@@ -138,7 +159,7 @@ http.createServer(async (req, res) => {
       const shipping = express ? null : buildPayPalShipping(body.shippingAddress)
       log(`checkout #${body.orderId} ${amount} ${currency} session=${session ? session.context : "-"} express=${express} address=${shipping ? "SET_PROVIDED_ADDRESS" : express ? "GET_FROM_FILE" : "NO_SHIPPING"}`)
       const order = await pp.createPayPalOrder({
-        clientId, clientSecret, amount, currencyCode: currency, intent: "CAPTURE",
+        clientId, clientSecret, amount, currencyCode: currency, intent: INTENT,
         items: [{ name: `#${body.orderId} Smart Buttons test`, quantity: "1", unitAmount: { currencyCode: currency, value: amount } }],
         skipRandomization: true,
         returnUrl: `${GATEWAY}/order/success?ref=${id}`,
@@ -152,7 +173,7 @@ http.createServer(async (req, res) => {
       return json(res, 201, {
         transactionId: id, executeToken: null, approvalUrl: pp.getApprovalUrl(order), flow: "SMART_BUTTONS",
         popupUrl: null, popupOrigin: null, embedUrl, embedOrigin: embedUrl ? GATEWAY : null,
-        paypalOrderId: order.id, intent: "CAPTURE", status: "PENDING",
+        paypalOrderId: order.id, intent: INTENT, status: "PENDING",
       })
     }
 
@@ -178,14 +199,14 @@ http.createServer(async (req, res) => {
       const sid = u.searchParams.get("session")
       if (sid !== null) {
         const s = sessions.get(sid)
-        const row = s && { id: s.id, store_id: STORE_ID, merchant_account_id: "acct", shield_domain: null, context: s.context, amount: s.amount, currency: s.currency, intent: "CAPTURE", allowed_origins: ORIGINS, expires_at: s.expires, client_id: clientId }
+        const row = s && { id: s.id, store_id: STORE_ID, merchant_account_id: "acct", shield_domain: null, context: s.context, amount: s.amount, currency: s.currency, intent: INTENT, allowed_origins: ORIGINS, expires_at: s.expires, client_id: clientId }
         const d = bs.decideSessionPage({ row: row || null, tokenShouldBlock: false, now: new Date() })
         return d.kind === "render"
           ? html(res, 200, sb.renderSessionButtonsPage(d.config, d.allowedOrigins), d.allowedOrigins)
           : html(res, d.status, sb.renderButtonsErrorPage(d.code, d.allowedOrigins), d.allowedOrigins)
       }
       const tx = txs.get(u.searchParams.get("ref") || "")
-      const row = tx && { id: tx.id, status: tx.status, intent: "CAPTURE", original_currency: tx.currency, paypal_order_id: tx.paypalOrderId, checkout_expires_at: new Date(Date.now() + 30 * 60e3).toISOString(), merchant_success_url: SUCCESS_URL, merchant_cancel_url: CANCEL_URL, client_id: clientId }
+      const row = tx && { id: tx.id, status: tx.status, intent: INTENT, original_currency: tx.currency, paypal_order_id: tx.paypalOrderId, checkout_expires_at: new Date(Date.now() + 30 * 60e3).toISOString(), merchant_success_url: SUCCESS_URL, merchant_cancel_url: CANCEL_URL, client_id: clientId }
       const d = sb.decideButtonPage({ row: row || null, executeToken: null, tokenShouldBlock: false, now: new Date() })
       const page = d.kind === "render" ? sb.renderButtonsPage(d.config, d.allowedOrigins)
         : d.kind === "finished" ? sb.renderButtonsFinishedPage(d.result, d.allowedOrigins, tx.id)
@@ -208,8 +229,22 @@ http.createServer(async (req, res) => {
       if (!tx) return json(res, 404, { error: "Transaction not found." })
       if (u.pathname === "/order/success") await captureTx(tx)
       log(`redirect return ${u.pathname} tx ${tx.id} → ${tx.status}`)
-      const ok = u.pathname === "/order/success" && tx.status === "COMPLETED"
+      const ok = u.pathname === "/order/success" && (tx.status === "COMPLETED" || tx.status === "AUTHORIZED")
       return redirect(res, `${ok ? SUCCESS_URL : CANCEL_URL}?transaction_id=${tx.id}`)
+    }
+
+    // Capture on shipment: the plugin captures the held authorization.
+    if (u.pathname === "/api/gateway/capture" && req.method === "POST") {
+      if (!authed(req)) return json(res, 401, { error: "Invalid API key." })
+      const { authorization_id } = JSON.parse(await readBody(req))
+      const tx = [...txs.values()].find((t) => t.authorizationId && t.authorizationId === authorization_id)
+      if (!tx) return json(res, 404, { error: "Authorization not found." })
+      if (tx.status !== "AUTHORIZED") return json(res, 409, { error: `Transaction is ${tx.status}.` })
+      const c = await pp.captureAuthorization({ clientId, clientSecret, authorizationId: authorization_id })
+      tx.status = c.status === "COMPLETED" ? "COMPLETED" : tx.status
+      log(`capture-on-ship tx ${tx.id} auth=${authorization_id} → ${c.status} capture=${c.id} amount=${c.amount?.value}`)
+      if (tx.status === "COMPLETED") await sendWebhook(tx, "payment.capture.completed", { paypal_capture_id: c.id })
+      return json(res, 200, { status: tx.status, capture_id: c.id, transaction_id: tx.id })
     }
 
     if (u.pathname.startsWith("/api/gateway/browser-status/")) {
@@ -233,4 +268,4 @@ http.createServer(async (req, res) => {
     log("gateway error:", e && e.message)
     json(res, 500, { error: String(e && e.message) })
   }
-}).listen(4200, () => log(`fake PayDef gateway ${GATEWAY} (WordPress expected at ${WP}; ${sessions.size} sessions, ${txs.size} transactions restored)`))
+}).listen(4200, () => log(`fake PayDef gateway ${GATEWAY} (intent ${INTENT}; WordPress expected at ${WP}; ${sessions.size} sessions, ${txs.size} transactions restored)`))
