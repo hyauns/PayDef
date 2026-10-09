@@ -1,5 +1,6 @@
 "use client"
 import { useEffect, useState, useRef } from "react"
+import { useIsClient } from "@/hooks/use-is-client"
 
 const rows = [
   { before: "Service Extension", after: "Verified Category: Product Order", status: "verified", tag: "OK" },
@@ -12,11 +13,10 @@ const rows = [
 
 export default function DescriptorTransformDemo() {
   const [activeIndex, setActiveIndex] = useState(-1)
-  const [isClient, setIsClient] = useState(false)
+  const isClient = useIsClient()
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
-    setIsClient(true)
     let current = 0
     // Start animation loop after 500ms
     const timeout = setTimeout(() => {

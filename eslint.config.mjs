@@ -12,6 +12,15 @@ export default defineConfig([
     "coverage/**",
     "public/**",
     "scripts/**",
+    // Not app code: vendored third-party templates, local tool/scratch output,
+    // the WooCommerce plugin (PHP + its own JS), and one-off root-level scripts.
+    "_reference_templates/**",
+    ".understand-anything/**",
+    ".skill/**",
+    ".superpowers/**",
+    "plugin woo/**",
+    "scratch/**",
+    "*.js",
   ]),
   {
     rules: {

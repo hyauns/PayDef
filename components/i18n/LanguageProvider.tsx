@@ -1,6 +1,7 @@
 "use client"
 
-import React, { createContext, useContext, useState, useEffect } from "react"
+import React, { createContext, useContext, useState, useSyncExternalStore } from "react"
+import { useIsClient } from "@/hooks/use-is-client"
 
 export type Language = "en" | "vi"
 
@@ -15,17 +16,18 @@ const LanguageContext = createContext<LanguageContextType>({
 })
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [language, setLanguageState] = useState<Language>("en")
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    const saved = localStorage.getItem("paydef_language") as Language
-    if (saved === "vi") setLanguageState("vi")
-    setMounted(true)
-  }, [])
+  const mounted = useIsClient()
+  // The saved choice is read on the client only; a choice made in this tab wins.
+  const saved = useSyncExternalStore<Language>(
+    () => () => {},
+    () => (localStorage.getItem("paydef_language") === "vi" ? "vi" : "en"),
+    () => "en"
+  )
+  const [chosen, setChosen] = useState<Language | null>(null)
+  const language = chosen ?? saved
 
   const setLanguage = (lang: Language) => {
-    setLanguageState(lang)
+    setChosen(lang)
     localStorage.setItem("paydef_language", lang)
   }
 

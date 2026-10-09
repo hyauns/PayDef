@@ -236,7 +236,6 @@ export async function POST(req: NextRequest) {
   const safeBrandName = brandValidation.value || null
   const safePrefix = prefixValidation.value || null
 
-  // @ts-ignore
   const profile: any = {
     industryVertical: VALID_VERTICALS.includes(industryVertical) ? industryVertical : "generic_ecommerce",
     displayMode: VALID_MODES.includes(displayMode) ? displayMode : "LEGACY_GENERIC",

@@ -125,7 +125,7 @@ export async function resolvePaymentIdentityBundleForCheckout(
 
     let bundle = resolved.bundle
     let reason: string = resolved.source
-    let maMatch = resolved.source === "merchant_account_bundle"
+    const maMatch = resolved.source === "merchant_account_bundle"
     let sdMatch = false
     const warnings = [...resolved.warnings]
 

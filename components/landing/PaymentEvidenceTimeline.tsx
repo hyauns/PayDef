@@ -1,5 +1,6 @@
 "use client"
 import { useEffect, useState, useRef } from "react"
+import { useIsClient, useMediaQuery } from "@/hooks/use-is-client"
 import { GitBranch, RefreshCcw, CreditCard, RotateCcw, BadgeCheck, ShieldCheck, Check } from "lucide-react"
 
 const events = [
@@ -22,28 +23,26 @@ const checklist = [
 ]
 
 export default function PaymentEvidenceTimeline() {
-  const [activeIndex, setActiveIndex] = useState(-1)
-  const [isClient, setIsClient] = useState(false)
+  const [animatedIndex, setAnimatedIndex] = useState(-1)
+  const isClient = useIsClient()
+  const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)")
+  // Reduced motion: no animation, the finished timeline is shown at once.
+  const activeIndex = prefersReducedMotion ? events.length - 1 : animatedIndex
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
-    setIsClient(true)
-    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    if (prefersReducedMotion) {
-      setActiveIndex(events.length - 1)
-      return
-    }
+    if (prefersReducedMotion) return
 
     let current = 0
     const timeout = setTimeout(() => {
-      setActiveIndex(current)
+      setAnimatedIndex(current)
       intervalRef.current = setInterval(() => {
         current = (current + 1) % (events.length + 2) // pause briefly at the end
         if (current >= events.length) {
            // stay on the last index for a bit
-           setActiveIndex(events.length - 1)
+           setAnimatedIndex(events.length - 1)
         } else {
-           setActiveIndex(current)
+           setAnimatedIndex(current)
         }
       }, 1500)
     }, 500)
@@ -52,7 +51,7 @@ export default function PaymentEvidenceTimeline() {
       clearTimeout(timeout)
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
-  }, [])
+  }, [prefersReducedMotion])
 
   const getStatusBadge = () => {
     if (!isClient || activeIndex < 0) return "WAITING"

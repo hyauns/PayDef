@@ -36,7 +36,16 @@ interface MerchantApiRow {
   isLimited?: boolean | null
 }
 
-// mapDbStatus moved to MerchantAccounts to use translation
+function mapDbStatus(t: (typeof dashboardCopy)[keyof typeof dashboardCopy], dbStatus: string, isLimited?: boolean): Status {
+  if (isLimited) return t.limitedStatus as Status
+  switch (dbStatus) {
+    case "ACTIVE": return t.activeStatus as Status
+    case "WARMING_UP": return t.warmupStatus as Status
+    case "PAUSED": return t.pausedStatus as Status
+    case "SUSPENDED": return t.suspendedStatus as Status
+    default: return t.activeStatus as Status
+  }
+}
 
 function VolumeBar({ current, soft, limit, t }: { current: number; soft: number; limit: number; t: any }) {
   const pct = Math.min((current / limit) * 100, 100)
@@ -71,17 +80,6 @@ export function MerchantAccounts() {
   const { language } = useLanguage()
   const t = dashboardCopy[language]
 
-  function mapDbStatus(dbStatus: string, isLimited?: boolean): Status {
-    if (isLimited) return t.limitedStatus as Status
-    switch (dbStatus) {
-      case "ACTIVE": return t.activeStatus as Status
-      case "WARMING_UP": return t.warmupStatus as Status
-      case "PAUSED": return t.pausedStatus as Status
-      case "SUSPENDED": return t.suspendedStatus as Status
-      default: return t.activeStatus as Status
-    }
-  }
-
   const [merchants, setMerchants] = useState<Merchant[]>([])
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
@@ -101,14 +99,14 @@ export function MerchantAccounts() {
             softLimit: a.softLimit ?? 4000,
             dailyLimit: a.dailyLimit ?? 5000,
             txCount: a.transactionCount ?? 0,
-            status: mapDbStatus(a.status, a.isLimited ?? undefined),
+            status: mapDbStatus(t, a.status, a.isLimited ?? undefined),
             isLimited: a.isLimited ?? false,
           }))
         )
       })
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [])
+  }, [t])
 
   useEffect(() => { fetchMerchants() }, [fetchMerchants])
 
