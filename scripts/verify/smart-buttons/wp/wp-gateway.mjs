@@ -23,6 +23,9 @@
 // Test values must match setup.php (gateway settings in WooCommerce).
 import http from "node:http"
 import { createHmac, randomUUID } from "node:crypto"
+import { readFileSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
 const ROOT = new URL("../../../../", import.meta.url) // repo root
 const pp = await import(new URL("lib/paypal.ts", ROOT).href)
@@ -46,8 +49,19 @@ const SUCCESS_URL = `${WP}/checkout/order-received/`
 const CANCEL_URL = `${WP}/checkout/`
 const ORIGINS = sb.frameAncestorOrigins([SUCCESS_URL, CANCEL_URL])
 
+// Kept in a file so a restart does not orphan the sessions WooCommerce has cached
+// (the real PayDef keeps them in the database).
+const STATE_FILE = join(tmpdir(), "paydef-wp-gateway-state.json")
 const sessions = new Map()
 const txs = new Map()
+try {
+  const saved = JSON.parse(readFileSync(STATE_FILE, "utf8"))
+  for (const s of saved.sessions || []) sessions.set(s.id, { ...s, expires: new Date(s.expires) })
+  for (const t of saved.txs || []) txs.set(t.id, t)
+} catch {}
+const saveState = () => {
+  try { writeFileSync(STATE_FILE, JSON.stringify({ sessions: [...sessions.values()], txs: [...txs.values()] })) } catch {}
+}
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a)
 
 const json = (res, status, body) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(body)) }
@@ -72,6 +86,7 @@ async function sendWebhook(tx, event, extra) {
 
 http.createServer(async (req, res) => {
   const u = new URL(req.url, GATEWAY)
+  res.on("finish", saveState)
   try {
     if (u.pathname === "/api/gateway/auth-check") {
       return authed(req) ? json(res, 200, { ok: true, store: STORE_ID }) : json(res, 401, { error: "Invalid API key." })
@@ -202,4 +217,4 @@ http.createServer(async (req, res) => {
     log("gateway error:", e && e.message)
     json(res, 500, { error: String(e && e.message) })
   }
-}).listen(4200, () => log(`fake PayDef gateway ${GATEWAY} (WordPress expected at ${WP})`))
+}).listen(4200, () => log(`fake PayDef gateway ${GATEWAY} (WordPress expected at ${WP}; ${sessions.size} sessions, ${txs.size} transactions restored)`))
