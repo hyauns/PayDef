@@ -83,7 +83,11 @@ class Fake_Cart {
 /** WC_Checkout::create_order reuses the order in order_awaiting_payment. */
 class Fake_Checkout {
 	public $seen_awaiting = array();
+	public $throw         = null; // a Throwable a woocommerce_checkout_* hook raises
 	public function create_order( $data ) {
+		if ( $this->throw ) {
+			throw $this->throw;
+		}
 		$awaiting              = WC()->session->get( 'order_awaiting_payment' );
 		$this->seen_awaiting[] = $awaiting;
 		if ( $awaiting && wc_get_order( $awaiting ) ) {

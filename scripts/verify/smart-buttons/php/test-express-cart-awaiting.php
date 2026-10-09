@@ -22,4 +22,14 @@ $order2 = Paydef_Express::create_from_cart();
 check( null === WC()->session->get( 'order_awaiting_payment' ), 'pointer left on the express order' );
 check( $order2->get_id() !== $order->get_id(), 'second express order is new' );
 
+// a hook inside create_order() throws an Error (not an Exception): the pointer
+// is still restored and the buyer gets an error, not a fatal
+WC()->session->set( 'order_awaiting_payment', 55 );
+WC()->checkout()->throw = new TypeError( 'hook broke' );
+$failed = Paydef_Express::create_from_cart();
+check( is_wp_error( $failed ), 'Error from create_order not turned into WP_Error' );
+check( 55 === WC()->session->get( 'order_awaiting_payment' ), 'pointer not restored after an Error' );
+check( 'The order could not be created.' === $failed->get_error_message(), 'Error text shown to the buyer' );
+WC()->checkout()->throw = null;
+
 echo "PASS test-express-cart-awaiting\n";
