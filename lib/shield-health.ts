@@ -48,7 +48,11 @@ export async function probeShieldDomain(domain: string, fetchImpl: typeof fetch 
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
       headers: { "User-Agent": "PayDef-ShieldHealthCheck/1.0" },
     })
-    if (res.status !== 200) return { ok: false, status: res.status, error: `HTTP ${res.status}` }
+    if (res.status !== 200) {
+      // free the connection: the body is never read on a non-200
+      try { await res.body?.cancel() } catch { /* ignore */ }
+      return { ok: false, status: res.status, error: `HTTP ${res.status}` }
+    }
     const body = (await res.text()).trim()
     if (body !== PROBE_BODY) return { ok: false, status: 200, error: "unexpected body (not a PayDef shield)" }
     return { ok: true, status: 200, error: null }

@@ -17,6 +17,15 @@ assert.equal(r.ok, false); assert.equal(r.status, 200); assert.match(r.error, /u
 r = await probeShieldDomain("pay.a.com", fake(() => res(307, "")))
 assert.equal(r.ok, false); assert.equal(r.status, 307); assert.match(r.error, /HTTP 307/)
 
+// non-200: the unread body is cancelled (fakes without a body still work, cancel errors ignored)
+let cancelled = false
+r = await probeShieldDomain("pay.a.com", fake(() => ({ status: 307, text: async () => "", body: { cancel() { cancelled = true; return Promise.resolve() } } })))
+assert.equal(r.ok, false); assert.equal(cancelled, true, "body cancelled on non-200")
+r = await probeShieldDomain("pay.a.com", fake(() => ({ status: 307, body: { cancel() { throw new Error("x") } } })))
+assert.equal(r.status, 307)
+r = await probeShieldDomain("pay.a.com", fake(() => ({ status: 307, body: { cancel() { return Promise.reject(new Error("x")) } } })))
+assert.equal(r.status, 307)
+
 r = await probeShieldDomain("pay.a.com", fake(() => res(502, "bad gateway")))
 assert.equal(r.ok, false); assert.match(r.error, /HTTP 502/)
 
