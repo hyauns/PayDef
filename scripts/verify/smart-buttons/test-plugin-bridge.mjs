@@ -93,7 +93,8 @@ function boot({ context = "checkout", sessionOk = true, checkoutResult, expressR
       ? { success: true, data: { enabled: true, sessionId: "S2", embedUrl: SHIELD + "/checkout/buttons?session=S2", embedOrigin: SHIELD } }
       : { success: true, data: { enabled: false } }
   }
-  return { container, placeOrder, form, fetched, frame, send, timers, window, jq, rerender, setSession }
+  const setExpress = (res) => { responses.paydef_express_create = res }
+  return { container, placeOrder, form, fetched, frame, send, timers, window, jq, rerender, setSession, setExpress }
 }
 const settle = () => new Promise((r) => globalThis.setTimeout(r, 20))
 
@@ -212,5 +213,28 @@ t.send(SHIELD, { type: "ready" })
 t.send(SHIELD, { type: "create-order", requestId: "r6" })
 await settle()
 assert.equal(t.container.style.display, "none", "second refusal: classic flow")
+
+// 12. product / cart: the shop refuses the express order (out of stock, options
+//     missing) → its message is shown next to the buttons, as text, and cleared
+//     on the next attempt
+for (const context of ["product", "cart"]) {
+  t = boot({ context, expressResult: { success: false, data: { message: "Sorry, <b>not enough</b> stock." } } })
+  await settle()
+  t.send(SHIELD, { type: "ready" })
+  t.send(SHIELD, { type: "create-order", requestId: "r7" })
+  await settle()
+  assert.equal(t.frame().contentWindow.posted.at(-1).m.type, "order-failed")
+  const notices = () => t.container.children.filter((c) => c.className === "woocommerce-error")
+  assert.equal(notices().length, 1, context + ": error notice shown")
+  assert.equal(notices()[0].textContent, "Sorry, <b>not enough</b> stock.")
+  assert.equal(notices()[0].innerHTML, "", "message set as text, never as HTML")
+  assert.notEqual(t.container.style.display, "none", "buttons stay for another try")
+  // next attempt: the old notice goes, a successful order leaves none
+  t.setExpress({ success: true, data: { transactionId: "TX3", executeToken: "", paypalOrderId: "PP3", ownerToken: "OWN3" } })
+  t.send(SHIELD, { type: "create-order", requestId: "r8" })
+  await settle()
+  assert.equal(t.frame().contentWindow.posted.at(-1).m.paypalOrderId, "PP3")
+  assert.equal(notices().length, 0, context + ": notice cleared on the next attempt")
+}
 
 console.log("PASS test-plugin-bridge")
