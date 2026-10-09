@@ -84,6 +84,26 @@ async function sendWebhook(tx, event, extra) {
   log(`webhook ${event} → ${r.status} ${(await r.text()).slice(0, 100)}`)
 }
 
+async function captureTx(tx) {
+  if (tx.status !== "PENDING") return
+  const r = await pp.captureApprovedOrder({ clientId, clientSecret, orderId: tx.paypalOrderId })
+  tx.status = r.status === "COMPLETED" ? "COMPLETED" : "FAILED"
+  const payer = sb.payerFromPayPal(r)
+  tx.payer = payer
+  const captured = r.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value
+  log(`capture tx ${tx.id} → ${r.status} captured=${captured} payer=${payer.payerEmail} shipping=${JSON.stringify(payer.shippingAddress)}`)
+  if (tx.status === "COMPLETED") {
+    await sendWebhook(tx, "payment.capture.completed", {
+      paypal_capture_id: r.id,
+      payer_email: payer.payerEmail ?? undefined,
+      buyer_name: payer.payerName ?? undefined,
+      shipping_address: payer.shippingAddress ?? undefined,
+    })
+  }
+}
+
+const redirect = (res, url) => { res.writeHead(302, { location: url, "cache-control": "no-store" }); res.end() }
+
 http.createServer(async (req, res) => {
   const u = new URL(req.url, GATEWAY)
   res.on("finish", saveState)
@@ -177,23 +197,19 @@ http.createServer(async (req, res) => {
       const { transactionId } = JSON.parse(await readBody(req))
       const tx = txs.get(transactionId)
       if (!tx) return json(res, 404, { error: "Transaction not found." })
-      if (tx.status === "PENDING") {
-        const r = await pp.captureApprovedOrder({ clientId, clientSecret, orderId: tx.paypalOrderId })
-        tx.status = r.status === "COMPLETED" ? "COMPLETED" : "FAILED"
-        const payer = sb.payerFromPayPal(r)
-        tx.payer = payer
-        const captured = r.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value
-        log(`capture tx ${tx.id} → ${r.status} captured=${captured} payer=${payer.payerEmail} shipping=${JSON.stringify(payer.shippingAddress)}`)
-        if (tx.status === "COMPLETED") {
-          await sendWebhook(tx, "payment.capture.completed", {
-            paypal_capture_id: r.id,
-            payer_email: payer.payerEmail ?? undefined,
-            buyer_name: payer.payerName ?? undefined,
-            shipping_address: payer.shippingAddress ?? undefined,
-          })
-        }
-      }
+      await captureTx(tx)
       return json(res, 200, { status: tx.status, transaction_id: tx.id })
+    }
+
+    // Classic redirect flow ("Always redirect" or the buttons fallback): PayPal
+    // returns the buyer here; capture, then send them to the shop like PayDef does.
+    if (u.pathname === "/order/success" || u.pathname === "/order/cancel") {
+      const tx = txs.get(u.searchParams.get("ref") || "")
+      if (!tx) return json(res, 404, { error: "Transaction not found." })
+      if (u.pathname === "/order/success") await captureTx(tx)
+      log(`redirect return ${u.pathname} tx ${tx.id} → ${tx.status}`)
+      const ok = u.pathname === "/order/success" && tx.status === "COMPLETED"
+      return redirect(res, `${ok ? SUCCESS_URL : CANCEL_URL}?transaction_id=${tx.id}`)
     }
 
     if (u.pathname.startsWith("/api/gateway/browser-status/")) {
