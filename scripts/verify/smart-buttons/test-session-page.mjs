@@ -50,6 +50,17 @@ let p2 = t2.options().createOrder()
 let ask2 = t2.posted.find((m) => m.type === "create-order")
 t2.send(SHOP, { type: "order-failed", requestId: ask2.requestId, message: "Billing email is required." })
 assert.equal(await pending(p2), "rejected")
+// PayPal then reports the rejected createOrder through onError: that is the shop
+// refusing the form, not PayPal failing, so the buttons must stay (no "error")
+t2.options().onError(new Error("Billing email is required."))
+assert.equal(t2.posted.some((m) => m.type === "error"), false, "a refused order does not take the buttons down")
+// the buyer fixes the form and clicks again; a real PayPal error still reports
+let p3 = t2.options().createOrder()
+let ask3 = t2.posted.filter((m) => m.type === "create-order").pop()
+t2.send(SHOP, { type: "order-created", requestId: ask3.requestId, transactionId: "TX9", executeToken: "", paypalOrderId: "PP9" })
+assert.equal(await p3, "PP9")
+t2.options().onError(new Error("boom"))
+assert.equal(t2.posted.filter((m) => m.type === "error").pop()?.code, "paypal_error")
 
 // 3. express: shipping changes are relayed with the current transaction; updated resolves, rejected rejects with the right error
 const errors = { ADDRESS_ERROR: "AE", COUNTRY_ERROR: "CE", STATE_ERROR: "SE", ZIP_ERROR: "ZE" }

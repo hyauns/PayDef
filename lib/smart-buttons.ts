@@ -451,12 +451,21 @@ ${RUNTIME_JS}
     return;
   }
 
+  // Set when the shop refused the order (e.g. an incomplete checkout form). PayPal
+  // reports that rejected createOrder through onError, but it is not a PayPal
+  // failure: the shop already shows its notices and the buttons must stay.
+  var refused = false;
+
   var options = {
     // The shop creates its order and asks PayDef for the PayPal order on the
     // account pinned by this session; we just hand the id to PayPal.
     createOrder: function () {
+      refused = false;
       return ask({ type: "create-order" }, 60000).then(function (m) {
-        if (m.type !== "order-created" || !m.paypalOrderId) throw new Error(m.message || "order_failed");
+        if (m.type !== "order-created" || !m.paypalOrderId) {
+          refused = m.type === "order-failed";
+          throw new Error(m.message || "order_failed");
+        }
         CFG.transactionId = m.transactionId;
         CFG.executeToken = m.executeToken || null;
         return m.paypalOrderId;
@@ -469,6 +478,7 @@ ${RUNTIME_JS}
     },
     onCancel: function () { post({ type: "cancelled" }); },
     onError: function (err) {
+      if (refused) { refused = false; return; }
       say("PayPal reported an error.");
       post({ type: "error", code: "paypal_error", message: String((err && err.message) || err).slice(0, 200) });
     }
