@@ -34,6 +34,7 @@ import { createLogger } from "@/lib/logger"
 const moduleLog = createLogger({ route: "/api/gateway/checkout" })
 import bcrypt from "bcryptjs"
 import { getPool, getSql } from "@/lib/neon"
+import { applyShieldHealth } from "@/lib/shield-health"
 import {
   clearPayPalTokenCache,
   createPayPalOrder,
@@ -496,7 +497,25 @@ export async function POST(req: NextRequest) {
       [tenantId]
     )
 
-    const allAccounts = eligibleQuery.rows.filter((account) => !excludedAccountIds.has(account.id))
+    // Accounts behind a shield host the probe has seen DOWN never take a new
+    // order in enforce mode: the buyer could pay but would return to a dead
+    // /order/success and the order would never be captured. Same place in the
+    // pipeline as /api/gateway/button-session, so the rotation lists match.
+    const shield = await applyShieldHealth(
+      eligibleQuery.rows.filter((account) => !excludedAccountIds.has(account.id)),
+      getSql(),
+      { storeId: store.id, tenantId }
+    )
+    const allAccounts = shield.accounts
+
+    if (shield.refusedAll && !buttonSession) {
+      await client.query("ROLLBACK")
+      log.warn("checkout.shield_unavailable", "Every PayPal account is behind a DOWN shield host", { storeId: store.id, tenantId })
+      return NextResponse.json(
+        { error: "PayPal is temporarily unavailable. Please choose another payment method.", code: "shield_unavailable" },
+        { status: 503 }
+      )
+    }
 
     // A button session has no fallback account: an empty pool (or its pinned
     // account excluded by a re-check below) is answered with the session's 409
