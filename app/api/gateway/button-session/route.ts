@@ -87,7 +87,9 @@ export async function POST(req: NextRequest) {
       preferredProfileId: async () =>
         (await resolvePaymentDisplayProfile({ tenantId: store.tenantId, storeId: store.id, storeName: store.name })).profileId ?? null,
       filterOpenCircuits: (accounts) => filterOpenCircuits(accounts, store.id),
-      selectByStrategy: (accounts) => selectByStrategy(accounts, store.tenantId, sql),
+      // Peek only: a page view must not move the rotation pointer. Checkout
+      // advances it when the order is created on the pinned account.
+      selectByStrategy: (accounts) => selectByStrategy(accounts, store.tenantId, sql, { advance: false }),
       insertSession: async (row: NewButtonSession) => {
         const rows = (await sql`
           INSERT INTO button_sessions (

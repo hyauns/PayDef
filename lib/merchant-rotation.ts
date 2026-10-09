@@ -370,16 +370,21 @@ export function filterEligibleAccounts(
  * @param candidates — pre-filtered eligible accounts (from filterEligibleAccounts)
  * @param tenantId   — the tenant whose strategy to use
  * @param sql        — Neon SQL tagged template for DB operations
+ * @param opts.advance — false = peek only (Smart Buttons page views): pick the
+ *                       account the strategy would use now without moving the
+ *                       pointer; the order later calls advanceRotationPast
  * @returns the selected MerchantAccountRow
  */
 export async function selectByStrategy(
   candidates: MerchantAccountRow[],
   tenantId: string,
-  sql: NeonQueryFunction<false, false>
+  sql: NeonQueryFunction<false, false>,
+  opts: { advance?: boolean } = {}
 ): Promise<MerchantAccountRow> {
   if (candidates.length === 1) return candidates[0]
 
   const config = await getRotationConfig(tenantId, sql)
+  const advance = opts.advance !== false
 
   switch (config.strategy) {
     case "VOLUME": {
@@ -389,7 +394,7 @@ export async function selectByStrategy(
     case "TIME": {
       const { account, newIndex, rotated } = selectByTime(candidates, config)
 
-      if (rotated) {
+      if (rotated && advance) {
         // Update the index and timestamp in DB (fire-and-forget for speed)
         sql`
           UPDATE tenants
@@ -412,6 +417,7 @@ export async function selectByStrategy(
 
     case "SEQUENTIAL": {
       const { account, newIndex } = selectSequential(candidates, config)
+      if (!advance) return account
 
       // Update the round-robin pointer (fire-and-forget)
       sql`
@@ -434,6 +440,56 @@ export async function selectByStrategy(
       // Unknown strategy — fall back to weighted random
       return weightedRandomSelect(candidates)
     }
+  }
+}
+
+/**
+ * Moves the SEQUENTIAL / TIME pointer past an account an order was just created
+ * on. Smart Buttons pin the account at page view with { advance: false }, so
+ * the rotation is driven by orders, not by page views. `candidates` should be
+ * the same kind of list the session chose from; an account no longer in it is
+ * a no-op. VOLUME (and unknown strategies) keep no pointer.
+ */
+export async function advanceRotationPast(
+  candidates: { id: string }[],
+  accountId: string,
+  tenantId: string,
+  sql: NeonQueryFunction<false, false>
+): Promise<void> {
+  if (candidates.length < 2) return
+  const index = candidates.findIndex((c) => c.id === accountId)
+  if (index === -1) return
+
+  const config = await getRotationConfig(tenantId, sql)
+
+  if (config.strategy === "SEQUENTIAL") {
+    const newIndex = (index + 1) % candidates.length
+    await sql`
+      UPDATE tenants
+      SET last_rotation_index = ${newIndex}
+      WHERE id = ${tenantId}
+    `
+    _settingsCache.set(tenantId, { ...config, lastIndex: newIndex, fetchedAt: Date.now() })
+    return
+  }
+
+  if (config.strategy === "TIME") {
+    // Already the current account → the interval keeps running. Otherwise the
+    // page view saw an elapsed interval and showed the next account: commit
+    // that rotation now.
+    if (config.lastIndex % candidates.length === index) return
+    await sql`
+      UPDATE tenants
+      SET last_rotation_index = ${index},
+          last_rotation_at = NOW()
+      WHERE id = ${tenantId}
+    `
+    _settingsCache.set(tenantId, {
+      ...config,
+      lastIndex: index,
+      lastRotationAt: new Date().toISOString(),
+      fetchedAt: Date.now(),
+    })
   }
 }
 

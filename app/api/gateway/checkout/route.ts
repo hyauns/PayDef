@@ -61,6 +61,7 @@ import {
   type MerchantAccountRow,
   filterEligibleAccounts,
   selectByStrategy,
+  advanceRotationPast,
   getEffectiveDailyLimit,
   WARMUP_MAX_TRANSACTION,
 } from "@/lib/merchant-rotation"
@@ -460,6 +461,9 @@ export async function POST(req: NextRequest) {
   let paypalOrderIdOut: string | null = null
   const excludedAccountIds = new Set<string>()
   let exhaustedInvalidAccounts = false
+  // Button session: the page view only peeked at the rotation; the pointer
+  // moves past the pinned account once its order is committed.
+  let rotationCandidates: MerchantAccountRow[] | null = null
 
   try {
     checkoutAttempt: while (true) {
@@ -529,6 +533,9 @@ export async function POST(req: NextRequest) {
         )
       }
       candidate = pinned
+      // Same preference the session applied before rotating (lib/button-session-create.ts)
+      const profileMatched = preferredProfileId ? eligible.filter((a) => a.display_profile_id === preferredProfileId) : []
+      rotationCandidates = profileMatched.length > 0 ? profileMatched : eligible
     } else {
       if (eligible.length === 0) {
         await client.query("ROLLBACK")
@@ -1434,6 +1441,13 @@ export async function POST(req: NextRequest) {
   } finally {
     // Always release the pool client back to the pool
     client.release()
+  }
+
+  if (buttonSession && rotationCandidates) {
+    // Rotation is driven by orders, not by button page views. Never blocks
+    // the order that was just committed.
+    await advanceRotationPast(rotationCandidates, buttonSession.merchant_account_id, tenantId, getSql())
+      .catch((error) => log.warn("checkout.rotation_advance_failed", "Rotation pointer not advanced", { error }))
   }
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
