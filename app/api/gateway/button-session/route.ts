@@ -18,6 +18,7 @@ import { authenticateStoreHeaders } from "@/lib/gateway-auth"
 import { checkRateLimit } from "@/lib/gateway-rate-limit"
 import { getCheckoutPreferences } from "@/lib/checkout-flow"
 import { filterOpenCircuits } from "@/lib/circuit-breaker"
+import { applyShieldHealth } from "@/lib/shield-health"
 import { selectByStrategy, type MerchantAccountRow } from "@/lib/merchant-rotation"
 import { resolvePaymentDisplayProfile } from "@/lib/payment-display-profiles"
 import { isButtonContext } from "@/lib/button-sessions"
@@ -86,6 +87,8 @@ export async function POST(req: NextRequest) {
         `) as unknown as MerchantAccountRow[],
       preferredProfileId: async () =>
         (await resolvePaymentDisplayProfile({ tenantId: store.tenantId, storeId: store.id, storeName: store.name })).profileId ?? null,
+      filterShieldHealth: async (accounts) =>
+        (await applyShieldHealth(accounts, sql, { storeId: store.id, tenantId: store.tenantId })).accounts,
       filterOpenCircuits: (accounts) => filterOpenCircuits(accounts, store.id),
       // Peek only: a page view must not move the rotation pointer. Checkout
       // advances it when the order is created on the pinned account.

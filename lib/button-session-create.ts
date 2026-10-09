@@ -2,8 +2,8 @@
  * lib/button-session-create.ts — decide whether a store gets Smart Buttons for
  * a page render, and if so pin a merchant account in a button session.
  *
- * Account choice mirrors /api/gateway/checkout (eligibility → display-profile
- * preference → circuit breaker → rotation strategy) but is read-only: no row
+ * Account choice mirrors /api/gateway/checkout (shield health → eligibility →
+ * display-profile preference → circuit breaker → rotation strategy) but is read-only: no row
  * lock, no volume change. Checkout re-checks the pinned account with the final
  * amount and answers 409 if it is no longer usable.
  *
@@ -22,6 +22,8 @@ export interface ButtonSessionDeps {
   loadAccounts(tenantId: string): Promise<MerchantAccountRow[]>
   preferredProfileId(): Promise<string | null>
   filterOpenCircuits(accounts: MerchantAccountRow[]): Promise<MerchantAccountRow[]>
+  /** Shield health (lib/shield-health.ts): leaves out accounts behind a DOWN shield in enforce mode. */
+  filterShieldHealth?(accounts: MerchantAccountRow[]): Promise<MerchantAccountRow[]>
   selectByStrategy(accounts: MerchantAccountRow[]): Promise<MerchantAccountRow>
   insertSession(row: NewButtonSession): Promise<{ id: string; expires_at: string | Date }>
 }
@@ -39,7 +41,7 @@ export interface NewButtonSession {
 }
 
 export type ButtonSessionResult =
-  | { enabled: false; reason: "flow" | "framing_not_configured" | "no_account" }
+  | { enabled: false; reason: "flow" | "framing_not_configured" | "no_account" | "shield_unavailable" }
   | { enabled: true; sessionId: string; embedUrl: string; embedOrigin: string; expiresAt: string }
 
 export async function createButtonSession(
@@ -63,7 +65,12 @@ export async function createButtonSession(
   const allowedOrigins = frameAncestorOrigins([store.successReturnUrl, store.cancelReturnUrl])
   if (allowedOrigins.length === 0) return { enabled: false, reason: "framing_not_configured" }
 
-  const eligible = filterEligibleAccounts(await deps.loadAccounts(store.tenantId), input.amount)
+  // Shield health first — the same place in the pipeline as checkout, so the
+  // list the rotation pointer indexes is identical on both sides.
+  const loaded = await deps.loadAccounts(store.tenantId)
+  const healthy = deps.filterShieldHealth ? await deps.filterShieldHealth(loaded) : loaded
+  if (loaded.length > 0 && healthy.length === 0) return { enabled: false, reason: "shield_unavailable" }
+  const eligible = filterEligibleAccounts(healthy, input.amount)
 
   const profileId = await deps.preferredProfileId()
   const profileMatched = profileId ? eligible.filter((a) => a.display_profile_id === profileId) : []
