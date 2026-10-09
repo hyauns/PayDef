@@ -141,7 +141,7 @@ assert.equal(t.frame(), undefined)
 // 8. cart express: create via paydef_express_create; shipping-change relayed and mapped
 t = boot({
   context: "cart",
-  expressResult: { success: true, data: { transactionId: "TX2", executeToken: "", paypalOrderId: "PP2" } },
+  expressResult: { success: true, data: { transactionId: "TX2", executeToken: "", paypalOrderId: "PP2", ownerToken: "OWN2" } },
   shippingResult: { success: false, data: { reason: "COUNTRY_ERROR" } },
 })
 await settle()
@@ -151,10 +151,13 @@ const ex = t.fetched.find((f) => f.url === "/?wc-ajax=paydef_express_create")
 assert.equal(ex.body.get("context"), "cart")
 assert.equal(ex.body.get("sessionId"), "S1")
 assert.equal(t.frame().contentWindow.posted.at(-1).m.paypalOrderId, "PP2")
+// the owner token stays on the shop page: never posted into the iframe
+assert.equal(JSON.stringify(t.frame().contentWindow.posted).includes("OWN2"), false)
 t.send(SHIELD, { type: "shipping-change", requestId: "r4", transactionId: "TX2", address: { city: "Juneau", state: "AK", countryCode: "US", postalCode: "99801" } })
 await settle()
 const sc = t.fetched.find((f) => f.url === "/?wc-ajax=paydef_shipping_change")
 assert.equal(sc.body.get("transactionId"), "TX2")
 assert.equal(sc.body.get("address[state]"), "AK")
+assert.equal(sc.body.get("ownerToken"), "OWN2")
 assert.deepEqual(t.frame().contentWindow.posted.at(-1).m, { type: "shipping-rejected", requestId: "r4", reason: "COUNTRY_ERROR", source: "paydef-shop" })
 console.log("PASS test-plugin-bridge")
