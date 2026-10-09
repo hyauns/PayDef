@@ -226,7 +226,8 @@ for (const context of ["product", "cart"]) {
   assert.equal(t.frame().contentWindow.posted.at(-1).m.type, "order-failed")
   const notices = () => t.container.children.filter((c) => c.className === "woocommerce-error")
   assert.equal(notices().length, 1, context + ": error notice shown")
-  assert.equal(notices()[0].textContent, "Sorry, <b>not enough</b> stock.")
+  // WooCommerce messages may carry markup: shown as plain text, never parsed as HTML
+  assert.equal(notices()[0].textContent, "Sorry, not enough stock.")
   assert.equal(notices()[0].innerHTML, "", "message set as text, never as HTML")
   assert.notEqual(t.container.style.display, "none", "buttons stay for another try")
   // next attempt: the old notice goes, a successful order leaves none
@@ -235,6 +236,21 @@ for (const context of ["product", "cart"]) {
   await settle()
   assert.equal(t.frame().contentWindow.posted.at(-1).m.paypalOrderId, "PP3")
   assert.equal(notices().length, 0, context + ": notice cleared on the next attempt")
+}
+
+// 12b. gateway / transport errors (code "gateway": "Gateway unreachable: cURL
+//      error 6…", "Invalid Store ID or API key (401)") never reach the buyer
+//      verbatim — a generic message instead
+t = boot({ context: "cart", expressResult: { success: false, data: { code: "gateway", message: "Gateway unreachable: cURL error 6: Could not resolve host: paylaz.nl" } } })
+await settle()
+t.send(SHIELD, { type: "ready" })
+t.send(SHIELD, { type: "create-order", requestId: "r9" })
+await settle()
+{
+  const n = t.container.children.filter((c) => c.className === "woocommerce-error")
+  assert.equal(n.length, 1)
+  assert.equal(n[0].textContent, "PayPal is not available right now. Please try again or choose another payment method.")
+  assert.equal(JSON.stringify(t.frame().contentWindow.posted).includes("cURL"), false, "gateway detail not posted into the iframe")
 }
 
 // 13. a session PayDef does not know (not_found / invalid_ref page, posted to "*")
