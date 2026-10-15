@@ -2,8 +2,8 @@ import LandingNavbar from "@/components/landing/LandingNavbar"
 import RequestAccessForm from "@/components/landing/RequestAccessForm"
 
 export const metadata = {
-  title: "Request Access — PayDef",
-  description: "Request access to PayDef, a payment gateway protection and operations platform for ecommerce teams."
+  title: "Request Access — PayLaz",
+  description: "Request access to PayLaz, a payment gateway protection and operations platform for ecommerce teams."
 }
 
 export default function RequestAccessPage() {
@@ -31,10 +31,10 @@ export default function RequestAccessPage() {
             [REQUEST ACCESS]
           </span>
           <h1 className="font-grotesk text-[32px] md:text-[56px] font-bold text-[#F5F5F0] tracking-[1px] leading-[1.1] uppercase">
-            Get early access<br />to PayDef.
+            Get early access<br />to PayLaz.
           </h1>
           <p className="font-ibm-mono text-[12px] md:text-[14px] text-[#888888] tracking-[1px] leading-relaxed uppercase max-w-[600px]">
-            Tell us about your store, payment setup, and operational needs. Our team will review your request and help you decide if PayDef is the right fit for your payment workflow.
+            Tell us about your store, payment setup, and operational needs. Our team will review your request and help you decide if PayLaz is the right fit for your payment workflow.
           </p>
           <div className="flex items-center gap-3 py-3 px-4 bg-[#111111] border border-[#2D2D2D] w-fit mt-2">
             <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full shrink-0" />

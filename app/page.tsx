@@ -16,7 +16,7 @@ import LandingFooter from "@/components/landing/LandingFooter"
 import FadeIn from "@/components/landing/FadeIn"
 
 export const metadata = {
-  title: "PayDef — Payment Gateway Protection for Ecommerce Teams",
+  title: "PayLaz — Payment Gateway Protection for Ecommerce Teams",
   description: "Protect checkout continuity, manage merchant accounts, improve payment display clarity, recover failed webhooks, and strengthen dispute readiness from one secure payment operations dashboard.",
 }
 

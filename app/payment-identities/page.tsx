@@ -6,7 +6,7 @@ import { DashboardShell } from "@/components/dashboard/DashboardShell"
 import { PaymentIdentitiesPageClient } from "@/components/payment-identities/PaymentIdentitiesPageClient"
 
 export const metadata: Metadata = {
-  title: "Payment Identities | PayDef",
+  title: "Payment Identities | PayLaz",
 }
 
 export default async function PaymentIdentitiesPage() {

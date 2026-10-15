@@ -117,7 +117,7 @@ function LoginForm() {
         <div className="flex flex-col items-center gap-4 mb-8">
           <Image 
             src="/redesign/brand/dr.png" 
-            alt="PayDef Logo" 
+            alt="PayLaz Logo" 
             width={160} 
             height={48} 
             className="h-[48px] w-auto object-contain" 

@@ -89,11 +89,11 @@ export function DashboardSidebar({ role, open, onClose }: SidebarProps) {
           >
             <img
               src="/redesign/brand/dr.png"
-              alt="PayDef"
+              alt="PayLaz"
               className="h-[22px] w-auto"
             />
             <span className="text-[14px] font-semibold text-[#c8cfd8] tracking-wide">
-              PayDef
+              PayLaz
             </span>
           </Link>
           <button

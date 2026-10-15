@@ -65,7 +65,7 @@ export default function LandingNavbar({ isLoggedIn }: { isLoggedIn: boolean }) {
         <Link href="/" className="flex items-center gap-[10px] shrink-0 group">
           <Image 
             src="/redesign/brand/dr.png" 
-            alt="PayDef" 
+            alt="PayLaz" 
             width={120} 
             height={32} 
             className="h-[32px] w-auto object-contain group-hover:opacity-80 transition-opacity" 
