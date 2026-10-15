@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary
 
-This document outlines the detailed plan to redesign the PayDef dashboard and admin UI. The primary objective is to visually transform the current UI using the `dashboard-html` template as a **visual reference only**, without altering any underlying business logic, database queries, API endpoints, or routing mechanisms.
+This document outlines the detailed plan to redesign the PayLaz dashboard and admin UI. The primary objective is to visually transform the current UI using the `dashboard-html` template as a **visual reference only**, without altering any underlying business logic, database queries, API endpoints, or routing mechanisms.
 - **Visual Reference:** The `dashboard-html` template will be analyzed for visual styling, spacing, and layout.
 - **Implementation:** All UI will be rebuilt natively using Tailwind CSS v4 and the existing `shadcn/ui` Radix components.
 - **Safety Rule:** Backend/payment logic must remain 100% untouched.

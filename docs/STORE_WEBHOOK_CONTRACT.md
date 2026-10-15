@@ -1,7 +1,7 @@
 # Store Integration Contract
 
 Gateway base URL:
-- `https://www.gooytoy.com`
+- `https://www.paylaz.nl`
 
 This document defines the hardened merchant-facing contract for checkout, webhook delivery, replay, reconciliation, and redirect return behavior.
 
@@ -16,7 +16,7 @@ Each store needs:
 - optional `Cancel Return URL`
 
 The main checkout endpoint is:
-- `POST https://www.gooytoy.com/api/gateway/checkout`
+- `POST https://www.paylaz.nl/api/gateway/checkout`
 
 The merchant-controlled webhook destination is any HTTPS endpoint they own, for example:
 - `https://merchant-store.com/api/webhooks/payment-gateway`
