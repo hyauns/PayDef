@@ -606,7 +606,7 @@ export default function ApiDocsPage() {
             <div className="space-y-2 pt-2">
               <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Buttons before the order exists (checkout, cart and product pages)</p>
               <div className="rounded-lg border border-border bg-background px-4 py-3 text-[11px] leading-6 text-muted-foreground">
-                Ask for a button session when the page renders; the iframe loads PayPal for the account PayDef pins. When the buyer clicks, the iframe asks your page to create the order. On cart and product pages PayPal collects the address and reports it so you can price shipping. Replies to the iframe use <span className="text-foreground">{'source: "paydef-shop"'}</span> and must echo the <span className="text-foreground">requestId</span>.
+                Ask for a button session when the page renders; the iframe loads PayPal for the account PayLaz pins. When the buyer clicks, the iframe asks your page to create the order. On cart and product pages PayPal collects the address and reports it so you can price shipping. Replies to the iframe use <span className="text-foreground">{'source: "paydef-shop"'}</span> and must echo the <span className="text-foreground">requestId</span>.
               </div>
               <CodeBlock code={buttonSessionExample} language="http" />
               <CodeBlock code={sessionCheckoutExample} language="http" />

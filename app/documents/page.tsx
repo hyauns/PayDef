@@ -13,7 +13,7 @@ export default function DocumentsPage() {
         <DashboardPageHeader 
           eyebrow="INTERNAL GUIDES"
           title="Documents"
-          description="Internal guides for understanding PayDef, payment operations, and gateway management."
+          description="Internal guides for understanding PayLaz, payment operations, and gateway management."
         />
 
         <div className="flex flex-col lg:flex-row gap-8 items-start">
@@ -22,10 +22,10 @@ export default function DocumentsPage() {
             <h3 className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3] mb-4">Table of Contents</h3>
             <nav className="space-y-1">
               <a href="#part-1" className="block px-3 py-2 text-sm text-[#FFD600] bg-[#FFD600]/10 rounded-md font-medium transition-colors">
-                Part 1 — What is PayDef?
+                Part 1 — What is PayLaz?
               </a>
               <a href="#part-2" className="block px-3 py-2 text-sm text-[#e7edf8] hover:text-[#FFD600] hover:bg-[#FFD600]/10 rounded-md font-medium transition-colors">
-                Part 2 — Why merchants use PayDef
+                Part 2 — Why merchants use PayLaz
               </a>
               <a href="#part-3" className="block px-3 py-2 text-sm text-[#e7edf8] hover:text-[#FFD600] hover:bg-[#FFD600]/10 rounded-md font-medium transition-colors">
                 Part 3 — Core Concepts
@@ -43,7 +43,7 @@ export default function DocumentsPage() {
           <div className="flex-1 min-w-0 space-y-8">
             <section id="part-1" className="bg-[#222530] border border-[#343947] border-b-[3px] border-b-[#2a2e3b] shadow-[0_8px_24px_rgba(0,0,0,0.2)] rounded-xl overflow-hidden">
               <div className="px-6 py-5 border-b border-[#343947] bg-[#1f222c]">
-                <h2 className="text-xl font-semibold text-[#e7edf8]">Part 1 — What is PayDef?</h2>
+                <h2 className="text-xl font-semibold text-[#e7edf8]">Part 1 — What is PayLaz?</h2>
               </div>
               
               <div className="p-6 space-y-8">
@@ -55,16 +55,16 @@ export default function DocumentsPage() {
                   </div>
                   <div className="text-[#e7edf8] leading-relaxed space-y-4 text-[15px]">
                     <p>
-                      PayDef là một nền tảng quản lý cổng thanh toán và vận hành thanh toán được thiết kế dành riêng cho các nhà bán hàng thương mại điện tử (e-commerce). Về cốt lõi, PayDef hỗ trợ quản lý các cửa hàng, tài khoản thanh toán, luồng thanh toán (checkout flows), đơn hàng PayPal, giao dịch, hoàn tiền (refunds), hủy tiền (voids), thu tiền (captures), webhooks, cũng như các thông tin thanh toán hiển thị cho người mua.
+                      PayLaz là một nền tảng quản lý cổng thanh toán và vận hành thanh toán được thiết kế dành riêng cho các nhà bán hàng thương mại điện tử (e-commerce). Về cốt lõi, PayLaz hỗ trợ quản lý các cửa hàng, tài khoản thanh toán, luồng thanh toán (checkout flows), đơn hàng PayPal, giao dịch, hoàn tiền (refunds), hủy tiền (voids), thu tiền (captures), webhooks, cũng như các thông tin thanh toán hiển thị cho người mua.
                     </p>
                     <p>
-                      Bằng việc tập trung hóa các thành phần này, PayDef cung cấp cho đội ngũ nội bộ, người vận hành và nhà bán hàng khả năng giám sát rõ ràng hơn và quyền kiểm soát vận hành tốt hơn trên toàn bộ các luồng thanh toán. Nền tảng này hỗ trợ sử dụng Hồ sơ Hiển thị Thanh toán (Payment Display Profiles) và Gói Định danh Thanh toán (Payment Identity Bundles) nhằm đảm bảo các mô tả thanh toán, tài khoản người bán, domain bảo vệ (shield domains), thông tin hỗ trợ và các liên kết chính sách luôn nhất quán và chính xác.
+                      Bằng việc tập trung hóa các thành phần này, PayLaz cung cấp cho đội ngũ nội bộ, người vận hành và nhà bán hàng khả năng giám sát rõ ràng hơn và quyền kiểm soát vận hành tốt hơn trên toàn bộ các luồng thanh toán. Nền tảng này hỗ trợ sử dụng Hồ sơ Hiển thị Thanh toán (Payment Display Profiles) và Gói Định danh Thanh toán (Payment Identity Bundles) nhằm đảm bảo các mô tả thanh toán, tài khoản người bán, domain bảo vệ (shield domains), thông tin hỗ trợ và các liên kết chính sách luôn nhất quán và chính xác.
                     </p>
                     <p>
-                      Điều quan trọng cần lưu ý là PayDef không thay thế các quy tắc hoặc chính sách từ phía các nhà cung cấp dịch vụ thanh toán. Nền tảng không đảm bảo rằng mọi giao dịch đều sẽ được phê duyệt, cũng như không thể ngăn chặn mọi khiếu nại (dispute) hay loại bỏ hoàn toàn rủi ro thanh toán.
+                      Điều quan trọng cần lưu ý là PayLaz không thay thế các quy tắc hoặc chính sách từ phía các nhà cung cấp dịch vụ thanh toán. Nền tảng không đảm bảo rằng mọi giao dịch đều sẽ được phê duyệt, cũng như không thể ngăn chặn mọi khiếu nại (dispute) hay loại bỏ hoàn toàn rủi ro thanh toán.
                     </p>
                     <p>
-                      Thay vào đó, PayDef được thiết kế nhằm mục đích giảm thiểu sự nhầm lẫn trong quá trình vận hành, cải thiện tính liên tục của trải nghiệm thanh toán, và giúp cho các hoạt động thanh toán trở nên dễ dàng theo dõi, quản lý và khắc phục hơn khi có sự cố xảy ra.
+                      Thay vào đó, PayLaz được thiết kế nhằm mục đích giảm thiểu sự nhầm lẫn trong quá trình vận hành, cải thiện tính liên tục của trải nghiệm thanh toán, và giúp cho các hoạt động thanh toán trở nên dễ dàng theo dõi, quản lý và khắc phục hơn khi có sự cố xảy ra.
                     </p>
                   </div>
                 </div>
@@ -79,16 +79,16 @@ export default function DocumentsPage() {
                   </div>
                   <div className="text-[#e7edf8] leading-relaxed space-y-4 text-[15px]">
                     <p>
-                      PayDef is a comprehensive payment operations and gateway management platform designed specifically for e-commerce merchants. At its core, PayDef helps manage stores, payment accounts, checkout flows, PayPal orders, transactions, refunds, voids, captures, webhooks, and the buyer-facing payment display.
+                      PayLaz is a comprehensive payment operations and gateway management platform designed specifically for e-commerce merchants. At its core, PayLaz helps manage stores, payment accounts, checkout flows, PayPal orders, transactions, refunds, voids, captures, webhooks, and the buyer-facing payment display.
                     </p>
                     <p>
-                      By centralizing these elements, PayDef provides internal teams, operators, and merchants with better visibility and operational control across complex payment flows. The platform supports Payment Display Profiles and Payment Identity Bundles to ensure that payment descriptions, merchant accounts, shield domains, support contact information, and policy links remain consistent and properly aligned during checkout.
+                      By centralizing these elements, PayLaz provides internal teams, operators, and merchants with better visibility and operational control across complex payment flows. The platform supports Payment Display Profiles and Payment Identity Bundles to ensure that payment descriptions, merchant accounts, shield domains, support contact information, and policy links remain consistent and properly aligned during checkout.
                     </p>
                     <p>
-                      It is important to understand that PayDef does not replace the rules or compliance requirements of payment providers. It does not guarantee that every transaction will be approved, nor does it prevent every dispute or remove all payment risk.
+                      It is important to understand that PayLaz does not replace the rules or compliance requirements of payment providers. It does not guarantee that every transaction will be approved, nor does it prevent every dispute or remove all payment risk.
                     </p>
                     <p>
-                      Instead, PayDef is specifically designed to reduce operational confusion, improve checkout continuity, and make day-to-day payment operations significantly easier to monitor and recover.
+                      Instead, PayLaz is specifically designed to reduce operational confusion, improve checkout continuity, and make day-to-day payment operations significantly easier to monitor and recover.
                     </p>
                   </div>
                 </div>
@@ -105,7 +105,7 @@ export default function DocumentsPage() {
                     <div className="space-y-3">
                       <h4 className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Vietnamese Key Takeaways</h4>
                       <ul className="list-disc pl-5 text-[#97a3b6] space-y-2 text-sm leading-relaxed">
-                        <li>PayDef là nền tảng quản lý cổng thanh toán và vận hành dành cho thương mại điện tử.</li>
+                        <li>PayLaz là nền tảng quản lý cổng thanh toán và vận hành dành cho thương mại điện tử.</li>
                         <li>Hệ thống giúp quản lý toàn diện từ cửa hàng, tài khoản, giao dịch, webhooks, đến thông tin hiển thị cho người mua.</li>
                         <li>Sử dụng Payment Display Profiles và Identity Bundles để duy trì sự nhất quán cho các thông tin hỗ trợ và mô tả đơn hàng.</li>
                         <li>KHÔNG thay thế quy định của cổng thanh toán, KHÔNG đảm bảo duyệt 100% giao dịch, và KHÔNG xóa bỏ hoàn toàn rủi ro.</li>
@@ -116,7 +116,7 @@ export default function DocumentsPage() {
                     <div className="space-y-3">
                       <h4 className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">English Key Takeaways</h4>
                       <ul className="list-disc pl-5 text-[#97a3b6] space-y-2 text-sm leading-relaxed">
-                        <li>PayDef is a payment operations and gateway management platform for e-commerce merchants.</li>
+                        <li>PayLaz is a payment operations and gateway management platform for e-commerce merchants.</li>
                         <li>It manages stores, accounts, checkout flows, transactions, webhooks, and buyer-facing displays.</li>
                         <li>It uses Payment Display Profiles and Identity Bundles to maintain consistent descriptions, domains, and support links.</li>
                         <li>It DOES NOT replace provider rules, guarantee transaction approvals, or eliminate payment risk.</li>
@@ -132,7 +132,7 @@ export default function DocumentsPage() {
             {/* Part 2 */}
             <section id="part-2" className="bg-[#222530] border border-[#343947] border-b-[3px] border-b-[#2a2e3b] shadow-[0_8px_24px_rgba(0,0,0,0.2)] rounded-xl overflow-hidden mt-8">
               <div className="px-6 py-5 border-b border-[#343947] bg-[#1f222c]">
-                <h2 className="text-xl font-semibold text-[#e7edf8]">Part 2 — Why Merchants Use PayDef</h2>
+                <h2 className="text-xl font-semibold text-[#e7edf8]">Part 2 — Why Merchants Use PayLaz</h2>
               </div>
               
               <div className="p-6 space-y-8">
@@ -144,13 +144,13 @@ export default function DocumentsPage() {
                   </div>
                   <div className="text-[#e7edf8] leading-relaxed space-y-4 text-[15px]">
                     <p>
-                      Các nhà bán hàng sử dụng PayDef để giải quyết những thách thức vận hành phức tạp khi quản lý nhiều cửa hàng thương mại điện tử, các tài khoản thanh toán khác nhau và việc duy trì trải nghiệm thanh toán nhất quán. Nếu không có một nền tảng tập trung, việc theo dõi giao dịch, xử lý hoàn tiền, và đảm bảo người mua nhìn thấy đúng thông tin cửa hàng trên các domain khác nhau có thể trở nên quá tải và dễ xảy ra sai sót.
+                      Các nhà bán hàng sử dụng PayLaz để giải quyết những thách thức vận hành phức tạp khi quản lý nhiều cửa hàng thương mại điện tử, các tài khoản thanh toán khác nhau và việc duy trì trải nghiệm thanh toán nhất quán. Nếu không có một nền tảng tập trung, việc theo dõi giao dịch, xử lý hoàn tiền, và đảm bảo người mua nhìn thấy đúng thông tin cửa hàng trên các domain khác nhau có thể trở nên quá tải và dễ xảy ra sai sót.
                     </p>
                     <p>
-                      PayDef tối ưu hóa các hoạt động này bằng cách cung cấp một bảng điều khiển duy nhất để giám sát toàn bộ hoạt động của cổng thanh toán. Nền tảng cho phép người bán định tuyến (route) luồng thanh toán một cách an toàn qua các domain bảo vệ (shield domains) được chỉ định, giúp giảm rủi ro gây bối rối cho khách hàng và bỏ trống giỏ hàng. Hơn nữa, các tính năng như Gói Định danh Thanh toán (Payment Identity Bundles) đảm bảo rằng bất kể tài khoản người bán (merchant account) nào đang được sử dụng ở hệ thống backend, người mua vẫn luôn nhìn thấy tên thương hiệu, mô tả sản phẩm và chính sách hỗ trợ đồng nhất.
+                      PayLaz tối ưu hóa các hoạt động này bằng cách cung cấp một bảng điều khiển duy nhất để giám sát toàn bộ hoạt động của cổng thanh toán. Nền tảng cho phép người bán định tuyến (route) luồng thanh toán một cách an toàn qua các domain bảo vệ (shield domains) được chỉ định, giúp giảm rủi ro gây bối rối cho khách hàng và bỏ trống giỏ hàng. Hơn nữa, các tính năng như Gói Định danh Thanh toán (Payment Identity Bundles) đảm bảo rằng bất kể tài khoản người bán (merchant account) nào đang được sử dụng ở hệ thống backend, người mua vẫn luôn nhìn thấy tên thương hiệu, mô tả sản phẩm và chính sách hỗ trợ đồng nhất.
                     </p>
                     <p>
-                      Cuối cùng, các nhà bán hàng tin dùng PayDef không phải để lách các quy định của nhà cung cấp dịch vụ, mà để đạt được sự minh bạch trong vận hành, duy trì trải nghiệm mua hàng chất lượng cao và phản hồi nhanh chóng trước các sự kiện thanh toán hoặc cảnh báo webhook trên toàn bộ hệ thống thương mại điện tử của họ.
+                      Cuối cùng, các nhà bán hàng tin dùng PayLaz không phải để lách các quy định của nhà cung cấp dịch vụ, mà để đạt được sự minh bạch trong vận hành, duy trì trải nghiệm mua hàng chất lượng cao và phản hồi nhanh chóng trước các sự kiện thanh toán hoặc cảnh báo webhook trên toàn bộ hệ thống thương mại điện tử của họ.
                     </p>
                   </div>
                 </div>
@@ -165,13 +165,13 @@ export default function DocumentsPage() {
                   </div>
                   <div className="text-[#e7edf8] leading-relaxed space-y-4 text-[15px]">
                     <p>
-                      Merchants use PayDef to solve the complex operational challenges of running multiple e-commerce stores, managing various payment accounts, and maintaining consistent checkout experiences. Without a centralized platform, tracking transactions, handling refunds, and ensuring that buyers see the correct storefront information across different domains can become overwhelming and error-prone.
+                      Merchants use PayLaz to solve the complex operational challenges of running multiple e-commerce stores, managing various payment accounts, and maintaining consistent checkout experiences. Without a centralized platform, tracking transactions, handling refunds, and ensuring that buyers see the correct storefront information across different domains can become overwhelming and error-prone.
                     </p>
                     <p>
-                      PayDef streamlines these operations by providing a single dashboard to monitor all gateway activities. It allows merchants to securely route checkout flows across designated shield domains, reducing the risk of customer confusion and cart abandonment. Furthermore, features like Payment Identity Bundles ensure that regardless of the backend merchant account being used, the buyer always sees a consistent brand name, semantic product description, and support policy.
+                      PayLaz streamlines these operations by providing a single dashboard to monitor all gateway activities. It allows merchants to securely route checkout flows across designated shield domains, reducing the risk of customer confusion and cart abandonment. Furthermore, features like Payment Identity Bundles ensure that regardless of the backend merchant account being used, the buyer always sees a consistent brand name, semantic product description, and support policy.
                     </p>
                     <p>
-                      Ultimately, merchants rely on PayDef not to bypass provider rules, but to achieve operational clarity, maintain high-quality buyer experiences, and respond quickly to payment events or webhook alerts across their entire e-commerce network.
+                      Ultimately, merchants rely on PayLaz not to bypass provider rules, but to achieve operational clarity, maintain high-quality buyer experiences, and respond quickly to payment events or webhook alerts across their entire e-commerce network.
                     </p>
                   </div>
                 </div>
@@ -188,7 +188,7 @@ export default function DocumentsPage() {
                     <div className="space-y-3">
                       <h4 className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">Vietnamese Key Takeaways</h4>
                       <ul className="list-disc pl-5 text-[#97a3b6] space-y-2 text-sm leading-relaxed">
-                        <li>PayDef giải quyết thách thức quản lý nhiều cửa hàng, tài khoản và domain.</li>
+                        <li>PayLaz giải quyết thách thức quản lý nhiều cửa hàng, tài khoản và domain.</li>
                         <li>Tập trung hóa vận hành giúp theo dõi giao dịch và xử lý hoàn tiền dễ dàng hơn.</li>
                         <li>Định tuyến qua shield domains và sử dụng Identity Bundles giúp duy trì trải nghiệm người mua đồng nhất.</li>
                         <li>Nâng cao tính minh bạch và tốc độ xử lý lỗi thay vì cố tình lách luật nhà cung cấp.</li>
@@ -198,7 +198,7 @@ export default function DocumentsPage() {
                     <div className="space-y-3">
                       <h4 className="text-sm font-semibold uppercase tracking-[0.08em] text-[#b6c2d3]">English Key Takeaways</h4>
                       <ul className="list-disc pl-5 text-[#97a3b6] space-y-2 text-sm leading-relaxed">
-                        <li>PayDef solves the challenge of managing multiple stores, accounts, and domains.</li>
+                        <li>PayLaz solves the challenge of managing multiple stores, accounts, and domains.</li>
                         <li>Centralized operations make transaction tracking and refund handling much easier.</li>
                         <li>Routing via shield domains and using Identity Bundles maintains a consistent buyer experience.</li>
                         <li>Enhances operational clarity and error response speed rather than bypassing provider rules.</li>
@@ -225,27 +225,27 @@ export default function DocumentsPage() {
                   </div>
                   <div className="text-[#e7edf8] leading-relaxed space-y-4 text-[15px]">
                     <p>
-                      PayDef áp dụng một số khái niệm kỹ thuật và vận hành cốt lõi nhằm duy trì tính ổn định của dòng tiền và bảo vệ tài khoản thanh toán. Mục tiêu là giảm thiểu rủi ro tài khoản bị giới hạn (Limited) do những phán đoán nhầm lẫn từ thuật toán tự động của cổng thanh toán.
+                      PayLaz áp dụng một số khái niệm kỹ thuật và vận hành cốt lõi nhằm duy trì tính ổn định của dòng tiền và bảo vệ tài khoản thanh toán. Mục tiêu là giảm thiểu rủi ro tài khoản bị giới hạn (Limited) do những phán đoán nhầm lẫn từ thuật toán tự động của cổng thanh toán.
                     </p>
                     <div className="space-y-4 mt-4">
                       <div className="bg-[#1a1d24] border border-[#343947] p-4 rounded-lg">
                         <h4 className="text-[#FFD600] font-semibold mb-2">1. Giảm thiểu Limited (Limitation Mitigation)</h4>
                         <p className="text-sm text-[#b6c2d3]">
-                          Thuật toán của các cổng thanh toán thường tự động giới hạn tài khoản (limited) khi phát hiện sự gia tăng đột biến về doanh thu (velocity spikes) hoặc sự thiếu nhất quán trong dữ liệu đơn hàng. PayDef giúp giảm thiểu rủi ro này bằng cách đảm bảo tính đồng nhất tuyệt đối về thông tin định danh (domain, email hỗ trợ, tên thương hiệu) và phân bổ lưu lượng giao dịch một cách hợp lý. Hệ thống không thể đảm bảo 100% không bị limited, nhưng giúp loại bỏ các nguyên nhân gốc rễ liên quan đến dữ liệu rác hoặc cấu hình sai lệch.
+                          Thuật toán của các cổng thanh toán thường tự động giới hạn tài khoản (limited) khi phát hiện sự gia tăng đột biến về doanh thu (velocity spikes) hoặc sự thiếu nhất quán trong dữ liệu đơn hàng. PayLaz giúp giảm thiểu rủi ro này bằng cách đảm bảo tính đồng nhất tuyệt đối về thông tin định danh (domain, email hỗ trợ, tên thương hiệu) và phân bổ lưu lượng giao dịch một cách hợp lý. Hệ thống không thể đảm bảo 100% không bị limited, nhưng giúp loại bỏ các nguyên nhân gốc rễ liên quan đến dữ liệu rác hoặc cấu hình sai lệch.
                         </p>
                       </div>
                       
                       <div className="bg-[#1a1d24] border border-[#343947] p-4 rounded-lg">
                         <h4 className="text-[#FFD600] font-semibold mb-2">2. Cấu trúc lại thông tin (Items Masking / Semantic Descriptors)</h4>
                         <p className="text-sm text-[#b6c2d3]">
-                          Thay vì gửi một giỏ hàng chứa nhiều mã SKU phức tạp, lộn xộn hoặc thay đổi liên tục khiến hệ thống quét tự động dễ nhận diện nhầm là rủi ro cao, PayDef sử dụng <em>Payment Identity Bundles</em> để cấu trúc lại thông tin (Items Masking). Toàn bộ giỏ hàng sẽ được gom gọn lại thành một mô tả ngữ nghĩa duy nhất, sạch sẽ và chuyên nghiệp (ví dụ: "TireVix Auto - Tire & Wheel Order"). Điều này giúp giao dịch minh bạch, dễ hiểu đối với cả người mua và thuật toán, đồng thời giảm thiểu tỷ lệ khiếu nại.
+                          Thay vì gửi một giỏ hàng chứa nhiều mã SKU phức tạp, lộn xộn hoặc thay đổi liên tục khiến hệ thống quét tự động dễ nhận diện nhầm là rủi ro cao, PayLaz sử dụng <em>Payment Identity Bundles</em> để cấu trúc lại thông tin (Items Masking). Toàn bộ giỏ hàng sẽ được gom gọn lại thành một mô tả ngữ nghĩa duy nhất, sạch sẽ và chuyên nghiệp (ví dụ: "TireVix Auto - Tire & Wheel Order"). Điều này giúp giao dịch minh bạch, dễ hiểu đối với cả người mua và thuật toán, đồng thời giảm thiểu tỷ lệ khiếu nại.
                         </p>
                       </div>
 
                       <div className="bg-[#1a1d24] border border-[#343947] p-4 rounded-lg">
                         <h4 className="text-[#FFD600] font-semibold mb-2">3. Luân chuyển Tài khoản (PayPal Xoay / Account Rotation)</h4>
                         <p className="text-sm text-[#b6c2d3]">
-                          Để tránh việc một tài khoản phải gánh chịu sự gia tăng khối lượng giao dịch (volume) quá nhanh, PayDef cung cấp tính năng luân chuyển (xoay) tài khoản PayPal. Hệ thống tự động phân bổ các giao dịch thanh toán sang nhiều tài khoản (merchant accounts) khác nhau dựa trên các thuật toán (ví dụ: weighted random). Việc "xoay PayPal" này giúp phân tán tải trọng (load balancing), duy trì ngưỡng an toàn của từng tài khoản, và đảm bảo kinh doanh không gián đoạn nếu một tài khoản cần xác minh.
+                          Để tránh việc một tài khoản phải gánh chịu sự gia tăng khối lượng giao dịch (volume) quá nhanh, PayLaz cung cấp tính năng luân chuyển (xoay) tài khoản PayPal. Hệ thống tự động phân bổ các giao dịch thanh toán sang nhiều tài khoản (merchant accounts) khác nhau dựa trên các thuật toán (ví dụ: weighted random). Việc "xoay PayPal" này giúp phân tán tải trọng (load balancing), duy trì ngưỡng an toàn của từng tài khoản, và đảm bảo kinh doanh không gián đoạn nếu một tài khoản cần xác minh.
                         </p>
                       </div>
                     </div>
@@ -262,27 +262,27 @@ export default function DocumentsPage() {
                   </div>
                   <div className="text-[#e7edf8] leading-relaxed space-y-4 text-[15px]">
                     <p>
-                      PayDef applies several core technical and operational concepts to maintain cash flow stability and protect payment accounts. The primary goal is to minimize the risk of algorithmic limitations caused by automated payment gateway flags.
+                      PayLaz applies several core technical and operational concepts to maintain cash flow stability and protect payment accounts. The primary goal is to minimize the risk of algorithmic limitations caused by automated payment gateway flags.
                     </p>
                     <div className="space-y-4 mt-4">
                       <div className="bg-[#1a1d24] border border-[#343947] p-4 rounded-lg">
                         <h4 className="text-[#FFD600] font-semibold mb-2">1. Limitation Mitigation (Giảm thiểu Limited)</h4>
                         <p className="text-sm text-[#b6c2d3]">
-                          Payment gateway algorithms often flag and limit accounts when they detect sudden velocity spikes or inconsistent metadata. PayDef mitigates this risk by enforcing strict consistency in identity data (shield domains, support emails, brand names) and managing transaction distribution. While the system cannot guarantee zero limitations, it effectively eliminates root causes related to messy data or misconfigurations.
+                          Payment gateway algorithms often flag and limit accounts when they detect sudden velocity spikes or inconsistent metadata. PayLaz mitigates this risk by enforcing strict consistency in identity data (shield domains, support emails, brand names) and managing transaction distribution. While the system cannot guarantee zero limitations, it effectively eliminates root causes related to messy data or misconfigurations.
                         </p>
                       </div>
                       
                       <div className="bg-[#1a1d24] border border-[#343947] p-4 rounded-lg">
                         <h4 className="text-[#FFD600] font-semibold mb-2">2. Semantic Item Descriptors (Items Masking)</h4>
                         <p className="text-sm text-[#b6c2d3]">
-                          Sending raw carts with complex, varied, or constantly changing SKU codes can trigger automated risk flags due to misclassification. Instead of exposing messy cart data, PayDef uses <em>Payment Identity Bundles</em> to cleanly summarize the order (Items Masking). The entire cart is aggregated into a single, clean, semantic descriptor (e.g., "TireVix Auto - Tire & Wheel Order"). This ensures the transaction is highly transparent to both the buyer and automated scanners.
+                          Sending raw carts with complex, varied, or constantly changing SKU codes can trigger automated risk flags due to misclassification. Instead of exposing messy cart data, PayLaz uses <em>Payment Identity Bundles</em> to cleanly summarize the order (Items Masking). The entire cart is aggregated into a single, clean, semantic descriptor (e.g., "TireVix Auto - Tire & Wheel Order"). This ensures the transaction is highly transparent to both the buyer and automated scanners.
                         </p>
                       </div>
 
                       <div className="bg-[#1a1d24] border border-[#343947] p-4 rounded-lg">
                         <h4 className="text-[#FFD600] font-semibold mb-2">3. Load Balancing & Account Rotation (PayPal Xoay)</h4>
                         <p className="text-sm text-[#b6c2d3]">
-                          To prevent accounts from experiencing unsafe transaction velocity spikes, PayDef features automated Account Rotation. The system smartly distributes incoming checkout traffic across multiple configured merchant accounts using weighted routing logic. This "PayPal Xoay" acts as a load balancer, maintaining safe operational thresholds for each account and ensuring business continuity if one account undergoes routine compliance verification.
+                          To prevent accounts from experiencing unsafe transaction velocity spikes, PayLaz features automated Account Rotation. The system smartly distributes incoming checkout traffic across multiple configured merchant accounts using weighted routing logic. This "PayPal Xoay" acts as a load balancer, maintaining safe operational thresholds for each account and ensuring business continuity if one account undergoes routine compliance verification.
                         </p>
                       </div>
                     </div>
@@ -304,7 +304,7 @@ export default function DocumentsPage() {
                         <li><strong>Giảm thiểu Limited:</strong> Ngăn chặn thuật toán cắm cờ do dữ liệu sai lệch hoặc doanh thu tăng trưởng bất thường.</li>
                         <li><strong>Items Masking:</strong> Gộp giỏ hàng phức tạp thành một mô tả đơn giản, sạch sẽ (Identity Bundles) để tránh nhận diện nhầm rủi ro.</li>
                         <li><strong>PayPal Xoay:</strong> Phân bổ đều giao dịch (load balancing) qua nhiều tài khoản để tránh quá tải (velocity spikes).</li>
-                        <li>Cốt lõi của PayDef là vận hành an toàn, ổn định và minh bạch, không phải là công cụ gian lận hệ thống.</li>
+                        <li>Cốt lõi của PayLaz là vận hành an toàn, ổn định và minh bạch, không phải là công cụ gian lận hệ thống.</li>
                       </ul>
                     </div>
 
@@ -314,7 +314,7 @@ export default function DocumentsPage() {
                         <li><strong>Limitation Mitigation:</strong> Prevents automated flags caused by inconsistent data or sudden volume spikes.</li>
                         <li><strong>Items Masking:</strong> Aggregates complex carts into clean, semantic descriptors (Identity Bundles) to prevent misclassification.</li>
                         <li><strong>Account Rotation:</strong> Distributes checkout traffic across multiple accounts to maintain safe velocity thresholds.</li>
-                        <li>PayDef's core philosophy focuses on operational safety, stability, and transparency, not system manipulation.</li>
+                        <li>PayLaz's core philosophy focuses on operational safety, stability, and transparency, not system manipulation.</li>
                       </ul>
                     </div>
                   </div>
