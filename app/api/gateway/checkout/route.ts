@@ -379,7 +379,7 @@ export async function POST(req: NextRequest) {
   }
 
   // SHOPIFY stores use the Shopify Draft Order invoice flow (one Shopify store
-  // per PayDef store — NO merchant-account rotation). The PayPal rotation logic
+  // per PayLaz store — NO merchant-account rotation). The PayPal rotation logic
   // below is never reached for these stores.
   if (store.providerType === "SHOPIFY") {
     return handleShopifyCheckout({

@@ -51,7 +51,7 @@ async function main() {
         { title: "Collectible Item (test)", price: "1.00", quantity: 1, taxable: false, requires_shipping: false },
       ],
       tax_exempt: true,
-      note: `PayDef transaction ${fakeTxnId}`,
+      note: `PayLaz transaction ${fakeTxnId}`,
       note_attributes: [{ name: "paydef_txn", value: fakeTxnId }],
       tags: "paydef",
       use_customer_default_address: false,

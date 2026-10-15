@@ -4,7 +4,7 @@
  *
  * The PayPal JS SDK needs the account's client-id when the buttons render, but
  * the PayPal order is only created when the buyer clicks. A button session pins
- * the PayDef-selected merchant account at render time (read-only — volume is
+ * the PayLaz-selected merchant account at render time (read-only — volume is
  * still counted at execute); /api/gateway/checkout later creates the order on
  * exactly that account and re-checks its limits with the final amount.
  *

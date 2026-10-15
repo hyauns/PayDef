@@ -195,7 +195,7 @@ export async function handleStripeCheckout(params: StripeCheckoutParams): Promis
   // In production these go through the masking shield domain. For LOCAL testing
   // the shield domain resolves to the deployed instance (which can't see a
   // transaction created on your local DB), so SHIELD_RETURN_BASE_URL lets you
-  // point the return back to a locally-reachable PayDef, e.g.
+  // point the return back to a locally-reachable PayLaz, e.g.
   //   SHIELD_RETURN_BASE_URL=http://localhost:3000
   // Leave it unset in production to keep shield-domain masking.
   const executeToken = generateExecuteToken(transactionId)

@@ -410,7 +410,7 @@ export function buildOrderPayload(p: CreateOrderParams) {
           // Profile-driven items (skipRandomization) are already sanitised by
           // buildOrderMaskedName and may carry an intentional order number
           // (e.g. "#TVX-2026-00017 …") — keepNumbers stops the final-pass phone
-          // stripper from eating it, so what we send matches what PayDef records.
+          // stripper from eating it, so what we send matches what PayLaz records.
           name:     sanitizePayPalField(item.name, 127, { keepNumbers: !!p.skipRandomization }),
           quantity: item.quantity,
           unit_amount: {
@@ -997,7 +997,7 @@ export async function addOrderTracking(
 //
 // An express order (cart / product page) is created with GET_FROM_FILE and
 // item_total = amount. When PayPal reports the buyer's address, the shop prices
-// shipping and tax and PayDef replaces the amount. item_total never changes, so
+// shipping and tax and PayLaz replaces the amount. item_total never changes, so
 // the masked line items stay valid.
 
 function toCents(value: string): number {

@@ -412,7 +412,7 @@ async function handleAuthorizationCreated(
 // out-of-order delivery: applying it would erase the newer, more authoritative
 // state and add the amount to merchant volume a second time.
 //
-// EXPIRED is deliberately absent. PayDef expires authorizations on its own
+// EXPIRED is deliberately absent. PayLaz expires authorizations on its own
 // clock, never by asking PayPal, so "EXPIRED locally + captured at PayPal"
 // means our clock was wrong and PayPal wins — the row must heal to COMPLETED.
 const CAPTURE_BLOCKING_STATES = ["REFUNDED", "VOIDED", "DISPUTED"]

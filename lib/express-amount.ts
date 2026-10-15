@@ -4,7 +4,7 @@
  *
  * The PayPal order was created with item_total only (express_item_total on the
  * transaction). The storefront prices shipping and tax for the address PayPal
- * reported and sends them with its own order total; PayDef refuses anything
+ * reported and sends them with its own order total; PayLaz refuses anything
  * that does not add up, so PayPal's total always equals the store's total.
  *
  * Dependencies are injected (DB, PayPal); app/api/gateway/order-amount wires them.

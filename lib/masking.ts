@@ -312,7 +312,7 @@ export function maskDescription(seed?: string): string {
  * digit run we must preserve — e.g. an order-traceable item name like
  * "#TVX-2026-00017 …" built by buildOrderMaskedName. Without it the phone-number
  * rule eats "2026-00017", so PayPal would display a different name than the one
- * PayDef recorded. The URL/email/injection rules still run.
+ * PayLaz recorded. The URL/email/injection rules still run.
  *
  * `opts.keepApostrophes` skips stripping the bare `'` character while still
  * stripping `<`, `>` and `"`. Use it only for fields PayPal keeps as its own

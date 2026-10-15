@@ -7,7 +7,7 @@
  * reauthorize first — but the authorization itself is still live and must not
  * be treated as dead.
  *
- * PayDef used 7 days here, which is neither of those numbers. Because
+ * PayLaz used 7 days here, which is neither of those numbers. Because
  * `processExpiredTransactions` (lib/gateway-recovery.ts) flips
  * `status='AUTHORIZED'` rows to `EXPIRED` purely on this clock and never asks
  * PayPal, that shortfall silently killed authorizations roughly 22 days early

@@ -7,21 +7,21 @@
  * │  This module is the Shopify equivalent of lib/stripe.ts. It is used  │
  * │  ONLY by stores whose provider_type = 'SHOPIFY'.                     │
  * │                                                                     │
- * │  • One Shopify store PER PayDef store — credentials come from the    │
+ * │  • One Shopify store PER PayLaz store — credentials come from the    │
  * │    store record (stores.shopify_*), so there is NO rotation and NO   │
  * │    dependency on merchant_accounts. The PayPal rotation logic and    │
  * │    the Stripe / mock-charge flows are never touched by this module.  │
  * │  • The buyer pays on Shopify's hosted checkout (Shopify Payments +   │
  * │    Shop Pay). We create a Draft Order with a SINGLE custom line item │
  * │    priced at the full checkout total and tax_exempt = true, so the   │
- * │    amount charged on Shopify equals the amount PayDef received.      │
+ * │    amount charged on Shopify equals the amount PayLaz received.      │
  * │  • Item Masking is reused: the line-item title is pre-masked by the  │
  * │    shared Payment Display Profile machinery before it reaches here.  │
  * └─────────────────────────────────────────────────────────────────────┘
  *
  * NOTE — return URL limitation: Shopify's draft-order invoice checkout does NOT
  * support a custom post-purchase redirect (unlike Stripe Checkout's success_url).
- * After paying, the buyer lands on Shopify's order-status page. The PayDef
+ * After paying, the buyer lands on Shopify's order-status page. The PayLaz
  * transaction is completed asynchronously by the orders/paid webhook.
  */
 
@@ -67,7 +67,7 @@ export interface CreateDraftOrderParams {
   /** Full checkout total as a 2-decimal string, e.g. "49.99". */
   amount: string
   customerEmail?: string | null
-  /** PayDef transaction id — carried in note_attributes for webhook matching. */
+  /** PayLaz transaction id — carried in note_attributes for webhook matching. */
   transactionId: string
 }
 
@@ -82,7 +82,7 @@ export interface CreateDraftOrderResult {
  *
  * The draft order uses ONE custom line item (title + price, no variant) at the
  * full amount with tax_exempt = true, so Shopify charges exactly `amount` and
- * never decrements the niche store's real inventory. The PayDef transaction id
+ * never decrements the niche store's real inventory. The PayLaz transaction id
  * is stored in note_attributes so the orders/paid webhook can reconcile it back.
  */
 export async function createDraftOrder(
@@ -109,7 +109,7 @@ export async function createDraftOrder(
       ],
       tax_exempt: true,
       ...(p.customerEmail ? { email: p.customerEmail } : {}),
-      note: `PayDef transaction ${p.transactionId}`,
+      note: `PayLaz transaction ${p.transactionId}`,
       note_attributes: [{ name: "paydef_txn", value: p.transactionId }],
       tags: "paydef",
       use_customer_default_address: false,
@@ -247,7 +247,7 @@ export async function refundShopifyOrder(
     refund: {
       currency: p.currency,
       notify: false,
-      note: p.note || "PayDef refund",
+      note: p.note || "PayLaz refund",
       transactions: [
         {
           parent_id: parent.id,

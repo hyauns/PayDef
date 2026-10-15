@@ -154,7 +154,7 @@ export async function handleShopifyRefund(params: ShopifyRefundParams): Promise<
       orderId: tx.shopify_order_id,
       amount: amount.toFixed(2),
       currency,
-      note: `PayDef refund ${tx.id}`,
+      note: `PayLaz refund ${tx.id}`,
     })
   } catch (err) {
     const status = err instanceof ShopifyApiError ? err.statusCode : 502

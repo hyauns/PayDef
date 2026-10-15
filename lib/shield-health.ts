@@ -46,7 +46,7 @@ export async function probeShieldDomain(domain: string, fetchImpl: typeof fetch 
       redirect: "manual", // a host redirecting elsewhere is not our shield
       cache: "no-store",
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
-      headers: { "User-Agent": "PayDef-ShieldHealthCheck/1.0" },
+      headers: { "User-Agent": "PayLaz-ShieldHealthCheck/1.0" },
     })
     if (res.status !== 200) {
       // free the connection: the body is never read on a non-200
@@ -54,7 +54,7 @@ export async function probeShieldDomain(domain: string, fetchImpl: typeof fetch 
       return { ok: false, status: res.status, error: `HTTP ${res.status}` }
     }
     const body = (await res.text()).trim()
-    if (body !== PROBE_BODY) return { ok: false, status: 200, error: "unexpected body (not a PayDef shield)" }
+    if (body !== PROBE_BODY) return { ok: false, status: 200, error: "unexpected body (not a PayLaz shield)" }
     return { ok: true, status: 200, error: null }
   } catch (err) {
     return { ok: false, status: null, error: shortError(err) }

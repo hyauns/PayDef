@@ -1,13 +1,13 @@
 /**
  * Registers the Shopify webhooks the SHOPIFY provider needs, via the Admin API.
  *
- * Run this AFTER the Paydef code is deployed and the SHOPIFY store exists in the
- * Paydef dashboard (so the destination endpoint actually responds).
+ * Run this AFTER the PayLaz code is deployed and the SHOPIFY store exists in the
+ * PayLaz dashboard (so the destination endpoint actually responds).
  *
  * Reads from env (token never lives in the file):
  *   SHOPIFY_DOMAIN=nemxek-1k.myshopify.com
  *   SHOPIFY_TOKEN=shpat_...
- *   PAYDEF_WEBHOOK_URL=https://<paydef-domain>/api/webhook/shopify/<storeId>
+ *   PAYLAZ_WEBHOOK_URL=https://www.paylaz.nl/api/webhook/shopify/<storeId>
  *   [SHOPIFY_API_VERSION=2024-10]
  *
  * Idempotent: lists existing webhooks first and skips any topic already pointing
@@ -17,7 +17,7 @@
  *   Webhooks created via the Admin API are signed with the custom app's
  *   **API secret key** (Shopify Admin → Apps → your app → API credentials →
  *   "API secret key"). Store THAT value as the SHOPIFY webhook secret in the
- *   Paydef store (field: shopifyWebhookSecret) so /api/webhook/shopify can
+ *   PayLaz store (field: shopifyWebhookSecret) so /api/webhook/shopify can
  *   verify the HMAC.
  *
  * Run:  node scripts/register-shopify-webhook.mjs
@@ -25,16 +25,16 @@
 
 const domain = (process.env.SHOPIFY_DOMAIN || "").trim().replace(/^https?:\/\//i, "").replace(/\/.*$/, "")
 const token = (process.env.SHOPIFY_TOKEN || "").trim()
-const address = (process.env.PAYDEF_WEBHOOK_URL || "").trim()
+const address = (process.env.PAYLAZ_WEBHOOK_URL || process.env.PAYDEF_WEBHOOK_URL || "").trim()
 const apiVersion = (process.env.SHOPIFY_API_VERSION || "2024-10").trim()
 
 if (!domain || !token || !address) {
-  console.error("Missing SHOPIFY_DOMAIN, SHOPIFY_TOKEN, or PAYDEF_WEBHOOK_URL env var.")
+  console.error("Missing SHOPIFY_DOMAIN, SHOPIFY_TOKEN, or PAYLAZ_WEBHOOK_URL env var.")
   process.exit(1)
 }
 if (!/^https:\/\/.+\/api\/webhook\/shopify\/.+/.test(address)) {
-  console.error(`PAYDEF_WEBHOOK_URL looks wrong: ${address}`)
-  console.error("Expected: https://<paydef-domain>/api/webhook/shopify/<storeId>")
+  console.error(`PAYLAZ_WEBHOOK_URL looks wrong: ${address}`)
+  console.error("Expected: https://www.paylaz.nl/api/webhook/shopify/<storeId>")
   process.exit(1)
 }
 
@@ -74,7 +74,7 @@ async function main() {
     console.log(`  ✓ ${topic} — created (id ${created.id})`)
   }
 
-  console.log(`\nDone. Remember: set the Paydef store's shopifyWebhookSecret to the app's`)
+  console.log(`\nDone. Remember: set the PayLaz store's shopifyWebhookSecret to the app's`)
   console.log(`API secret key so the webhook HMAC verifies.\n`)
 }
 

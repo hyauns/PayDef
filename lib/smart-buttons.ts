@@ -465,7 +465,7 @@ ${RUNTIME_JS}
   var refused = false;
 
   var options = {
-    // The shop creates its order and asks PayDef for the PayPal order on the
+    // The shop creates its order and asks PayLaz for the PayPal order on the
     // account pinned by this session; we just hand the id to PayPal.
     createOrder: function () {
       refused = false;
@@ -494,7 +494,7 @@ ${RUNTIME_JS}
 
   if (SESSION.express) {
     // Cart / product page: the shop prices shipping for the address the buyer
-    // picks in PayPal and PayDef updates the order total — or the shop rejects it.
+    // picks in PayPal and PayLaz updates the order total — or the shop rejects it.
     options.onShippingAddressChange = function (data, actions) {
       return ask({ type: "shipping-change", address: data.shippingAddress }, 20000).then(function (m) {
         if (m.type !== "shipping-updated") return actions.reject(data.errors[m.reason] || data.errors.ADDRESS_ERROR);
@@ -577,7 +577,7 @@ ${POST_FN}
 }
 
 /**
- * Session pages for a session PayDef does not know (no row, or a malformed id):
+ * Session pages for a session PayLaz does not know (no row, or a malformed id):
  * there are no allowed origins to answer, yet the shop is waiting for a message.
  * This page carries nothing but the error code, so it is the one page served
  * frameable (no frame-ancestors) and posting to targetOrigin "*" — the shop

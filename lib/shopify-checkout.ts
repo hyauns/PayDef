@@ -3,7 +3,7 @@
  *
  * Mirrors the Stripe checkout flow (lib/stripe-checkout.ts) for stores whose
  * provider_type = 'SHOPIFY', WITHOUT touching:
- *   • merchant-account rotation (Shopify = one store per PayDef store)
+ *   • merchant-account rotation (Shopify = one store per PayLaz store)
  *   • lib/paypal.ts / lib/stripe.ts
  *   • the existing mock-charge route
  *

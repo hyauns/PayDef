@@ -11,7 +11,7 @@
  * or the mock-charge flow. It reuses the shared merchant-webhook delivery +
  * Telegram machinery.
  *
- * The PENDING PayDef transaction is matched by the `paydef_txn` note attribute
+ * The PENDING PayLaz transaction is matched by the `paydef_txn` note attribute
  * carried from the Draft Order. Idempotency is guaranteed by the first-
  * transition guard (status = 'PENDING' → 'COMPLETED'), so duplicate Shopify
  * deliveries are no-ops.
@@ -72,7 +72,7 @@ function decryptMaybe(value: string): string {
   return isEncrypted(value) ? decrypt(value) : value.trim()
 }
 
-function readPaydefTxn(payload: ShopifyOrderPayload): string | null {
+function readTxnAttribute(payload: ShopifyOrderPayload): string | null {
   const attrs = Array.isArray(payload.note_attributes) ? payload.note_attributes : []
   const hit = attrs.find((a) => a?.name === "paydef_txn")
   return hit?.value?.trim() || null
@@ -177,7 +177,7 @@ async function completeShopifyTransaction(
   store: StoreRow,
   log: ReturnType<typeof moduleLog.child>
 ): Promise<void> {
-  const transactionId = readPaydefTxn(payload)
+  const transactionId = readTxnAttribute(payload)
   const shopifyOrderId = payload.id != null ? String(payload.id) : null
 
   if (!transactionId) {
