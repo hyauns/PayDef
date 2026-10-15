@@ -18,7 +18,7 @@ export default function RiskProtectionSection() {
             Reduce the risks that cause payment operations to break.
           </h2>
           <p className="text-lg text-muted-foreground mb-8 text-pretty">
-            Payment issues are often caused by inconsistent checkout records, unclear descriptors, delayed fulfillment updates, failed webhooks, and weak audit trails. PayDef helps reduce these risks by keeping payment operations consistent, traceable, and easier to manage.
+            Payment issues are often caused by inconsistent checkout records, unclear descriptors, delayed fulfillment updates, failed webhooks, and weak audit trails. PayLaz helps reduce these risks by keeping payment operations consistent, traceable, and easier to manage.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {points.map((point, idx) => (

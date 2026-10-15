@@ -29,7 +29,7 @@ export default function LandingHero({ isLoggedIn }: { isLoggedIn: boolean }) {
 
       {/* Subheading */}
       <p className="font-ibm-mono text-[13px] md:text-[15px] text-[var(--landing-text-muted)] tracking-[1px] leading-[1.6] text-center w-full max-w-[800px] uppercase z-10 relative">
-        PAYDEF HELPS ECOMMERCE TEAMS STRENGTHEN PAYMENT OPERATIONS WITH SMART ACCOUNT ROUTING, BUYER-FRIENDLY DISPLAY PROFILES, WEBHOOK RECOVERY, AND SAFER WORKFLOWS.
+        PAYLAZ HELPS ECOMMERCE TEAMS STRENGTHEN PAYMENT OPERATIONS WITH SMART ACCOUNT ROUTING, BUYER-FRIENDLY DISPLAY PROFILES, WEBHOOK RECOVERY, AND SAFER WORKFLOWS.
       </p>
 
       <div className="h-10 md:h-[48px]" />

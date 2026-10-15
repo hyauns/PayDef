@@ -148,7 +148,7 @@ export default function TelegramAlertDemo() {
             )}
           </div>
           <div className="flex flex-col">
-            <span className="font-ibm-mono text-[13px] font-bold text-[#F5F5F0] tracking-[1px]">PayDef Alerts</span>
+            <span className="font-ibm-mono text-[13px] font-bold text-[#F5F5F0] tracking-[1px]">PayLaz Alerts</span>
             <span className="font-ibm-mono text-[10px] text-emerald-500 tracking-[1px]">bot • online</span>
           </div>
         </div>

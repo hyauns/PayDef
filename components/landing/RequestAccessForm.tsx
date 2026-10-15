@@ -166,7 +166,7 @@ export default function RequestAccessForm() {
                 <div className="flex items-center gap-3 mt-2">
                   <input type="checkbox" id="agree" name="agree" checked={formData.agree} onChange={handleChange} className="w-4 h-4 accent-[var(--landing-yellow)] bg-[#111] border-[#2D2D2D] cursor-pointer" />
                   <label htmlFor="agree" className="font-ibm-mono text-[11px] text-[#888] tracking-[1px] uppercase cursor-pointer select-none mt-0.5">
-                    I agree to be contacted by the PayDef team about my request.
+                    I agree to be contacted by the PayLaz team about my request.
                   </label>
                 </div>
 
@@ -254,7 +254,7 @@ export default function RequestAccessForm() {
         <div className="bg-[#0A0A0A] border border-[#2D2D2D] flex flex-col relative overflow-hidden">
           <div className="flex items-center gap-3 p-4 border-b border-[#2D2D2D] bg-[#111111]">
             <div className="w-2 h-2 bg-[var(--landing-yellow)] rounded-full animate-pulse" />
-            <span className="font-ibm-mono text-[10px] font-bold text-[#F5F5F0] uppercase tracking-[2px]">PayDef Intake</span>
+            <span className="font-ibm-mono text-[10px] font-bold text-[#F5F5F0] uppercase tracking-[2px]">PayLaz Intake</span>
           </div>
           <div className="p-6 flex flex-col gap-6 min-h-[300px]">
             <div className={`flex flex-col gap-1 transition-all duration-500 ${animStep >= 0 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>

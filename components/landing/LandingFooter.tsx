@@ -6,11 +6,11 @@ export default function LandingFooter() {
           <div className="flex items-center gap-[8px] h-[32px] px-[12px] border-2 border-[#FFD600] w-fit">
             <div className="w-[8px] h-[8px] bg-[#FFD600]" />
             <span className="font-ibm-mono text-[11px] font-bold text-[#FFD600] tracking-[2px] uppercase">
-              PAYDEF
+              PAYLAZ
             </span>
           </div>
           <p className="font-ibm-mono text-[12px] text-[#666666] tracking-[1px] leading-[1.6] uppercase">
-            PAYDEF HELPS ECOMMERCE TEAMS OPERATE PAYMENT WORKFLOWS WITH MORE CLARITY, CONSISTENCY, AND CONTROL.
+            PAYLAZ HELPS ECOMMERCE TEAMS OPERATE PAYMENT WORKFLOWS WITH MORE CLARITY, CONSISTENCY, AND CONTROL.
           </p>
         </div>
 
@@ -30,7 +30,7 @@ export default function LandingFooter() {
 
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <span className="font-ibm-mono text-[10px] text-[#555555] tracking-[2px] uppercase">
-          © {new Date().getFullYear()} PAYDEF. ALL RIGHTS RESERVED.
+          © {new Date().getFullYear()} PAYLAZ. ALL RIGHTS RESERVED.
         </span>
         <span className="font-ibm-mono text-[10px] text-[#555555] tracking-[2px] uppercase">
           VERSION 2.0 // SYSTEMS OPERATIONAL

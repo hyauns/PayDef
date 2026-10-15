@@ -15,7 +15,7 @@ export default function SecuritySection() {
       <SectionHeader
         label="[05] // SECURITY"
         title="DESIGNED WITH SECURITY AND OPERATIONAL SAFETY IN MIND."
-        subtitle="PAYDEF IS BUILT WITH SECURE API AUTHENTICATION, ENCRYPTED PROVIDER CREDENTIALS, AND STRUCTURED LOGS."
+        subtitle="PAYLAZ IS BUILT WITH SECURE API AUTHENTICATION, ENCRYPTED PROVIDER CREDENTIALS, AND STRUCTURED LOGS."
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-[2px] w-full">
