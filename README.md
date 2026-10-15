@@ -2,7 +2,7 @@
 
 **Payment operations platform for e-commerce merchants who run multiple stores and multiple payment accounts.**
 
-🌐 [paylaz.nl](https://www.paylaz.nl)
+[paylaz.nl](https://www.paylaz.nl)
 
 ---
 
@@ -40,7 +40,7 @@ Online merchants rarely sell through a single store with a single payment accoun
 - Failed deliveries are retried, and a scheduled recovery job reconciles any order whose status drifted from the provider.
 
 ### Monitoring and alerts
-- Real-time **Telegram alerts** for payments and failures, sent per store.
+- Real-time **Telegram alerts** for payments and failures, configured per tenant.
 - Health checks on checkout infrastructure, with alerts when something goes down.
 - Structured logs and an analytics dashboard for revenue and volume per store and account.
 
@@ -51,18 +51,18 @@ Online merchants rarely sell through a single store with a single payment accoun
 
 ## Integrations
 
-| Channel | How it connects |
+| Integration | How it connects |
 |---|---|
-| **WooCommerce** | Official PayLaz plugin: payment method, native refunds, webhooks, and Smart Buttons on checkout, cart, and product pages |
+| **WooCommerce** | WordPress plugin: payment method, native refunds, webhooks, and PayPal Smart Buttons |
 | **Custom storefronts** | REST API (`/api/gateway/checkout`, merchant transaction endpoints) plus signed webhooks |
-| **Shopify** | Shopify provider with order sync and refunds |
+| **Shopify (as a provider)** | Payments processed through a linked Shopify store, with order sync and refunds |
 
 The API reference is available in the dashboard at `/docs/api`.
 
 ## Architecture
 
 ```
- Storefronts (WooCommerce · Shopify · custom)
+ Storefronts (WooCommerce · custom)
                 │  REST API + signed webhooks
                 ▼
         ┌───────────────────┐
@@ -98,7 +98,6 @@ Verification suites:
 
 ```bash
 npm run verify:smart-buttons
-npm run verify:shield-health
 npm run verify:brand
 ```
 
